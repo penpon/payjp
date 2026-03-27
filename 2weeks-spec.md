@@ -80,12 +80,15 @@ MVPでは実装しない。
 3. 入力項目
 - `planId`（選択式）
 - `email`
+- `cardholderName`（3Dセキュア認証用）
+- `phone`（任意、3Dセキュア補助）
 - カード入力（PAY.JP提供UI）
 
 4. 動作
 - 連携完了確認: `GET /v1/auth/discord/session`
 - 「登録する」押下で `payjpToken` を生成
-- 選択した `planId` を含めて `POST /v1/subscriptions` を呼ぶ
+- クライアントで `Idempotency-Key`（UUID v4推奨）を生成する
+- 選択した `planId` を含めて `POST /v1/subscriptions` を呼ぶ（`Idempotency-Key` ヘッダ必須）
 - 結果メッセージを表示（成功/失敗）
 
 5. 注意事項
@@ -129,12 +132,14 @@ MVPでは実装しない。
   - `Origin` / `Referer` が `FRONTEND_BASE_URL` と一致することを検証（不一致は403）
   - `link_session` Cookie 検証（有効期限/ワンタイム）
   - `planId` が許可リスト内か検証
+  - `payjpToken` が3Dセキュア認証済みであることを検証（未完了は422）
+  - PAY.JP API呼び出しは公式SDKまたは `application/x-www-form-urlencoded` で実行する（JSON POSTしない）
   - `discord_user_id` 単位の排他ロックを取得
   - `subscription_request_keys` で冪等性を保証（`discord_user_id + idempotency_key` unique）
   - 同一 `Idempotency-Key` 再送時は `request_hash` を照合し、一致時のみ保存済みレスポンスを返す（不一致は409）
   - 既存 `active` 購読がある場合は新規作成せず既存結果を返す
   - PAY.JPでcustomer作成（既存あれば再利用）
-  - PAY.JPでsubscription作成（選択プラン）
+  - PAY.JPでsubscription作成（選択プラン、`metadata.discord_user_id` を保存）
   - `members` をupsert
   - 使用済み `link_session` を無効化
   - 初回ロール同期ジョブを登録
@@ -152,7 +157,7 @@ MVPでは実装しない。
   - 重複なら何もしないで200
   - 新規イベントなら処理対象として記録
 - 応答:
-  - 検証失敗時は `401/400/413/415`
+  - 検証失敗時は `401/400/413/415`（PAY.JPの再送対象。3分間隔で最大3回再送される前提で設計）
   - 重複時は `200`
   - 新規イベント保存成功時は `200`
   - DB保存失敗など受理不能時は `503`（PAY.JPリトライを許可）
@@ -166,14 +171,15 @@ MVPでは実装しない。
 3. `subscription.paused`
 4. `subscription.resumed`
 5. `subscription.canceled`
-6. `charge.failed`
+6. `subscription.deleted`
+7. `charge.failed`
 
 共通処理:
 
 1. `event.created` の鮮度を検証し、古すぎる/未来すぎるイベントは処理しない。
 2. PAY.JP APIから対象subscriptionを再取得する。
 3. 再取得オブジェクトの `livemode` と `plan_id`（許可リスト）を検証する。
-4. `discord_user_id` と `subscription` の紐付けが正しいことを検証する。
+4. `discord_user_id` と `subscription` の紐付けが正しいことを検証する（`subscription.metadata.discord_user_id` と `members.discord_user_id` を照合）。
 5. 検証不一致時は fail-close（ロール付与しない/必要なら剥奪寄り）で `process_status = failed` にし、`critical` 通知対象にする。
 6. `subscription.status` を真実源として `members.subscription_status` を更新する。
 7. 取得した `subscription.plan` を `members.payjp_plan_id` に反映する。
@@ -308,10 +314,13 @@ MVPでは実装しない。
 14. Webhookで `livemode/plan_id/会員紐付け` が不一致の場合は fail-close で処理する。
 15. Webhookは `Content-Type: application/json` を必須化し、ボディサイズ上限を適用する。
 16. Webhookは `event.created` の鮮度チェック（未来許容5分、過去許容30日）を実施する。
-17. カード情報を保存・ログ出力しない。
-18. Botトークン/PAY.JP秘密鍵/OAuthクライアント秘密を環境変数で管理する。
-19. APIログから機密値（token, secret, code, cookie）をマスクする。
-20. `payjp_events.payload_json` は機微フィールドを除外し、保持期間を30日に制限する。
+17. 本番の購読作成はEMV 3-Dセキュア認証済みトークンのみ受け付ける。
+18. 3-Dセキュア実行時に必要なカード名義・連絡先情報をPAY.JPトークン化時に付与する。
+19. `subscription.metadata.discord_user_id` を保存し、Webhook再取得時に照合する。
+20. カード情報を保存・ログ出力しない。
+21. Botトークン/PAY.JP秘密鍵/OAuthクライアント秘密を環境変数で管理する。
+22. APIログから機密値（token, secret, code, cookie）をマスクする。
+23. `payjp_events.payload_json` は機微フィールドを除外し、保持期間を30日に制限する。
 
 ## 9. 環境変数
 
@@ -332,6 +341,7 @@ MVPでは実装しない。
 15. `WEBHOOK_MAX_BODY_BYTES`（既定: `262144`）
 16. `PAYJP_EVENT_MAX_AGE_DAYS`（既定: `30`）
 17. `DATABASE_URL`
+18. `PAYJP_REQUIRE_3DS`（`true|false`, 本番は `true` 固定）
 
 ## 10. バッチ/ジョブ
 
@@ -373,6 +383,7 @@ MVPでは実装しない。
 3. Day 4-5
 - `POST /v1/subscriptions`
 - PAY.JP顧客/購読作成（複数プラン）
+- 3-Dセキュア必須フロー（認証済みトークンのみ受理）
 - Idempotency-Key + 既存active購読ガード実装
 - Discordロール付与/剥奪関数
 
@@ -380,6 +391,7 @@ MVPでは実装しない。
 
 1. Day 6-7
 - Webhook受信 + 冪等化
+- `subscription.deleted` を含む最小イベント処理
 - イベント処理ジョブ
 - `livemode` 検証実装
 - Webhook `Content-Type` / ボディ上限 / `event.created` 鮮度チェック実装
@@ -427,6 +439,9 @@ MVPでは実装しない。
 23. 異なる `planId` で購読しても `active` なら同一Roleが付与される。
 24. `planId` 変更イベントを受けても `active` 継続中はRoleが維持される。
 25. `payjp_events.payload_json` 保持期間ジョブで30日超過データが削除または匿名化される。
+26. 3-Dセキュア未完了の `payjpToken` では `POST /v1/subscriptions` が失敗する。
+27. `subscription.metadata.discord_user_id` が不一致のWebhookは fail-close で処理される。
+28. `subscription.deleted` 受信時に有料Roleが剥奪される。
 
 ## 13. 運用ルール（MVP）
 
@@ -437,9 +452,9 @@ MVPでは実装しない。
 
 ## 14. 受け入れ条件（Go-Live）
 
-1. テスト要件25項目がすべて通過している。
+1. テスト要件28項目がすべて通過している。
 2. 検証環境で「課金停止→ロール剥奪」を実演確認済み。
-3. 本番Webhook疎通確認済み（署名検証含む）。
+3. 本番Webhook疎通確認済み（Webhookトークン検証含む）。
 4. OAuth連携（start→callback→session）が本番で疎通済み。
 5. Alert Lite通知（2ルール）が検証環境で疎通済み。
 6. 緊急時手順（手動剥奪・再同期実行）が文書化済み。
