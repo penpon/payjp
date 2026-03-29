@@ -41,6 +41,7 @@ MVPでは実装しない。
 8. PAY.JPイベント保持期間の自動削除/匿名化ジョブ
 9. Webhook受信ごとのPAY.JP `event.id` 再取得照合（MVP後に追加）
 10. Webhook失敗イベント専用の再処理CLI（MVP後に追加）
+11. `Idempotency-Key` 再利用時の `request_hash` 不一致チェック（MVP後に追加）
 
 ## 4. 全体構成（最小）
 
@@ -77,31 +78,27 @@ MVPでは実装しない。
 ## 6.1 フロントエンド（1ページ）
 
 1. ページ: `/`
-2. 表示状態
-- 未連携: 「Discord連携」ボタンを表示
-- 連携済み: Discord表示名（またはID）と課金フォームを表示
 
-3. 入力項目
+2. 入力項目
 - `planId`（選択式）
 - `email`
 - `cardholderName`（3Dセキュア認証用）
 - `phone`（任意、3Dセキュア補助）
 - カード入力（PAY.JP提供UI）
 
-4. 動作
+3. 動作
 - 連携完了確認: `GET /v1/auth/discord/session`
 - 3-Dセキュア方式は `PAY.JP.js` のiframe方式に固定する（redirect方式はMVP非対応）
 - 「登録する」押下で `payjpToken` を生成
 - `PAY.JP.js` の `createToken` で `three_d_secure: true` を必須にする
 - トークン化時に `card.name = cardholderName` と `card.email = email` を必須付与し、`phone` 入力があれば `card.phone` も付与する
 - 3Dセキュア認証が完了し、`three_d_secure_status = verified` のトークンを取得できた場合のみ `POST /v1/subscriptions` を実行する
-- 3Dセキュアが中断/失敗/タイムアウトした場合は `POST /v1/subscriptions` を呼ばず、再試行導線を表示する
+- 3Dセキュアが中断/失敗/タイムアウトした場合は `POST /v1/subscriptions` を呼ばない
 - クライアントで `Idempotency-Key`（UUID v4推奨）を生成する
 - `csrf_token` Cookie の値を `X-CSRF-Token` ヘッダに設定する（double submit）
 - 選択した `planId` を含めて `POST /v1/subscriptions` を呼ぶ（`Idempotency-Key` ヘッダ必須）
-- 結果メッセージを表示（成功/失敗）
 
-5. 注意事項
+4. 注意事項
 - カード情報はフロントから直接PAY.JPへ送信する。
 - フロントで秘密鍵を保持しない。
 - OAuth/連携セッションはHttpOnly Cookieで扱い、フロントJSから読ませない。
@@ -149,12 +146,12 @@ MVPでは実装しない。
   - `planId` が許可リスト内か検証
   - `discord_user_id` が `DISCORD_GUILD_ID` のメンバーであることを検証（未参加は409）
   - Botに `Manage Roles` 権限があり、`DISCORD_PAID_ROLE_ID` を付与可能な序列であることを検証（不可は503）
-  - `payjpToken` をPAY.JP APIで再取得し、`used=false` かつ `card.three_d_secure_status = verified` を検証する（`attempted` 含め未完了は422）
+  - `payjpToken` をPAY.JP APIで再取得し、`used=false` かつ `card.three_d_secure_status = verified` を検証する（`attempted` / `failed` / `error` / `unverified` / `null` は422）
   - PAY.JP API呼び出しは公式SDKまたは `application/x-www-form-urlencoded` で実行する（JSON POSTしない）
   - PAY.JP API（customer/subscription作成）が `429` または `5xx` の場合は指数バックオフで最大3回再試行する
-  - `discord_user_id` 単位の排他ロックを取得
+  - `members` テーブルの対象行に `SELECT FOR UPDATE` を実行してロックを取得
   - `subscription_request_keys` で冪等性を保証（`discord_user_id + idempotency_key` unique）
-  - 同一 `Idempotency-Key` 再送時は `request_hash` を照合し、一致時のみ保存済みレスポンスを返す（不一致は409）
+  - 同一 `Idempotency-Key` 再送時は保存済みレスポンスをそのまま返す
   - 既存 `active` 購読がある場合は新規作成せず既存結果を返す
   - PAY.JPでcustomer作成（既存あれば再利用）
   - PAY.JPでsubscription作成（選択プラン、`metadata.discord_user_id` を保存）
@@ -188,6 +185,8 @@ MVPでは実装しない。
 2. `subscription.updated`
 3. `subscription.canceled`
 4. `subscription.deleted`
+5. `subscription.paused`
+6. `subscription.resumed`
 
 共通処理:
 
@@ -196,8 +195,8 @@ MVPでは実装しない。
 3. 重複 `event.id` は二重処理せず `200` を返す。
 4. 新規イベントは payload の `data.object`（subscription）を真実源として `status/plan/metadata.discord_user_id` を読み取る。
 5. `metadata.discord_user_id` が欠落している場合は `process_status = failed` にし、日次再同期または手動再同期CLIで回復する。
-6. `discord_user_id` 単位の排他ロックを取得し、Webhook処理と再同期処理の競合を防ぐ。
-7. `subscription.deleted` は `members.subscription_status = deleted` として扱う。その他は payload の `subscription.status` を反映する。
+6. `members` テーブルの対象行に `SELECT FOR UPDATE` を実行してロックを取得し、Webhook処理と再同期処理の競合を防ぐ。
+7. `subscription.deleted` イベントは `event.type` で判断し、payload の `data.status` によらず `members.subscription_status = deleted` として扱う。その他のイベントは payload の `subscription.status` を `members.subscription_status` に反映する。
 8. `plan.id` が取得できた場合のみ `members.payjp_plan_id` を更新する。
 9. 状態に応じてDiscordロール同期を実行する。
 10. Discord API `429/5xx` は指数バックオフで最大3回再試行し、最終失敗時は `process_status = failed` を記録する。
@@ -287,7 +286,6 @@ MVPでは実装しない。
 - `id` (uuid, pk)
 - `discord_user_id` (text)
 - `idempotency_key` (text)
-- `request_hash` (text)
 - `response_json` (jsonb)
 - `created_at`
 - unique: (`discord_user_id`, `idempotency_key`)
@@ -299,7 +297,7 @@ MVPでは実装しない。
 3. `link_session` をワンタイム・短期有効にする。
 4. OAuth/linkトークンはURLに載せない（Cookieのみ）。
 5. `POST /v1/subscriptions` は `Idempotency-Key` 必須 + 既存active購読ガードを実装する。
-6. `POST /v1/subscriptions` は `Idempotency-Key` 再利用時に `request_hash` 不一致を `409` で拒否する。
+6. `POST /v1/subscriptions` の `Idempotency-Key` 再利用時は保存済みレスポンスを返す（`request_hash` 照合はMVP後に追加）。
 7. `POST /v1/subscriptions` は `Origin` を優先検証し、`Origin` が無い場合のみ `Referer` を検証する。`FRONTEND_BASE_URL` 不一致または両方欠落は `403` で拒否する。
 8. `POST /v1/subscriptions` は `X-CSRF-Token` と `csrf_token` Cookie の一致を必須化する。
 9. Cookieベース連携を成立させるため、本番はフロントとAPIを同一サイト（同一eTLD+1）に配置する。
@@ -311,10 +309,10 @@ MVPでは実装しない。
 15. Webhookは `Content-Type` 前方一致・ボディサイズ上限・`event.created` 鮮度チェック（未来許容5分）を実施する。
 16. Webhookの恒久的な不正入力は `ignored` 記録 + `200` 応答とし、不要な再送を抑止する。
 17. Webhook payload の `metadata.discord_user_id` 欠落や会員不整合時は fail-close（ロール付与しない）で `failed` に記録する。
-18. 本番の購読作成は3-Dセキュア `verified` トークンのみ受け付ける（`attempted` は拒否）。
+18. 本番の購読作成は3-Dセキュア `verified` トークンのみ受け付ける（`attempted` / `failed` / `error` / `unverified` / `null` は拒否）。
 19. 3-Dセキュア実行時、`createToken` の `three_d_secure: true` と `card.name + card.email`（`card.phone` は任意）を必須化する。
 20. `subscription.metadata.discord_user_id` を保存する。
-21. Webhook処理・再同期ジョブ・購読作成処理は `discord_user_id` 単位で排他ロックを取得する。
+21. Webhook処理・再同期ジョブ・購読作成処理は `members` テーブルの対象行に `SELECT FOR UPDATE` を実行してロックを取得する。
 22. 公開APIにレート制限を適用する（`/auth/*`, `/subscriptions`, `/payjp/webhook`）。
 23. CORS許可オリジンを `FRONTEND_BASE_URL` のみに固定する。
 24. カード情報を保存・ログ出力しない。
@@ -372,30 +370,28 @@ MVPでは実装しない。
 - `csrf_token` 発行（double submit）実装
 
 3. Day 4-5
-- `POST /v1/subscriptions`
-- PAY.JP顧客/購読作成（3プランから1つ選択）
+- `POST /v1/subscriptions` コア実装（PAY.JP顧客/購読作成、3プランから1つ選択）
 - 3-Dセキュア必須フロー（`verified` のみ受理）
-- Idempotency-Key + 既存active購読ガード実装
-- 課金前Discord参加チェック + ロール付与可能性チェック実装
-- Discordロール付与/剥奪関数
+- PAY.JP Token再取得検証
 
 ## Week 2
 
 1. Day 6
+- `POST /v1/subscriptions` 仕上げ（Idempotency-Key保存・既存active購読ガード・課金前Discord参加チェック + ロール付与可能性チェック・SELECT FOR UPDATE ロック・Discordロール付与/剥奪関数）
+
+2. Day 7
 - Webhook受信 + 冪等化
-- `subscription.created/updated/canceled/deleted` の最小イベント処理
+- `subscription.created/updated/canceled/deleted/paused/resumed` の最小イベント処理
 - `livemode` 検証実装
 - Webhook `Content-Type` / ボディ上限 / `event.created` 鮮度チェック（未来時刻は `ignored`）実装
 - payloadベースの会員状態反映 + ロール同期実装
 
-2. Day 7
+3. Day 8
 - PAY.JP API `429/5xx` 再試行（指数バックオフ）実装
 - 日次再同期ジョブ
 - 手動再同期CLI
 - OAuth/Linkセッション期限切れ掃除
-- `discord_user_id` 単位ロックでWebhook/再同期の競合回避
-
-3. Day 8
+- `SELECT FOR UPDATE` でWebhook/再同期の競合回避
 - ログマスキング/レート制限/CORS固定の仕上げ
 - 運用手順の最小化（再同期実行手順、失敗時の一次対応）
 
@@ -420,7 +416,7 @@ MVPでは実装しない。
 5. `X-CSRF-Token` 不一致の `POST /v1/subscriptions` は403で拒否される。
 6. `Origin/Referer` 検証（`Origin` 優先、`Origin` 無し時の `Referer` フォールバック、両方欠落拒否）が仕様通りに動作する。
 7. Discord未参加またはBot権限不足時は `POST /v1/subscriptions` が課金前に失敗し、PAY.JP APIが呼ばれない。
-8. 同一 `Idempotency-Key` 再送で二重購読が作成されず、`request_hash` 不一致は409で拒否される。
+8. 同一 `Idempotency-Key` 再送で二重購読が作成されない。
 9. 既存 `active` 購読ありで二重作成されない。
 10. 3-Dセキュア `verified` 以外の `payjpToken` では `POST /v1/subscriptions` が失敗し、3DS中断/失敗/タイムアウト時は `POST /v1/subscriptions` が実行されない。
 11. `event.id` 重複送信でWebhookが二重処理されない。
@@ -450,3 +446,4 @@ MVPでは実装しない。
 2. 監視高度化（外部監視SaaS、メトリクス可視化、SLO化）
 3. プラン別Role分岐（必要時のみ）
 4. 会員ポータル化（解約/カード変更/プラン変更）
+5. `Idempotency-Key` 再利用時の `request_hash` 不一致チェック
