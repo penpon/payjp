@@ -108,6 +108,28 @@ MVPでは実装しない。
 70. 受け入れ証跡の自動収集（CI ID/operationId/ログ紐付け）
 71. `503` 不確定失敗時の「運用者による手動API再実行」運用の必須化
 72. Week1 Day1終了時点での課金/解約状態遷移表の変更凍結
+73. Webhookの `event.type` 別必須項目の詳細固定（`data.current_period_end` を含む厳密必須）
+74. Discord API `429` 時の `Retry-After` 優先 + 最大3秒待機の詳細制御
+75. 手動再同期CLIで `role_mismatch_count/revocation_miss_count` 出力を必須化
+76. `role_mismatch_count/revocation_miss_count` 残件の手順・担当者・期限記録をGo-Live必須化
+77. Webhook処理/再同期処理まで含む全面 `pg_advisory_xact_lock` 必須化
+78. Webhook処理で `payjp_events` 記録・`members` 更新・`process_status` 更新の3点同時トランザクション必須化
+79. Discord API再試行の詳細制御（短時間/待機制限）の必須化
+80. セキュリティ必須としてのUTC保持/JST換算ルール
+81. `payjp_events` 監査項目最小化の詳細規定の必須化
+82. `operationId` を全ログ/外部API呼出へ必須付与
+83. 再同期CLIの `--dry-run`（差分表示のみ）
+84. Webhookペイロード再生ツール（保存イベントのローカル再実行）
+85. Discord未参加ユーザーへの招待リンク自動提示UI
+86. 保護POSTへのCSRFトークン（二重送信）
+87. 秘密鍵ローテーション訓練（手順リハーサル）
+88. Webhook異常トラフィック向けWAFルール
+89. 再加入時trial再適用なしの自動テスト必須化
+90. `paused/deleted` 剥奪の受け入れ別立て必須化
+91. `operationId` 追跡可能性の受け入れ別立て必須化
+92. 受け入れ項目ごとの個別証跡（毎回ログ添付）の必須化
+93. `PAYJP_PLAN_IDS` 残り2プランの設定整合テスト必須化
+94. `access_end_at` 「1か月前同日 00:00:00 JST」境界マトリクス全面網羅
 
 ## 4. 全体構成（最小）
 
@@ -209,8 +231,8 @@ MVPでは実装しない。
   - `planId` が `PAYJP_PLAN_IDS` の許可リスト内であることを検証
   - ユーザー単位の排他制御として `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
   - `members` 行が存在しない場合は `discord_user_id` と `email` で仮行を作成する（購読作成中状態の永続化に利用）
-  - ロック後に `members` を参照し、既存 `active/trial`、または `canceled` かつ `access_end_at > now()` の契約がある場合は新規作成せず既存結果を返し、残存 `inflight_operation_*` があれば同時にクリアする
-  - 既存有効契約がない状態で `members.inflight_operation_id` が存在する場合は新規課金処理を開始せず `503` を返す（既存 `operationId` を返却。運用でPAY.JP状態確認後に再同期CLIで回復する）
+  - `members.inflight_operation_id` が存在する場合は既存契約有無に関わらず新規課金処理を開始せず `503` を返す（既存 `operationId` を返却。解除はPAY.JP状態確認後の再同期CLIのみ）
+  - ロック後に `members` を参照し、既存 `active/trial`、または `canceled` かつ `access_end_at > now()` の契約がある場合は新規作成せず既存結果を返す
   - `discord_user_id` が `DISCORD_GUILD_ID` のメンバーであることを検証（未参加は409）
   - Botに `Manage Roles` 権限があり、`DISCORD_PAID_ROLE_ID` を付与可能な序列であることを検証（不可は503）
   - `payjpToken` をPAY.JP APIで再取得し、`used=false` かつ `card.three_d_secure_status = verified` を検証する（`attempted` / `failed` / `error` / `unverified` / `null` は422）
@@ -229,9 +251,9 @@ MVPでは実装しない。
   - 成功時は `members.inflight_operation_*` をクリアする
 - 失敗時ポリシー:
   - customer/subscription/charge 作成系APIは自動再試行しない（重複作成リスク回避）
-- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする）
+- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする。`__Host-link_session` は再利用不可のため再OAuth必須）
   - 確定失敗（バリデーション/事前検証失敗）では `members.inflight_operation_*` をクリアして失敗を返す
-  - `operationId` は API応答ログ・失敗ログに必ず記録し、外部API呼出ログにも同一値を付与する
+  - `operationId` は API応答ログ・失敗ログに必ず記録する
 - 出力: `{ ok: true, memberId, subscriptionStatus, planId, trialApplied, accessEndAt }`
 
 6. `POST /v1/subscriptions/cancel`
@@ -242,39 +264,41 @@ MVPでは実装しない。
   - `__Host-link_session` Cookie を検証し、失効/不正/消費済みは `401` で拒否して再OAuthを要求する
   - ユーザー単位の排他制御として `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
   - `members` を取得し、`active/trial/canceled` の既存購読が無ければ409
-  - `members.cancel_requested_at` が既存の場合はPAY.JP cancel APIを再実行せず `200` を返す（冪等成功）
   - `members.inflight_operation_id` が存在する場合は新規キャンセル処理を開始せず `503` を返す（既存 `operationId` を返却）
-  - DB保存時刻はUTC（`timestamptz`/Unix秒）で扱い、受付可否判定時のみJSTに変換する
+  - `members.access_end_at` が未設定の場合は `409` を返し、再同期CLIで状態補正後に再実行する
   - 退会申請の受付開始日時は `access_end_at` の1か月前同日 `00:00:00 JST` とする。該当日が存在しない場合は当月末日に繰り上げる（例: 3/31 -> 2/28 or 2/29）
   - `now_jst < 受付開始日時` の場合は早期申請として `409` を返す
-  - PAY.JP書き込み（cancel API）開始前に `operationId` を生成し、`members.inflight_operation_id` / `members.inflight_operation_type=cancel` / `members.inflight_operation_started_at` を保存する
   - 認証前提検証（`Origin` / `__Host-link_session` / 受付期間判定）を通過した時点で `__Host-link_session` を消費する（以後は成功/失敗に関わらず再利用不可）
+  - `members.cancel_requested_at` が既存の場合はPAY.JP cancel APIを再実行せず `200` を返す（冪等成功、Cookieは消費済み）
+  - PAY.JP書き込み（cancel API）開始前に `operationId` を生成し、`members.inflight_operation_id` / `members.inflight_operation_type=cancel` / `members.inflight_operation_started_at` を保存する
   - PAY.JP subscriptionキャンセルAPIを呼び、次回請求を停止する（即時削除はしない）
   - `members.cancel_requested_at` を記録し、`members.access_end_at` をPAY.JP応答の終了時刻で更新する
   - ロール同期は行わない（終了日到達までは付与維持）
   - 成功時は `members.inflight_operation_*` をクリアする
 - 失敗時ポリシー:
   - subscriptionキャンセルAPIは自動再試行しない
-- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする）
-  - `operationId` は API応答ログ・失敗ログに必ず記録し、外部API呼出ログにも同一値を付与する
+- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする。UI文言は「再OAuthが必要です」に固定する）
+  - `operationId` は API応答ログ・失敗ログに必ず記録する
 - 出力: `{ ok: true, memberId, cancelEffectiveAt, roleRemovalAt }`
 
 7. `POST /v1/payjp/webhook`
 - 目的: 課金状態更新
 - ヘッダ検証: `X-Payjp-Webhook-Token`
 - 処理:
+  - `X-Payjp-Webhook-Token` 不一致は `401` を返し、`payjp_events` とは分離したセキュリティログに記録する（`payjp_event_id` 一意領域に入れない）
   - `livemode` が `PAYJP_LIVEMODE` と一致することを検証（不一致は `ignored` 記録して200）
   - `event.type` は `subscription.created/updated/renewed/canceled/deleted/paused/resumed` の許可リストのみ処理し、それ以外は `ignored` 記録して200で受理する
   - `data.object` は `subscription` を必須とし、不一致は `ignored` 記録して200で受理する
-  - 処理対象イベントの必須項目を `event.type` ごとに固定する（`subscription.updated/renewed/canceled/resumed` は `event.id/event.created/data.id/data.status/data.current_period_end` 必須、`subscription.paused` は `event.id/event.created/data.id/data.status` 必須、`subscription.deleted` は `event.id/event.created/data.id` 必須）
-  - `subscription.created` は `event.id/event.created/data.id` を満たす場合でも常に `ignored` として記録し、`members` は更新しない
+  - 必須項目は `event.id` / `event.type` / `event.created` / `data.id` を最小必須とする。`members.subscription_status` を反映するイベント（`created`/`deleted` 以外）は `data.status` も必須とする
+  - `subscription.created` は必須項目充足時のみ `ignored` として記録し、必須項目欠落時は `failed` として記録する（`members` は更新しない）
   - `data.metadata.discord_user_id` と `data.id` 逆引きで解決した `discord_user_id` が両方得られる場合は一致必須とし、不一致時は `failed` 記録で `members` 非更新（fail-close）
   - 上記必須項目が欠落/不正な場合、`members` 更新は行わず `failed` 記録して200を返す
-  - `event.id` / `event.type` / `event.created` / `livemode` / `data.id` / `data.object` / `data.status` / `data.plan.id` / `data.current_period_end` / `data.metadata.discord_user_id` を `payjp_events` に保存（`payjp_event_id` unique）
+  - `event.id` / `event.type` / `event.created` / `livemode` / `data.id` / `data.object` / `data.status` / `data.plan.id` / `data.current_period_end` / `data.metadata.discord_user_id` を `payjp_events` に保存する（`payjp_event_id` unique はトークン検証通過イベントのみに適用）
   - 重複なら何もしないで200
-  - 新規イベントは `payjp_events` 記録・`members` 更新・`process_status` 更新を1トランザクションで実行する（`succeeded/failed/ignored`）
+  - 新規イベントは `payjp_events` 記録・`members` 更新・`process_status` 更新を同一処理で実行する（`succeeded/failed/ignored`）
 - 応答:
-  - 恒久的に処理しない入力（トークン不一致 / `livemode` 不一致 / 許可外 `event.type` / `data.object` 不一致）は `200` を返し `ignored` として記録する
+  - トークン不一致は `401`
+  - 恒久的に処理しない入力（`livemode` 不一致 / 許可外 `event.type` / `data.object` 不一致）は `200` を返し `ignored` として記録する
   - 必須項目欠落・型不正の処理不能入力は `200` を返し `failed` として記録する（`members` は更新しない）
   - 重複時は `200`
   - 新規イベント処理完了時は `200`
@@ -284,7 +308,7 @@ MVPでは実装しない。
 
 対象イベントは最小限に限定する。
 
-1. `subscription.created`（常に `ignored`）
+1. `subscription.created`（必須項目充足時は `ignored`）
 2. `subscription.updated`
 3. `subscription.renewed`
 4. `subscription.canceled`
@@ -295,25 +319,24 @@ MVPでは実装しない。
 共通処理:
 
 1. 受信時に `X-Payjp-Webhook-Token` / `livemode` / `event.type` 許可リスト / `data.object=subscription` を検証する。
-2. 必須項目は `event.type` ごとに固定する（`updated/renewed/canceled/resumed`: `event.id,event.created,data.id,data.status,data.current_period_end`、`paused`: `event.id,event.created,data.id,data.status`、`deleted`: `event.id,event.created,data.id`）。
-3. `event.id` を `payjp_events` へ保存して冪等化する（`payjp_event_id` unique）。
-4. 重複 `event.id` は二重処理せず `200` を返す。
-5. `subscription.created` は常に `ignored` を記録して終了する（`members` は更新しない）。
-6. 新規イベント（`created` 以外）は payload の `data` をsubscription本体として扱い、`status/plan/metadata.discord_user_id/current_period_end` を読む。
-7. `discord_user_id` はまず `data.metadata.discord_user_id` から取得する。欠落時は対象イベント（`subscription.updated/renewed/canceled/paused/resumed/deleted`）で `data.id`（subscription id）から `members.payjp_subscription_id` を逆引きし、解決できない場合は `failed` として記録する。
-8. `data.metadata.discord_user_id` と `data.id` 逆引きが両方解決できる場合は一致必須とし、不一致時は `failed` として記録する（`members` 非更新）。
-9. `event.created`（Unix秒）が欠落/不正なイベントは `failed` として記録する。
-10. `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得し、Webhook処理と再同期処理の競合を防ぐ。
+2. トークン不一致は `401` を返し、`payjp_events` と分離したセキュリティログへ記録する。
+3. 必須項目は `event.id,event.type,event.created,data.id` を最小必須とし、`members.subscription_status` を反映するイベント（`created/deleted` 以外）は `data.status` も必須とする。
+4. `event.id` を `payjp_events` へ保存して冪等化する（`payjp_event_id` unique はトークン検証通過イベントのみに適用）。
+5. 重複 `event.id` は二重処理せず `200` を返す。
+6. `subscription.created` は必須項目欠落時は `failed`、充足時は `ignored` を記録して終了する（`members` は更新しない）。
+7. 新規イベント（`created` 以外）は payload の `data` をsubscription本体として扱い、`status/plan/metadata.discord_user_id/current_period_end` を読む。
+8. `discord_user_id` はまず `data.metadata.discord_user_id` から取得する。欠落時は対象イベント（`subscription.updated/renewed/canceled/paused/resumed/deleted`）で `data.id`（subscription id）から `members.payjp_subscription_id` を逆引きし、解決できない場合は `failed` として記録する。
+9. `data.metadata.discord_user_id` と `data.id` 逆引きが両方解決できる場合は一致必須とし、不一致時は `failed` として記録する（`members` 非更新）。
+10. `event.created`（Unix秒）が欠落/不正なイベントは `failed` として記録する。
 11. `event.created < members.last_payjp_event_created_at` の場合は順不同到着の古いイベントとして `ignored` にする（状態を巻き戻さない）。`event.created` が同秒の場合は到着順で処理し、最終整合は日次再同期で補正する。
 12. `subscription.deleted` は `event.type` で判断し、`data.status` によらず `members.subscription_status = deleted` として扱う。その他イベントは `data.status`（`active/trial/canceled/paused`）を `members.subscription_status` に反映する。
 13. `data.plan.id` が取得できた場合のみ `members.payjp_plan_id` を更新する。
-14. `data.current_period_end` を取得できた場合は `members.next_billing_at` に保存する。`status=active/trial/canceled` の間は同値を `members.access_end_at` にも保存する（アクセス保証終了時刻）。
+14. `data.current_period_end` は取得できた場合のみ `members.next_billing_at` に保存する。`status=active/trial/canceled` の間は同値を `members.access_end_at` にも保存する（アクセス保証終了時刻）。
 15. `ignored` 以外で処理したイベントは `status` 不変でも `members.last_payjp_event_created_at = event.created` を更新する。
 16. `status` 不変の `subscription.updated` でも `payjp_plan_id` と `next_billing_at/access_end_at` の更新は行う。Role同期のみ省略できる。
 17. 状態に応じてDiscordロール同期を実行する。
-18. Discord API `429/5xx` は短時間の同期リトライ（0秒, 1秒, 3秒）を最大3回行い、最終失敗時は `process_status = failed` を記録する。
-19. `payjp_events` 記録・`members` 更新・`payjp_events.process_status` 更新は1トランザクションで完了させる。
-20. 必須項目欠落や検証失敗時は fail-close（`members` 非更新）とし、`failed` を記録する（DB障害以外は `200`）。
+18. Discord API `429/5xx` は短時間の同期リトライを最大3回行い、最終失敗時は `process_status = failed` を記録する。
+19. 必須項目欠落や検証失敗時は fail-close（`members` 非更新）とし、`failed` を記録する（DB障害以外は `200`）。
 
 注記:
 
@@ -325,9 +348,8 @@ MVPでは実装しない。
 1. `active` / `trial` / `canceled` のとき付与する。
 2. `canceled` は `access_end_at` 到達までは付与を維持し、`subscription.deleted` 到達時は即時剥奪する。Webhook欠落時は次回日次再同期で `access_end_at` 超過を補正して剥奪する。
 3. `paused` / `deleted` / 不明ステータスは剥奪する。
-4. APIエラー時は短時間の同期リトライを最大3回（0秒, 1秒, 3秒）実行する。
-5. 429時は `Retry-After` を優先するが、MVPでは最大3秒まで待機し、長い待機が必要な場合は失敗記録して再同期へ回す。
-6. `payjp_plan_id` はRole判定に使わない（3プランでもRoleは共通）。
+4. APIエラー時は短時間の同期リトライを最大3回実行する。長時間待機は行わず、失敗時は再同期へ回す。
+5. `payjp_plan_id` はRole判定に使わない（3プランでもRoleは共通）。
 
 ## 6.5 解約時ポリシー（MVP）
 
@@ -421,40 +443,31 @@ MVPでは実装しない。
 
 ## 8. セキュリティ要件（MVP必須）
 
-1. OAuth `state` 検証を必須化する。
-2. `oauth_states` に `state_hash + oauth_session_hash` を保存し、callbackで `state + __Host-oauth_session + 未使用 + TTL内` を1トランザクションで検証/消費する。
-3. OAuth連携Cookieは `__Host-oauth_session` を使用する（`Secure; Path=/; Domainなし; HttpOnly; SameSite=Lax`）。
-4. 課金連携Cookieは `__Host-link_session` を使用する（同属性、TTL 15分、ワンタイム）。
-5. `__Host-link_session` は認証前提検証（`Origin` / セッション整合。`cancel` では受付期間判定も含む）通過後かつPAY.JP書き込み前に消費し、成功/失敗に関わらず再利用不可とする。
-6. OAuth/linkトークンはURLに載せない（Cookieのみ）。
-7. `POST /v1/subscriptions` / `POST /v1/subscriptions/cancel` は `Origin == FRONTEND_BASE_URL` を必須化し、欠落/不一致/`Origin: null` は `403` で拒否する。
-8. Cookieベース連携を成立させるため、本番はフロントとAPIを同一サイト（同一eTLD+1）に配置する。
-9. `POST /v1/subscriptions` の課金実行前に、Discordギルド参加状態とBotのロール付与可能性を検証する（不成立時は課金しない）。
-10. `createToken` の `three_d_secure: true` を必須化し、本番の購読作成は3-Dセキュア `verified` トークンのみ受け付ける（`attempted` / `failed` / `error` / `unverified` / `null` は拒否）。
-11. `subscription.metadata.discord_user_id` を保存する。
-12. customer/subscription/charge 作成系PAY.JP APIは自動再試行しない（重複作成リスク回避）。
-13. 不確定失敗（タイムアウト等）は `503 + operationId` を返し、クライアント自動再試行は禁止する。
-14. 不確定失敗に備え、PAY.JP書き込み前に `members.inflight_operation_id/type/started_at` を保存し、成功時のみクリアする。
-15. 購読作成・退会申請・Webhook処理・再同期処理は `pg_advisory_xact_lock(hashtext(discord_user_id))` でユーザー単位排他を取得する。
-16. Webhookトークン検証を必須化する。
-17. Webhookで `livemode` を検証する。
-18. `event.id` の冪等化を必須化する。
-19. Webhookは `event.created` の新旧判定を実施し、`event.created < last_payjp_event_created_at` の古いイベントで会員状態を巻き戻さない。
-20. Webhookは `event.type` を `subscription.created/updated/renewed/canceled/deleted/paused/resumed` の許可リストに固定し、`data.object=subscription` を必須化する。
-21. Webhookの必須項目は `event.type` ごとに固定し、欠落・不正入力は fail-close（`members` 非更新）で `failed` 記録とする（DB障害以外は `200`）。
-22. `data.metadata.discord_user_id` と `data.id` 逆引きが両方解決できる場合は一致必須とし、不一致時は `failed` とする。
-23. `subscription.created` は常に `ignored` とし、`members` を更新しない。
-24. Webhook処理では `payjp_events` 記録・`members` 更新・`process_status` 更新を1トランザクションで実行する。
-25. Discord API再試行は短時間同期リトライのみ許可し、分単位再試行は日次再同期/手動CLIで回復する。
-26. カード情報を保存・ログ出力しない。
-27. Botトークン/PAY.JP秘密鍵/OAuthクライアント秘密を環境変数で管理する。
-28. APIログ・レスポンスの機密値は `authorization`, `cookie`, `set-cookie`, `x-payjp-webhook-token`, `payjpToken`, `code`, `secret` の固定キーをキー名の大文字小文字を区別せずマスクし、`/v1/payjp/webhook` と認証/課金APIで raw header/body をログ保存しない。
-29. `callback` / `session` 応答は `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を必須とする。
-30. DB時刻はUTC（`timestamptz` またはUnix秒）で保持し、JST換算は受付日計算の判定時のみ行う。
-31. `planId` は `PAYJP_PLAN_IDS` の許可リスト照合を必須化し、購読作成APIで不正値を拒否する。
-32. 初回無料適用は `discord_user_id` 単位で一度のみ許可し、`first_trial_granted_at` を保存する。
-33. `payjp_events` には最小限の監査項目のみ保存し、カード情報を保持しない（`discord_user_id` は整合確認用途で保持可）。
-34. `operationId` はAPI応答ログ・失敗ログに同一値で必ず記録し、外部API呼出ログにも同一値を付与する。
+詳細実装は `6.2` / `6.3` を正とし、ここではP0のみを固定する。
+
+1. OAuth callbackで `state + __Host-oauth_session + 未使用 + TTL内` を1トランザクションで検証/消費する。
+2. OAuth連携Cookieは `__Host-oauth_session`、課金連携Cookieは `__Host-link_session` を使用し、後者はTTL 15分のワンタイムとする。
+3. `__Host-link_session` は認証前提検証通過後かつPAY.JP書き込み前に消費し、成功/失敗に関わらず再利用不可とする。
+4. OAuth/linkトークンはURLに載せない（Cookieのみ）。
+5. `POST /v1/subscriptions` / `POST /v1/subscriptions/cancel` は `Origin == FRONTEND_BASE_URL` を必須化し、欠落/不一致/`Origin: null` は `403` で拒否する。
+6. Cookieベース連携を成立させるため、本番はフロントとAPIを同一サイト（同一eTLD+1）に配置する。
+7. `POST /v1/subscriptions` の課金実行前にDiscord参加状態とBotのロール付与可能性を検証し、不成立時は課金しない。
+8. `createToken` の `three_d_secure: true` を必須化し、本番の購読作成は3-Dセキュア `verified` トークンのみ受け付ける。
+9. customer/subscription/charge/cancel のPAY.JP書き込みAPIは自動再試行しない。
+10. 不確定失敗（タイムアウト等）は `503 + operationId` を返し、クライアント自動再試行は禁止する。
+11. 不確定失敗に備え、PAY.JP書き込み前に `members.inflight_operation_id/type/started_at` を保存し、成功時のみクリアする。
+12. `members.inflight_operation_id` が残っている間は課金/解約APIを再実行せず `503` とし、解除は再同期CLIのみで行う。
+13. 購読作成・退会申請APIでは `pg_advisory_xact_lock(hashtext(discord_user_id))` によるユーザー単位排他を取得する。
+14. Webhookはトークン検証を必須化し、不一致は `401` を返して `payjp_events` と分離したセキュリティログへ記録する。
+15. Webhookは `livemode` / `event.type` 許可リスト / `data.object=subscription` を検証する。
+16. Webhookの最小必須項目は `event.id,event.type,event.created,data.id` とし、状態反映イベントは `data.status` も必須とする。欠落・不正入力は fail-close（`members` 非更新）で `failed` 記録とする。
+17. `subscription.created` は必須項目欠落時のみ `failed`、充足時は `ignored` とする。
+18. `event.id` の冪等化（トークン検証通過イベントのみ）と `event.created` 新旧判定を実施し、古いイベントで会員状態を巻き戻さない。
+19. `data.metadata.discord_user_id` と `data.id` 逆引きが両方解決できる場合は一致必須とし、不一致時は `failed` とする。
+20. カード情報を保存・ログ出力しない。機密値は固定キーでマスクし、`/v1/payjp/webhook` と認証/課金APIで raw header/body をログ保存しない。
+21. `callback` / `session` 応答は `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を必須とする。
+22. `planId` は `PAYJP_PLAN_IDS` の許可リスト照合を必須化し、購読作成APIで不正値を拒否する。
+23. 初回無料適用は `discord_user_id` 単位で一度のみ許可し、`first_trial_granted_at` を保存する。
 
 ## 9. 環境変数
 
@@ -485,19 +498,22 @@ MVPでは実装しない。
 - `access_end_at` 超過（`canceled`/`trial` の終了到達）会員はロール剥奪対象として再同期する
 - 障害対応として同じ再同期処理を運用CLIから手動実行可能にする（公開HTTP endpointは設けない）
 - 手動再同期CLIは `operationId` または `discord_user_id` 指定で対象会員を再同期できる
-- `inflight_operation_*` 残留時は「`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` 更新」を1実行で行う
+- `inflight_operation_*` 残留時は「`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` 更新」を1実行で行う（この反映後に到着した `event.created` がそれ未満の遅延Webhookは `ignored` としてよい）
 - `inflight_operation_*` はPAY.JP現状態と `members` 整合が確認できた場合のみ解除する。PAY.JP状態が確定不能な場合は解除しない
-- 手動再同期CLIは実行結果として `failed_count` / `role_mismatch_count` / `revocation_miss_count` を出力する（集計範囲は当該CLI実行対象のみ）
-- `failed_count` は未解決の会員影響件数を表し、完了判定は `failed_count=0` を必須とする。`role_mismatch_count` / `revocation_miss_count` は残件手順を記録して処理する
+- 手動再同期CLIは実行結果として `failed_count` を必須出力する
+- `failed_count` は未解決の会員影響件数を表し、完了判定は `failed_count=0` のみを必須とする
 
 2. 期限切れデータ掃除ジョブ
 - 日次1回で `oauth_states` / `discord_link_sessions` の期限切れ行を削除
 
 ## 11. 開発スケジュール（〜2026-04-20）
 
+- 機能凍結日: 2026-04-16（Day 9 終了時）
+- リリース実行日: 2026-04-20
+
 ## Week 1
 
-1. Day 1
+1. Day 1（2026-04-06）
 - プロジェクト雛形
 - DBマイグレーション（4テーブル）
 - 環境変数管理
@@ -507,7 +523,7 @@ MVPでは実装しない。
 - 本番DB反映手順（migration適用 -> `/health` -> 主要API疎通）を文書化開始する
 - `2weeks-spec.md` を実装・テストの正本として固定する
 
-2. Day 2
+2. Day 2（2026-04-07）
 - `GET /v1/auth/discord/start`
 - `GET /v1/auth/discord/callback`
 - `GET /v1/auth/discord/session`
@@ -516,30 +532,29 @@ MVPでは実装しない。
 - フロントOAuth連携UI（`/session` 呼び出しと連携状態表示）を実装
 - P0テスト（OAuth state原子的検証）を実装
 
-3. Day 3
+3. Day 3（2026-04-08）
 - 本番外部依存の確認を実施し、未完了項目はリスクとして記録する（PAY.JP本番キー投入可否、Webhook URL/トークン設定、Discord OAuth redirect設定、Bot Role序列確認）
-- `operationId` 共通ログ出力（API応答/外部API呼出/失敗ログ）を実装
+- `operationId` 共通ログ出力（API応答/失敗ログ）を実装
 
-4. Day 4
+4. Day 4（2026-04-09）
 - `POST /v1/subscriptions` コア実装（3プラン選択でPAY.JP顧客/購読作成）
 - `planId` 許可リスト検証実装
 - 初回「1ヶ月目課金 + 2/3ヶ月目無料」判定（`discord_user_id` 単位）実装
 - ユーザー単位ロック（advisory lock）+ 既存有効契約ガード（`canceled && access_end_at > now` のみ新規作成拒否）
 - `members` 仮行作成 + `inflight_operation_*` 保存/クリアを実装
 - `__Host-link_session` の認証前提検証後消費を実装
-- P0テスト（1プランE2E、並列登録、既存契約ガード、3プラン設定整合チェック）を実装
+- P0テスト（1プランE2E、並列登録、既存契約ガード）を実装
 
-5. Day 5
+5. Day 5（2026-04-10）
 - 3-Dセキュア必須フロー（`verified` のみ受理）
 - PAY.JP Token再取得検証（`used=false` + 3DS状態）
 - 3Dセキュア中断/失敗/タイムアウト時の失敗表示 + 再試行導線を実装
 - `subscription.current_period_end` の `next_billing_at/access_end_at` 反映をtrial有無に関係なく実装
 - 不確定失敗時の `503 + operationId` 契約（自動再試行禁止、`inflight_operation_*` 保持）を実装
-- P0テスト（初回無料適用）を実装
 
 ## Week 2
 
-1. Day 6
+1. Day 6（2026-04-13）
 - `POST /v1/subscriptions` 仕上げ（課金前Discord参加チェック + ロール付与可能性チェック + 初回ロール同期）
 - `POST /v1/subscriptions/cancel` 実装（請求停止 + 終了日までRole維持 + `cancel_requested_at` 冪等成功）
 - 作成系PAY.JP APIの「自動再試行しない」失敗ハンドリング実装
@@ -547,58 +562,57 @@ MVPでは実装しない。
 - 機密マスキング（固定キー）と raw header/body ログ禁止を実装
 - P0テスト（課金前Discord未参加/権限不足拒否、cancel境界・冪等）を実装
 
-2. Day 7
+2. Day 7（2026-04-14）
 - Webhook受信 + 冪等化
 - `subscription.created/updated/renewed/canceled/deleted/paused/resumed` の最小イベント処理
 - `event.created` の新旧判定実装（古いイベント無視）
-- `event.type` 別必須項目検証を実装
+- Webhook最小必須項目（`event.id/event.type/event.created/data.id` + 状態反映時 `data.status`）検証を実装
 - `metadata.discord_user_id` と `data.id` 逆引きの一致必須チェックを実装
 - `access_end_at` 更新（`active/trial/canceled`）と終了日ロール剥奪判定実装
-- `subscription.created` を常時 `ignored` に固定
+- `subscription.created` の「必須項目欠落時 failed / 充足時 ignored」を実装
 - `subscription.updated` の `status` 不変時でも `plan/current_period_end` 反映を実装（Role同期は省略可）
-- `payjp_events` 記録 + `members` 更新 + `process_status` 更新の1トランザクション実装
 - P0テスト（Webhook fail-close最小セット、重複/古いイベント/逆引き不一致、`paused/deleted` 剥奪）を実装
 
-3. Day 8
+3. Day 8（2026-04-15）
 - 日次再同期ジョブ
 - 手動再同期CLI
 - OAuth/Linkセッション期限切れ掃除（日次）
 - 運用手順ドラフト作成（再同期CLI手順、手動ロール剥奪手順）
-- 手動再同期CLIの完了条件出力（`failed_count/role_mismatch_count/revocation_miss_count`）を実装
-- P0テスト（`503` 不確定失敗A/B + cancel `503` 復旧）を実装
-- P0テスト（`access_end_at` 到達/JST境界、Webhook整合）を実装
+- 手動再同期CLIの完了条件出力（`failed_count`）を実装
+- P0テスト（`503` 不確定失敗の代表ケース + cancel `503` 復旧）を実装
+- P0テスト（`access_end_at` 到達の代表ケース、Webhook整合）を実装
+- 503復旧オペの運用CLIリハーサルを1回実施する
 
-4. Day 9
+4. Day 9（2026-04-16）
 - `12.1` のGo-Live必須テストを1回実行し、失敗修正後は「修正影響範囲 + 二重課金系 + 503整合系 + `access_end_at` 境界」を再実行してPassさせる（Day9出口条件）
 - Day10本番スモークの事前準備として設定凍結チェックを実施する（Webhook token/livemode、OAuth設定、Role序列）
 - Day8ドラフトの運用文書へDay9修正内容を反映し、最終版を固定する
+- Day9終了時点で機能凍結し、新規機能追加を停止する
 
-5. Day 10
+5. Day 10（2026-04-17）
 - バッファ（最終不具合修正・Go/No-Go判定）を先に実施する
 - 本番環境変数投入
 - migration適用 -> `/health` -> 主要API疎通（OAuth/session/subscriptions/cancel/webhook）を確認する
 - 本番最小スモーク（Webhook token/livemode、OAuth→登録→cancel）を1回実施する
-- リリース
+- Go/No-Go判定を確定し、2026-04-20のリリース実行に備える
 
 ## 12. テスト要件（P0必須）
 
-### 12.1 P0（Go-Live必須: 9件）
+### 12.1 P0（Go-Live必須: 7件）
 
-1. OAuthは `state + __Host-oauth_session + 未使用 + TTL内` の原子的検証/消費が行われる。代表失敗ケース（`state` 不一致）で認可失敗し、callback/session 応答に `Cache-Control: no-store` と `Referrer-Policy: no-referrer` が付与される。
-2. `POST /v1/subscriptions` は1プランで実課金E2E成功し、`members.payjp_plan_id` 保存とRole付与が行われる。残り2プランは設定整合（`PAYJP_PLAN_IDS` と選択値）を確認する。
-3. Discord未参加時は `POST /v1/subscriptions` が `409` で課金前に失敗し、Bot権限不足またはRole序列不足時は `503` で課金前に失敗する（いずれもPAY.JP APIは呼ばれない）。
-4. 同一 `discord_user_id` への並列 `POST /v1/subscriptions` で二重購読が作成されず、`charge=1` / `subscription=1` が保たれる。既存 `active/trial` または `canceled && access_end_at > now` の契約では新規作成されない。
-5. 初回登録時のみ「1ヶ月目課金 + 2/3ヶ月目無料」が適用され、同一 `discord_user_id` 再加入時は再適用されない。
-6. 不確定失敗（`503`）はサブケースA（`charge` 成功後 `subscription` 失敗/タイムアウト）とサブケースB（`subscription` 作成済みで応答喪失）を検証し、運用CLIで `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。
-7. `POST /v1/subscriptions/cancel` は受付開始日前を `409` で拒否し、`cancel_requested_at` 既存時はPAY.JP再呼び出しなしで冪等成功（200）となる。受付開始判定は `access_end_at` の1か月前同日 `00:00:00 JST` 基準で検証し、`503` 不確定失敗後は `operationId` 確認 + 再同期で整合回復できる。
-8. `access_end_at` 到達時にRoleが除去される（Webhookまたは日次再同期）。JST境界時刻（例: 23:59:59→00:00:00）を時刻固定で検証し、`paused/deleted` 到達時の剥奪も確認する。
-9. Webhookで `event.id` 重複送信は二重処理されず、`event.created` が古いWebhookは `ignored` となり会員状態が巻き戻らない。`metadata.discord_user_id` と `data.id` 逆引き不一致・必須項目欠落は `failed` で `members` 非更新、トークン不一致/`livemode` 不一致/許可外 `event.type`/`data.object` 不一致は `ignored` で、いずれもHTTP 200となる。
+1. OAuthは `state + __Host-oauth_session + 未使用 + TTL内` の原子的検証/消費が行われる。代表失敗ケース（`state` 不一致）で認可失敗する。
+2. `POST /v1/subscriptions` は1プランで実課金E2E成功し、`members.payjp_plan_id` 保存とRole付与が行われる。Discord未参加時は `409`、Bot権限不足またはRole序列不足時は `503` で課金前に失敗する（いずれもPAY.JP APIは呼ばれない）。
+3. 同一 `discord_user_id` への並列 `POST /v1/subscriptions` で二重購読が作成されず、`charge=1` / `subscription=1` が保たれる。既存 `active/trial` または `canceled && access_end_at > now` の契約では新規作成されない。
+4. 不確定失敗（`503`）の代表ケース（`charge` 後の `subscription` 不確定）を検証し、運用CLIで `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。
+5. `POST /v1/subscriptions/cancel` は受付開始日前を `409` で拒否し、`cancel_requested_at` 既存時はPAY.JP再呼び出しなしで冪等成功（200）となる。`503` 不確定失敗後は `operationId` 確認 + 再同期で整合回復でき、`access_end_at` 未設定時は `409` で再同期要求になる。
+6. `access_end_at` 到達時にRoleが除去される（Webhookまたは日次再同期）。`paused/deleted` 到達時の剥奪も確認する。
+7. Webhookで `event.id` 重複送信は二重処理されず、`event.created` が古いWebhookは `ignored` となり会員状態が巻き戻らない。`metadata.discord_user_id` と `data.id` 逆引き不一致・必須項目欠落は `failed` で `members` 非更新、トークン不一致は `401`、`subscription.created` は必須項目欠落時 `failed` / 充足時 `ignored` とする。
 
 ## 13. 運用ルール（MVP）
 
 1. 毎朝、前日失敗ログ件数を確認する。
 2. 手動再同期CLIの `failed_count`（当該CLI実行対象の未解決会員影響件数）が0でない場合は、同日中に再同期と手動復旧を継続する。
-3. 再同期の完了条件は「`failed_count = 0`」とし、`role_mismatch_count` / `revocation_miss_count` は残件手順・担当者・期限を記録して処理する。
+3. 再同期の完了条件は「`failed_count = 0`」とする。
 4. 課金作成API/退会申請APIでタイムアウト等の不確定失敗（`503`）が発生した場合は、`operationId` をキーにPAY.JP現状態を確認してから再同期CLIを実行する（クライアント自動再試行は禁止。再試行は運用CLIのみ）。
 5. `members.inflight_operation_id` が残っている間は同一ユーザーの課金/解約APIを再実行しない。`inflight_operation_started_at` から30分超過時は、`operationId` 突合 -> PAY.JP状態確認 -> `members` 反映 -> `last_payjp_event_created_at` 単調増加更新を完了した場合のみ `inflight_operation_*` を解除できる。
 6. 緊急時手順として手動剥奪を定義し、実施条件・手順・確認方法を運用文書に固定する。
@@ -611,14 +625,12 @@ MVPでは実装しない。
 
 各受け入れ項目の証跡は「実施日時 / テストIDまたは実行コマンド / 結果」を必須とし、`CI実行ID` または `主要ログ1件` のいずれか1つを添付する。
 
-1. Day9で `12.1` の9件を1回実行してPassしている。不具合修正後は「修正影響範囲 + 12.1-4 + 12.1-6 + 12.1-8」を再実行してPassしている。
-2. 検証環境で `paused/deleted` 到達時のロール剥奪（`members.role_state=revoked`）を確認済み。
-3. Day10に本番最小スモーク（Webhook token/livemode、OAuth→登録→cancel）を1回実施し、成功している。
-4. 手動再同期CLIの実行で `failed_count=0` を確認済み。`role_mismatch_count` / `revocation_miss_count` に残件がある場合は、手順・担当者・期限を記録済み。
-5. 2026-04-20時点の運用文書として「再同期CLI手順」「手動ロール剥奪手順」が最終化されている。
-6. 本番反映時に `migration適用 -> /health -> 主要API疎通`（OAuth/session/subscriptions/cancel/webhook）を確認済み。
-7. `503` 発生時の `operationId` が API応答ログと失敗ログで一致し、同一IDで追跡可能であることを確認済み。
-8. 機密マスキング（固定キー）と raw header/body 非出力がログ/レスポンスで確認済み。
+1. Day9で `12.1` の7件を1回実行してPassしている。不具合修正後は「修正影響範囲 + 12.1-3 + 12.1-4 + 12.1-6」を再実行してPassしている。
+2. Day10に本番最小スモーク（Webhook token/livemode、OAuth→登録→cancel）を1回実施し、成功している。
+3. 手動再同期CLIの実行で `failed_count=0` を確認済み。
+4. 2026-04-20時点の運用文書として「再同期CLI手順」「手動ロール剥奪手順」が最終化されている。
+5. 本番反映時に `migration適用 -> /health -> 主要API疎通`（OAuth/session/subscriptions/cancel/webhook）を確認済み。
+6. 機密マスキング（固定キー）と raw header/body 非出力がログ/レスポンスで確認済み。
 
 ## 15. 将来拡張（リリース後）
 
