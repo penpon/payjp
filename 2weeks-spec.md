@@ -106,6 +106,8 @@ MVPでは実装しない。
 68. 匿名化した実Webhookログの長時間リプレイ回帰
 69. Discord/PAY.JP障害注入（429/5xx/timeout）の定期カオステスト
 70. 受け入れ証跡の自動収集（CI ID/operationId/ログ紐付け）
+71. `503` 不確定失敗時の「運用者による手動API再実行」運用の必須化
+72. Week1 Day1終了時点での課金/解約状態遷移表の変更凍結
 
 ## 4. 全体構成（最小）
 
@@ -227,7 +229,7 @@ MVPでは実装しない。
   - 成功時は `members.inflight_operation_*` をクリアする
 - 失敗時ポリシー:
   - customer/subscription/charge 作成系APIは自動再試行しない（重複作成リスク回避）
-  - タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIまたは運用者の手動API再実行のみとする）
+- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする）
   - 確定失敗（バリデーション/事前検証失敗）では `members.inflight_operation_*` をクリアして失敗を返す
   - `operationId` は API応答ログ・失敗ログに必ず記録し、外部API呼出ログにも同一値を付与する
 - 出力: `{ ok: true, memberId, subscriptionStatus, planId, trialApplied, accessEndAt }`
@@ -253,7 +255,7 @@ MVPでは実装しない。
   - 成功時は `members.inflight_operation_*` をクリアする
 - 失敗時ポリシー:
   - subscriptionキャンセルAPIは自動再試行しない
-  - タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIまたは運用者の手動API再実行のみとする）
+- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする）
   - `operationId` は API応答ログ・失敗ログに必ず記録し、外部API呼出ログにも同一値を付与する
 - 出力: `{ ok: true, memberId, cancelEffectiveAt, roleRemovalAt }`
 
@@ -502,7 +504,6 @@ MVPでは実装しない。
 - 静的1ページの骨組み（UI最小、文言のみ）
 - 本番外部依存の事前確認を開始（PAY.JP本番キー、Webhook設定、Discordアプリ/OAuth設定、Role序列確認）
 - 「初回1ヶ月目課金 + 2/3ヶ月目無料」の課金フローを確定（charge + subscription trial の分離）
-- 課金/解約の状態遷移表を確定し、Day 1終了時点で変更凍結する
 - 本番DB反映手順（migration適用 -> `/health` -> 主要API疎通）を文書化開始する
 - `2weeks-spec.md` を実装・テストの正本として固定する
 
@@ -534,7 +535,7 @@ MVPでは実装しない。
 - 3Dセキュア中断/失敗/タイムアウト時の失敗表示 + 再試行導線を実装
 - `subscription.current_period_end` の `next_billing_at/access_end_at` 反映をtrial有無に関係なく実装
 - 不確定失敗時の `503 + operationId` 契約（自動再試行禁止、`inflight_operation_*` 保持）を実装
-- P0テスト（初回無料適用、`503` 不確定失敗A/B）を実装
+- P0テスト（初回無料適用）を実装
 
 ## Week 2
 
@@ -544,7 +545,7 @@ MVPでは実装しない。
 - 作成系PAY.JP APIの「自動再試行しない」失敗ハンドリング実装
 - 退会受付の「1か月前同日 00:00 JST（存在しない日は月末繰上げ）」判定を実装
 - 機密マスキング（固定キー）と raw header/body ログ禁止を実装
-- P0テスト（課金前Discord未参加/権限不足拒否、cancel境界・冪等・503復旧）を実装
+- P0テスト（課金前Discord未参加/権限不足拒否、cancel境界・冪等）を実装
 
 2. Day 7
 - Webhook受信 + 冪等化
@@ -564,6 +565,7 @@ MVPでは実装しない。
 - OAuth/Linkセッション期限切れ掃除（日次）
 - 運用手順ドラフト作成（再同期CLI手順、手動ロール剥奪手順）
 - 手動再同期CLIの完了条件出力（`failed_count/role_mismatch_count/revocation_miss_count`）を実装
+- P0テスト（`503` 不確定失敗A/B + cancel `503` 復旧）を実装
 - P0テスト（`access_end_at` 到達/JST境界、Webhook整合）を実装
 
 4. Day 9
@@ -587,7 +589,7 @@ MVPでは実装しない。
 3. Discord未参加時は `POST /v1/subscriptions` が `409` で課金前に失敗し、Bot権限不足またはRole序列不足時は `503` で課金前に失敗する（いずれもPAY.JP APIは呼ばれない）。
 4. 同一 `discord_user_id` への並列 `POST /v1/subscriptions` で二重購読が作成されず、`charge=1` / `subscription=1` が保たれる。既存 `active/trial` または `canceled && access_end_at > now` の契約では新規作成されない。
 5. 初回登録時のみ「1ヶ月目課金 + 2/3ヶ月目無料」が適用され、同一 `discord_user_id` 再加入時は再適用されない。
-6. 不確定失敗（`503`）はサブケースA（`charge` 成功後 `subscription` 失敗/タイムアウト）とサブケースB（`subscription` 作成済みで応答喪失）を検証し、運用CLIまたは運用者の手動API再実行で `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。
+6. 不確定失敗（`503`）はサブケースA（`charge` 成功後 `subscription` 失敗/タイムアウト）とサブケースB（`subscription` 作成済みで応答喪失）を検証し、運用CLIで `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。
 7. `POST /v1/subscriptions/cancel` は受付開始日前を `409` で拒否し、`cancel_requested_at` 既存時はPAY.JP再呼び出しなしで冪等成功（200）となる。受付開始判定は `access_end_at` の1か月前同日 `00:00:00 JST` 基準で検証し、`503` 不確定失敗後は `operationId` 確認 + 再同期で整合回復できる。
 8. `access_end_at` 到達時にRoleが除去される（Webhookまたは日次再同期）。JST境界時刻（例: 23:59:59→00:00:00）を時刻固定で検証し、`paused/deleted` 到達時の剥奪も確認する。
 9. Webhookで `event.id` 重複送信は二重処理されず、`event.created` が古いWebhookは `ignored` となり会員状態が巻き戻らない。`metadata.discord_user_id` と `data.id` 逆引き不一致・必須項目欠落は `failed` で `members` 非更新、トークン不一致/`livemode` 不一致/許可外 `event.type`/`data.object` 不一致は `ignored` で、いずれもHTTP 200となる。
@@ -597,7 +599,7 @@ MVPでは実装しない。
 1. 毎朝、前日失敗ログ件数を確認する。
 2. 手動再同期CLIの `failed_count`（当該CLI実行対象の未解決会員影響件数）が0でない場合は、同日中に再同期と手動復旧を継続する。
 3. 再同期の完了条件は「`failed_count = 0`」とし、`role_mismatch_count` / `revocation_miss_count` は残件手順・担当者・期限を記録して処理する。
-4. 課金作成API/退会申請APIでタイムアウト等の不確定失敗（`503`）が発生した場合は、`operationId` をキーにPAY.JP現状態を確認してから再同期CLIを実行する（クライアント自動再試行は禁止。再試行は運用CLIまたは運用者の手動API再実行のみ）。
+4. 課金作成API/退会申請APIでタイムアウト等の不確定失敗（`503`）が発生した場合は、`operationId` をキーにPAY.JP現状態を確認してから再同期CLIを実行する（クライアント自動再試行は禁止。再試行は運用CLIのみ）。
 5. `members.inflight_operation_id` が残っている間は同一ユーザーの課金/解約APIを再実行しない。`inflight_operation_started_at` から30分超過時は、`operationId` 突合 -> PAY.JP状態確認 -> `members` 反映 -> `last_payjp_event_created_at` 単調増加更新を完了した場合のみ `inflight_operation_*` を解除できる。
 6. 緊急時手順として手動剥奪を定義し、実施条件・手順・確認方法を運用文書に固定する。
 7. OAuth失敗率が高い場合は `redirect_uri` とクライアント設定を再確認する。
