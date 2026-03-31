@@ -261,7 +261,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 9. `data.metadata.discord_user_id` と `data.id` 逆引きが両方解決できる場合は一致必須とし、不一致時は `failed` として記録する（`members` 非更新）。
 10. `event.created`（Unix秒）が欠落/不正なイベントは `failed` として記録する。
 11. `event.created < members.last_payjp_event_created_at` の場合は順不同到着の古いイベントとして `ignored` にする（状態を巻き戻さない）。`event.created` が同秒の場合は到着順で処理し、最終整合は日次再同期で補正する。
-12. `subscription.deleted` は `event.type` で判断し、`data.status` によらず `members.subscription_status = deleted` として扱う。その他イベントは `data.status`（`active/trial/canceled/paused`）を `members.subscription_status` に反映する。
+12. `subscription.deleted` は `event.type` で判断し、`data.status` によらず `members.subscription_status = deleted` として扱う。その他イベントは `data.status`（`active/trial/canceled/paused`）を `members.subscription_status` に反映する。`data.status` が上記以外（不明ステータス）の場合は `failed` として記録し、`members` は更新せず、安全側でDiscordロール剥奪を実行する。
 13. `data.plan.id` が取得できた場合のみ `members.payjp_plan_id` を更新する。
 14. `data.current_period_end` は取得できた場合のみ `members.next_billing_at` に保存する。`status=active/trial/canceled` の間は同値を `members.access_end_at` にも保存する（アクセス保証終了時刻）。
 15. `ignored` 以外で処理したイベントは `status` 不変でも `members.last_payjp_event_created_at = event.created` を更新する。
@@ -388,7 +388,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 9. customer/subscription/charge/cancel のPAY.JP書き込みAPIは自動再試行しない。
 10. 不確定失敗（タイムアウト等）は `503 + operationId` を返し、クライアント自動再試行は禁止する。
 11. 不確定失敗に備え、PAY.JP書き込み前に `members.inflight_operation_id/type/started_at` を保存し、成功時のみクリアする。
-12. `members.inflight_operation_id` が残っている間は課金/解約APIを再実行せず `503` とし、解除は再同期CLIのみで行う。
+12. `members.inflight_operation_id` が残っている間は課金/解約APIを再実行せず `503` とし、解除は手動再同期CLIのみで行う（日次再同期ジョブでは解除しない）。
 13. 購読作成・退会申請APIでは `pg_advisory_xact_lock(hashtext(discord_user_id))` によるユーザー単位排他を取得する。
 14. Webhookはトークン検証を必須化し、不一致は `401` を返して `payjp_events` と分離したセキュリティログへ記録する。
 15. Webhookは `livemode` / `event.type` 許可リスト / `data.object=subscription` を検証する。
@@ -423,6 +423,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 15. `FRONTEND_BASE_URL`
 16. `OAUTH_COOKIE_SECRET`
 17. `DATABASE_URL`
+18. `DAILY_RESYNC_CRON`（CRON式。JST基準で評価）
 
 `FRONTEND_BASE_URL` はオリジン形式（`scheme://host[:port]`）のみを許可し、pathや末尾スラッシュは含めない。
 
@@ -435,8 +436,8 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - `access_end_at` 超過（`canceled`/`trial` の終了到達）会員はロール剥奪対象として再同期する
 - 障害対応として同じ再同期処理を運用CLIから手動実行可能にする（公開HTTP endpointは設けない）
 - 手動再同期CLIは `operationId` または `discord_user_id` 指定で対象会員を再同期できる
-- `inflight_operation_*` 残留時は「`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` 更新」を1実行で行う（この反映後に到着した `event.created` がそれ未満の遅延Webhookは `ignored` としてよい）
-- `inflight_operation_*` はPAY.JP現状態と `members` 整合が確認できた場合のみ解除する。PAY.JP状態が確定不能な場合は解除しない
+- 手動再同期CLIで `inflight_operation_*` が残留している場合は「`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` 更新」を1実行で行う（この反映後に到着した `event.created` がそれ未満の遅延Webhookは `ignored` としてよい）
+- 手動再同期CLIで `inflight_operation_*` はPAY.JP現状態と `members` 整合が確認できた場合のみ解除する。PAY.JP状態が確定不能な場合は解除しない
 - PAY.JP状態の確定不能が6時間継続した場合は当日中に運用文書の緊急時手順へエスカレーションし、解除可否・担当者・実施時刻を記録する（手動での無条件解除は禁止）
 - 手動再同期CLIは実行結果として `failed_count` を必須出力する
 - `failed_count` は未解決の会員影響件数を表し、完了判定は `failed_count=0` のみを必須とする
@@ -476,7 +477,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - `POST /v1/subscriptions` コア実装（3プラン選択でPAY.JP顧客/購読作成）
 - `planId` 許可リスト検証実装
 - 初回「1ヶ月目課金 + 2/3ヶ月目無料」判定（`discord_user_id` 単位）実装
-- ユーザー単位ロック（advisory lock）+ 既存有効契約ガード（`canceled && access_end_at > now` のみ新規作成拒否）
+- ユーザー単位ロック（advisory lock）+ 既存有効契約ガード（既存 `active/trial`、または `canceled && access_end_at > now` は新規作成拒否）
 - `members` 仮行作成 + `inflight_operation_*` 保存/クリアを実装
 - `__Host-link_session` の認証前提検証後消費を実装
 - P0テスト（代表1プランE2E、残り2プラン設定整合、並列登録、既存契約ガード）を実装
@@ -515,13 +516,13 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 日次再同期ジョブ
 - 手動再同期CLI
 - 運用手順ドラフト作成（再同期CLI手順、手動ロール剥奪手順）
-- Day10本番スモークの事前準備として設定凍結チェックを実施する（Webhook token/livemode、OAuth設定、Role序列）
+- Day10本番スモークの事前準備として設定凍結チェックを実施する（Webhook token/livemode、OAuth設定、Role序列、`DAILY_RESYNC_CRON`）
 - Day8ドラフトの運用文書を最終版候補まで更新する
 - 手動再同期CLIの完了条件出力（`failed_count`）を実装
 - P0テスト（`503` 不確定失敗の代表ケース + cancel `503` 復旧）を実装
 - P0テスト（`access_end_at` 到達の代表ケース、Webhook整合）を実装
 - 503復旧オペの運用CLIリハーサルを1回実施し、証跡を保存する
-- Day10用の受付期間内cancel検証ユーザーで事前検証を完了し、証跡を保存する
+- Day10用の受付期間内cancel検証ユーザー（Day8事前検証とは別ユーザー）で事前検証を完了し、証跡を保存する
 
 4. Day 9（2026-04-16）
 - `12.1` のGo-Live必須テストを1回実行し、失敗修正後は「修正影響範囲 + 12.1-3 + 12.1-4 + 12.1-6」を再実行してPassさせる（Day9出口条件）
@@ -535,7 +536,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - バッファ（P0不具合の最終修正・Go/No-Go判定）を先に実施する（新規機能追加、API/DBスキーマ変更、受け入れ項目追加は禁止）
 - 本番環境変数投入
 - migration適用 -> `/health` -> 主要API疎通（OAuth/session/subscriptions/cancel/webhook）を確認する
-- 本番最小スモーク（Webhook token/livemode、OAuth→登録→cancel）を1回実施する（cancel は受付期間内テストユーザーで初回 `200` 成功を必須とし、受付期間外 `409` は任意確認とする）
+- 本番最小スモーク（Webhook token/livemode、OAuth→登録→再OAuth→cancel）を1回実施する（cancel は受付期間内テストユーザーで初回 `200` 成功を必須とし、受付期間外 `409` は任意確認とする）
 - Go/No-Go判定を確定し、2026-04-20のリリース実行に備える
 
 ## 12. テスト要件（P0必須）
@@ -556,7 +557,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 2. 手動再同期CLIの `failed_count`（当該CLI実行対象の未解決会員影響件数）が0でない場合は、同日中に再同期と手動復旧を継続する。
 3. 再同期の完了条件は「`failed_count = 0`」とする。
 4. 課金作成API/退会申請APIでタイムアウト等の不確定失敗（`503`）が発生した場合は、`operationId` をキーにPAY.JP現状態を確認してから再同期CLIを実行する（クライアント自動再試行は禁止。再試行は運用CLIのみ）。
-5. `members.inflight_operation_id` が残っている間は同一ユーザーの課金/解約APIを再実行しない。`inflight_operation_started_at` から30分超過時は、`operationId` 突合 -> PAY.JP状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at` 単調増加更新を完了した場合のみ `inflight_operation_*` を解除できる。6時間超の確定不能は緊急時手順へエスカレーションし、解除可否を記録する。
+5. `members.inflight_operation_id` が残っている間は同一ユーザーの課金/解約APIを再実行しない。`operationId` 突合 -> PAY.JP状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at` 単調増加更新を完了した場合のみ `inflight_operation_*` を解除できる。`inflight_operation_started_at` から30分は監視強化の閾値とし、30分未満でも上記整合条件を満たせば解除してよい。6時間超の確定不能は緊急時手順へエスカレーションし、解除可否を記録する。
 6. 緊急時手順として手動剥奪を定義し、実施条件・手順・確認方法を運用文書に固定する。
 7. OAuth失敗率が高い場合は `redirect_uri` とクライアント設定を再確認する。
 8. 重大障害（課金不整合1件以上、または `access_end_at` 到達済みのロール未剥奪1件以上）が判明した場合は当日中に手動復旧を実施する。
@@ -568,7 +569,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 各受け入れ項目の証跡は「実施日時 / テストIDまたは実行コマンド / 結果」を必須とし、再現可能な証跡として `CI実行ID` または `主要ログ参照` のいずれか1つを必ず添付する。
 
 1. Day9で `12.1` の7件を1回実行してPassしている。不具合修正後は「修正影響範囲 + 12.1-3 + 12.1-4 + 12.1-6」を再実行してPassしている。
-2. Day10に本番最小スモーク（Webhook token/livemode、OAuth→登録→cancel）を1回実施し、cancel は受付期間内テストユーザーで初回 `200` 成功（PAY.JP cancel API実行あり）を確認している。
+2. Day10に本番最小スモーク（Webhook token/livemode、OAuth→登録→再OAuth→cancel）を1回実施し、cancel は受付期間内テストユーザーで初回 `200` 成功（PAY.JP cancel API実行あり）を確認している。
 3. 手動再同期CLIの実行で `failed_count=0` を確認済みで、`members.inflight_operation_id` 残留0件を確認している。
 4. 2026-04-20時点の運用文書として「再同期CLI手順」「手動ロール剥奪手順」が最終化されており、前者には「6時間超の確定不能時エスカレーション分岐（解除可否/担当者/実施時刻の記録必須）」が明記されている。
 5. 本番反映時に `migration適用 -> /health -> 主要API疎通`（OAuth/session/subscriptions/cancel/webhook）を確認済み。
