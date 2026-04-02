@@ -82,6 +82,7 @@
   - customer作成/再利用の確定後に `members.payjp_customer_id` が保存されず、`503` 復旧時の照合キーが欠落する
   - 初回 `charge` 成功後に `members.payjp_initial_charge_id` が保存されず、再同期で既存課金を一意判定できない
   - subscription作成成功後に `members.payjp_subscription_id` が保存されず、cancel/再同期/Webhook逆引きの照合キーが欠落する
+  - `charge` / `subscription` 作成時に `metadata.discord_user_id` と `metadata.operation_id` が設定されず、Webhook同定と復旧照合が不安定になる
   - 代表1プランの実課金E2E、残り2プランの設定整合確認が不足する
   - `subscription interval=month` の検証が無く、非month設定を見逃す
   - 課金APIログで raw header/body またはカード情報が保存される、あるいは固定キー機密マスクが行われない
@@ -97,6 +98,7 @@
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
   - 初回 `charge` 成功時点で `members.payjp_initial_charge_id` を即時保存する
   - subscription作成成功時点で `members.payjp_subscription_id` を即時保存する
+  - `charge` / `subscription` 作成時に `metadata.discord_user_id` と `metadata.operation_id` を必須設定する
   - 初回 `charge + trial_end(+3か月)`、非初回 `trial_endなし`
   - 非初回は `charge` を実行せず subscriptionのみ作成する
   - 退会後再加入でも `first_trial_granted_at` を保持し、trial再適用なしを検証する
@@ -145,6 +147,8 @@
   - `members` 行が無い場合に仮行作成されず、`operationId` 復旧時の会員特定に失敗する
   - customer作成/再利用の確定後に `members.payjp_customer_id` が保存されず、`operationId` 復旧照合ができない
   - 初回 `charge` 成功後に `members.payjp_initial_charge_id` が保存されず、CLI復旧で既存課金検知ができない
+  - `members.payjp_initial_charge_id` 欠落時に `GET /v1/charges?customer=...&since=...&until=...` の `metadata.operation_id=operationId` 検索を行わず、再課金が発生する
+  - `metadata.operation_id` 一致が複数件でもfail-closeにならず、復旧を継続してしまう
   - 日次再同期で `inflight_operation_*` が誤って解除される
   - PAY.JP書き込み前の確定失敗で `inflight_operation_*` がクリアされない
   - PAY.JP書き込み後の確定失敗で整合未確認でも `inflight_operation_*` が誤ってクリアされる
@@ -157,12 +161,14 @@
   - `members` 行が無い場合は `discord_user_id + email` で仮行を作成する
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を保存し、CLI復旧の照合キーに使う
   - 初回 `charge` 成功時点で `members.payjp_initial_charge_id` を保存し、CLI復旧の課金判定キーに使う
+  - `members.payjp_initial_charge_id` 欠落時は `GET /v1/charges?customer=...&since=...&until=...` で `metadata.operation_id=operationId` 一致を既存課金として採用し、`members.payjp_initial_charge_id` を補正保存する
+  - `metadata.operation_id` 一致0件のみchargeを1回実行し、一致2件以上は確定不能としてfail-closeで停止する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId` を返し、PAY.JP書き込み0回
   - 日次再同期は `inflight_operation_*` を解除せず、解除は手動CLIのみ
   - PAY.JP書き込み前の確定失敗では `inflight_operation_*` をクリアする
   - PAY.JP書き込み後の確定失敗では整合確認できた場合のみ `inflight_operation_*` をクリアする
   - 不確定失敗で `503 + operationId` を返却し自動再試行禁止
-  - 手動再同期CLIで `operationId` 指定復旧し、`members.payjp_initial_charge_id` を決定キーに `charge=1/subscription=1` を維持
+  - 手動再同期CLIで `operationId` 指定復旧し、`members.payjp_initial_charge_id` または `metadata.operation_id=operationId` を決定キーに `charge=1/subscription=1` を維持
   - CLI復旧時に `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` を更新し、旧 `event.created` は `ignored`
   - 手動CLI結果に `failed_count` を出力する
   - PAY.JP書き込み実行時/不確定失敗時の `operationId` 必須ログを検証する
@@ -188,6 +194,8 @@
   - 並列 `cancel` でロックが効かず、PAY.JP cancel API が重複実行される
   - `active/trial/canceled` 既存購読が無いケースで `409` にならない
   - `payjp_subscription_id` 未設定で `409` にならず、cancel APIが実行される
+  - `payjp_subscription_id` 欠落時の再構築で `GET /v1/customers/:id/subscriptions` を使わず、手動判断に依存して誤ったsubscriptionを採用する
+  - `payjp_subscription_id` 再構築候補が0件/複数件でもfail-closeで停止せず、cancelが実行される
   - `cancel_requested_at` 既存時にPAY.JP cancel APIが再実行される
   - `inflight_operation_id` 既存時に即 `503 + 既存operationId` にならない
   - `inflight_operation_id` 既存時の `503` 応答で `__Host-link_session` が誤って消費される
@@ -206,6 +214,8 @@
   - `pg_advisory_xact_lock(hashtext(discord_user_id))` により並列 `cancel` を排他する
   - `active/trial/canceled` 既存購読が無い場合は `409`
   - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
+  - `payjp_subscription_id` 欠落時は `GET /v1/customers/:id/subscriptions`（必要に応じてページング）で候補取得し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == discord_user_id` が1件のみの場合に補正保存する
+  - 候補が0件または複数件の場合は確定不能としてfail-closeで停止し、`inflight_operation_*` を解除せずcancelを実行しない
   - 初回cancelのみPAY.JP cancel API実行、消費済みCookie再送は `401`、再OAuth後再実行は冪等 `200`（PAY.JP再呼び出しなし）
   - PAY.JP cancel APIは `members.payjp_subscription_id` 指定で実行する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId`（PAY.JP書き込み0回）
