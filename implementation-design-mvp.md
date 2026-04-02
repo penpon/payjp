@@ -3,6 +3,7 @@
 - 正本仕様: `2weeks-spec.md`
 - 本書の目的: 2026-04-20向けMVP実装方針を固定する（追加提案なし）
 - 採番ルール: `2. スコープ` の9項目を `R1-R9` として扱う
+- 参照調査（正本）: `deep-research-report.md`（`deepresearch.md` は互換名）
 
 ## 1. スコープ境界（R1-R9対応表）
 
@@ -22,6 +23,15 @@
 
 - 管理画面、会員ポータル、Webhook再生/DLQ、高度監視、通知自動化は追加しない
 - `inflight_operation_*` の解除は手動再同期CLIのみ（日次ジョブでは解除しない）
+
+### `deep-research-report.md` 反映の固定前提（2026-03-28版）
+
+- 決済基盤の採用方針は PAY.JP 第一候補、Stripe 代替候補とする。
+- 実装の必須原則は `Webhook中心` / `署名検証` / `冪等性` / `自動再試行` / `Discord APIレート制限自己修復` の5点とする。
+- 課金停止状態の安全側判定として `paused` / `deleted` / 不明ステータスを即時剥奪対象に固定する。
+- PAY.JPのWebhook再送前提（HTTP 200 以外で3分間隔・最大3回）を受信APIの応答境界設計に反映する。
+- Go-Live前に `課金失敗時イベント遅延/Dunning`、`長時間5xx時フェイルセーフ`、`トークン移管手順` の3項目をベンダー確認する。
+- 上記3項目は実装着手のブロッカーにしない（実装は先行可）。ただし Day3（2026-04-08）終了までに一次回答を収集し、Day10（2026-04-17）開始前までに採用判断を固定する。
 
 ## 2. サービス責務と境界（auth / billing / sync）
 
@@ -68,14 +78,15 @@
 | `GET /v1/auth/discord/start` | なし | Discord認可URLへ `302` | - |
 | `GET /v1/auth/discord/callback` | `code`, `state`, `__Host-oauth_session` | `__Host-link_session` 設定 + フロントへ `302` | `401`（state/Cookie/TTL不正） |
 | `GET /v1/auth/discord/session` | `__Host-link_session` | `{ linked: boolean }` | - |
-| `POST /v1/subscriptions` | `{ planId, email, payjpToken }` + `__Host-link_session` + `Origin` | `{ ok, memberId, subscriptionStatus, planId, trialApplied, accessEndAt }` | `401/403/409/422/503` |
-| `POST /v1/subscriptions/cancel` | `{}` + `__Host-link_session` + `Origin` | `{ ok, memberId, cancelEffectiveAt, roleRemovalAt }` | `401/403/409/503` |
+| `POST /v1/subscriptions` | `{ planId, email, payjpToken }` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), subscriptionStatus: "active"|"trial"|"canceled"|"paused"|"deleted", planId: string, trialApplied: boolean, accessEndAt: string(RFC3339 UTC) }` | `401/403/409/422/503` |
+| `POST /v1/subscriptions/cancel` | `{}` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/403/409/503` |
 | `POST /v1/payjp/webhook` | PAY.JPイベント + `X-Payjp-Webhook-Token` | `200`（処理/ignored/failed/重複） | `401`（token不一致）, `503`（DB受理不能） |
 
 補足:
 - `GET /v1/auth/discord/callback` / `GET /v1/auth/discord/session` は `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を必須で返す
 - `GET /v1/auth/discord/callback` の `302 Location` には OAuth/link トークンを載せない（query/fragment禁止）
 - Cookie連携API（`GET /v1/auth/discord/session`, `POST /v1/subscriptions`, `POST /v1/subscriptions/cancel`）は `FRONTEND_BASE_URL` のみを許可Originに固定し、`Access-Control-Allow-Credentials: true` を必須とする
+- 成功レスポンスの日時項目（`accessEndAt`, `cancelEffectiveAt`, `roleRemovalAt`）は RFC 3339 UTC 文字列で返し、Unix秒やJST文字列は返さない
 
 ### 3.2 エラーコード意味（固定）
 
@@ -145,7 +156,7 @@
 6. `data.metadata.discord_user_id` と `data.id` 逆引きが両方解決できる場合は一致必須。不一致は `failed` で `members` 非更新
 7. `event.id` 重複は二重処理せず `200`
 8. `event.created < members.last_payjp_event_created_at` は `ignored`（巻き戻し防止）
-9. `event.created == members.last_payjp_event_created_at` は到着順で処理する（同秒イベントの取りこぼし防止）
+9. `event.created == members.last_payjp_event_created_at`（同秒）は `ignored` にせず処理対象とする（単一ワーカーでは到着順になり得るが、複数ワーカーではDBコミット順となり得るため順序は非決定）
 10. `succeeded` イベントは `status` 不変時も `last_payjp_event_created_at` を更新する
 11. `status` 不変の `subscription.updated` でも `payjp_plan_id` と `next_billing_at/access_end_at` を更新し、ロール同期は行わない
 12. 検証通過イベントのみ `members` 更新、状態変化時のみロール同期（Discord API `429/5xx` は短時間リトライ最大3回: `0秒/1秒/2秒` 待機、各回timeout `1秒`、総処理 `6秒` 以内）
@@ -157,8 +168,11 @@
 1. 日次ジョブ: 全会員照合、`access_end_at` 超過/`subscription 404` を補正（`inflight_operation_*` は解除しない）
    - 実行スケジュールは `DAILY_RESYNC_CRON` を本番値で固定し、Day10前（2026-04-17開始前）に凍結する
 2. 手動CLI: `operationId` / `discord_user_id` / 全会員を受け付け、`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> ロール再同期を行う
-3. `subscribe` 不確定失敗復旧では、初回charge既存判定を優先順位で固定する: (a) `members.payjp_initial_charge_id` がある場合はそれを正、(b) 無い場合は `GET /v1/charges?customer=<payjp_customer_id>&since=<inflight_operation_started_at_unix-3600>&until=<inflight_operation_started_at_unix+604800>&limit=100` の `metadata.operation_id == operationId` 一致を既存課金として採用し `members.payjp_initial_charge_id` を補正保存（再課金禁止）、(c) 一致0件のみchargeを1回実行、(d) 一致2件以上は確定不能としてfail-closeで停止（解除禁止）。`since`/`until` はPAY.JP仕様に合わせてUNIX秒（UTC）で渡す。`subscription` も未作成時のみ1回作成し、作成済みなら再作成しない（`charge=1/subscription=1` 維持）
-4. `cancel` 不確定失敗復旧および `payjp_subscription_id` 欠落時は、`members.payjp_customer_id` を前提に `GET /v1/customers/:id/subscriptions`（必要に応じて `offset` でページング）で候補を取得し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == members.discord_user_id` の候補を評価する（`metadata.discord_user_id` 欠落時は、同じ `status` 条件の候補が1件のみの場合に限りその1件を採用）。1件なら `members.payjp_subscription_id` を補正保存のうえ未cancel時のみcancel APIを1回実行し、0件または複数件は確定不能としてfail-closeで停止する（`members` 反映・解除は行わない）
+   - 引数は相互排他で `--operation-id <operationId>` / `--discord-user-id <discord_user_id>` / `--all` のいずれか1つのみ受け付ける
+   - 標準出力は1行JSON固定とし、`mode`, `target`, `processed_count`, `succeeded_count`, `failed_count`, `started_at`, `finished_at`, `duration_ms` を必須キーとする（`started_at` / `finished_at` は RFC 3339 UTC）
+   - 終了コードは `0=完了かつ failed_count=0`, `2=実行完了だが failed_count>0（fail-close残を含む）`, `1=CLI実行エラー（入力不正/依存障害）` に固定する
+3. `subscribe` 不確定失敗復旧では、初回charge既存判定を優先順位で固定する: (a) `members.payjp_initial_charge_id` がある場合はそれを正、(b) 無い場合は `GET /v1/charges?customer=<payjp_customer_id>&since=<inflight_operation_started_at_unix-3600>&until=<inflight_operation_started_at_unix+604800>&limit=100&offset=<0|100|...>` を `has_more=false` までページングして全件走査し、`metadata.operation_id == operationId` 一致を既存課金として採用し `members.payjp_initial_charge_id` を補正保存（再課金禁止）、(c) 一致0件のみchargeを1回実行、(d) 一致2件以上は確定不能としてfail-closeで停止（解除禁止）。ページング上限は `offset<=900`（最大1000件）とし、上限到達時に `has_more=true` の場合は一致件数に関わらず確定不能として fail-close（再課金禁止・解除禁止）。`members.payjp_customer_id IS NULL` の場合も即 fail-close（再課金/再作成/解除禁止、`member_impact_logs` 記録、エスカレーション）とする。`since`/`until` はPAY.JP仕様に合わせてUNIX秒（UTC）で渡し、`inflight_operation_started_at_unix` は `members.inflight_operation_started_at` をUTCとしてUnix秒化（整数）した値を用いる。`subscription` も未作成時のみ1回作成し、作成済みなら再作成しない（`charge=1/subscription=1` 維持）
+4. `cancel` 不確定失敗復旧および `payjp_subscription_id` 欠落時は、`members.payjp_customer_id` を前提に `GET /v1/customers/:id/subscriptions` を `limit=100`・`offset=0,100,200,...` で `has_more=false` までページングして候補を取得し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == members.discord_user_id` の候補を評価する（`members.payjp_customer_id IS NULL` の場合は即 fail-close（cancel実行/解除禁止、`member_impact_logs` 記録、エスカレーション））。ページング上限は `offset<=900`（最大1000件）とし、`offset=900` 到達時点で `has_more=true` の場合は一致件数に関わらず確定不能として fail-close（cancel実行/解除禁止）。`metadata.discord_user_id` 欠落時は、同じ `status` 条件の候補が1件のみであることに加え、`access_end_at_unix = floor(extract(epoch from members.access_end_at))`（UTC・整数秒）を用いて `subscription.current_period_end == access_end_at_unix` の完全一致の場合に限りその1件を採用する。1件なら `members.payjp_subscription_id` を補正保存のうえ未cancel時のみcancel APIを1回実行し、0件または複数件（または `members.access_end_at` が `NULL` / 時刻整合不一致）は確定不能としてfail-closeで停止する。通信エラーやJSON欠落で全件走査を完了できない場合も確定不能として fail-close で停止する（`members` 反映・解除は行わない）
 5. 手動CLIで `inflight_operation_*` 残留会員を復旧した場合は `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` を更新する
 6. `inflight_operation_*` は整合確認できた場合のみCLIで解除し、確定不能時は解除しない（自動解除禁止）
 7. 手動CLIは `failed_count`（`member_impact_logs.resolved_at IS NULL` 件数）を必須出力し、完了条件は `failed_count=0`
@@ -195,6 +209,7 @@
 - PAY.JP書き込み後は現状態照合で整合確定できた場合のみCLIでクリア可
 - `failed_count > 0` の日は同日中に再同期/手動復旧を継続する
 - PAY.JP状態の確定不能が6時間継続した場合は、当日中に緊急時手順へエスカレーションする
+- PAY.JP再送仕様（HTTP 200 以外で3分間隔・最大3回）を前提に、検証失敗入力は `200` で終端し再送増幅を避ける
 
 ## 8. ログ最小要件（調査可能・過剰監査なし）
 
@@ -203,10 +218,11 @@
 - Webhook token不一致ログは `event`, `received_at`, `remote_ip`, `reason` を必須
 - Webhook token不一致イベントは `payjp_events` 一意領域に入れない（分離ログのみ）
 - `payjp_events.process_status` は `succeeded/failed/ignored` を記録
-- `payjp_events` には `data.metadata.operation_id`（存在時）を保存し、`operationId` をキーとした調査導線を閉じる
+- `payjp_events` には `data.metadata.operation_id`（存在時）を保存する（`payjp_events.data_metadata_operation_id`）。`operationId` をキーとした調査導線を閉じる
 - 失敗時は調査に必要な最小理由のみ記録し、カード情報は保存・ログ出力しない。その他機密値は固定キーでマスク
 - `member_impact_logs` で未解決影響を追跡し、再同期解消時は同一 `member_id + issue_code` の `resolved_at` を更新
 - 毎朝の運用確認指標は `payjp_events.process_status=failed` 件数、課金/解約APIの `503/5xx` 件数、`member_impact_logs.resolved_at IS NULL` 件数の3点を必須とする
 - `access_end_at` が当日到達する退会申請ユーザーを毎日確認し、ロール除去漏れがあれば当日中に手動再同期で補正する
 - Go-Live受け入れ前に `DAILY_RESYNC_CRON` 固定値、変更凍結時刻、直近1回の成功ログ参照を証跡へ残す
 - Go-Live受け入れ前に運用文書「再同期CLI手順」「手動ロール剥奪手順」を最終化し、証跡へ紐づける
+- Go-Live受け入れ前に `deep-research-report.md` の未確定事項3件（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順）の回答ソースと採用判断を証跡化する（実装着手のブロッカーにはしない）
