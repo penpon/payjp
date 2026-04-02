@@ -107,7 +107,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 3Dセキュア方式は `PAY.JP.js` のiframe方式に固定する（redirect方式はMVP非対応）
 - 「登録する」押下で `payjpToken` を生成
 - `PAY.JP.js` の `createToken` で `three_d_secure: true` を必須にし、`card.name`（カード名義）と `card.email`（または `card.phone`）を必須で渡す
-- 3Dセキュア認証が完了し、`three_d_secure_status = verified` のトークンを取得できた場合のみ `POST /v1/subscriptions` を実行する
+- 3Dセキュア認証が完了し、`card.three_d_secure_status = verified` のトークンを取得できた場合のみ `POST /v1/subscriptions` を実行する
 - 3Dセキュア判定はMVPの完全認証方針として `verified` のみ許容し、`attempted` は受け付けない
 - 3Dセキュアが中断/失敗/タイムアウトした場合は `POST /v1/subscriptions` を呼ばない
 - 3Dセキュア中断/失敗/タイムアウト時は、画面に失敗理由を表示し、再試行導線を提示する
@@ -120,6 +120,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 4. 注意事項
 - カード情報はフロントから直接PAY.JPへ送信する。
 - フロントで秘密鍵を保持しない。
+- 3Dセキュア実施に伴いカード名義・メール/電話等の個人情報を取り扱うため、画面上で同意を取得する（同意なしは `createToken` を開始しない）。
 - OAuth/連携セッションはHttpOnly Cookieで扱い、フロントJSから読ませない。
 - 課金APIは `Origin` を必須検証し、`Origin` 欠落時も拒否する。
 - Cookieベース連携を成立させるため、フロントとAPIは同一サイト（同一eTLD+1）で配置する。
@@ -178,8 +179,10 @@ MVP（〜2026-04-20）では、以下は実装しない。
   - PAY.JPでcustomer作成（既存あれば再利用）
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
   - 初回ユーザーは「入会時に選択プランの1か月分を `charge` で即時課金」してから、月次subscriptionを `trial_end = now + 3か月` で作成する（2か月目/3か月目無料）
+  - 初回ユーザーの `charge` 成功時点で `charge.id` を `members.payjp_initial_charge_id` に即時保存し、`members.initial_charge_paid_at` も更新する
   - 非初回ユーザーは月次subscriptionを通常作成する（`trial_end` なし）
   - subscription作成時は `metadata.discord_user_id` を保存する
+  - subscription作成成功時点で `subscription.id` を `members.payjp_subscription_id` に即時保存する
   - `members` をupsert
   - `subscription.current_period_end` を trial適用有無に関係なく `members.next_billing_at` と `members.access_end_at` に保存する
   - 初回無料を適用した場合は `members.first_trial_granted_at` を保存する（一度保存したら解除しない）
@@ -203,12 +206,13 @@ MVP（〜2026-04-20）では、以下は実装しない。
   - `members` を取得し、`active/trial/canceled` の既存購読が無ければ409
   - `members.inflight_operation_id` が存在する場合は新規キャンセル処理を開始せず `503` を返す（既存 `operationId` を返却）
   - `members.access_end_at` が未設定の場合は `409` を返し、再同期CLIで状態補正後に再実行する
+  - `members.payjp_subscription_id` が未設定の場合は `409` を返し、再同期CLIで状態補正後に再実行する
   - 退会申請の受付開始日時は `access_end_at` の1か月前同日 `00:00:00 JST` とする。該当日が存在しない場合は当月末日に繰り上げる（例: 3/31 -> 2/28 or 2/29）
   - `now_jst < 受付開始日時` の場合は早期申請として `409` を返す
   - 認証前提検証（`Origin` / `__Host-link_session` / 受付期間判定）を通過した時点で `__Host-link_session` を消費する（以後は成功/失敗に関わらず再利用不可）
   - `members.cancel_requested_at` が既存の場合はPAY.JP cancel APIを再実行せず `200` を返す（冪等成功、Cookieは消費済み）
   - PAY.JP書き込み（cancel API）開始前に `operationId` を生成し、`members.inflight_operation_id` / `members.inflight_operation_type=cancel` / `members.inflight_operation_started_at` を保存する
-  - PAY.JP subscriptionキャンセルAPIを呼び、次回請求を停止する（即時削除はしない）
+  - PAY.JP subscriptionキャンセルAPIを `members.payjp_subscription_id` 指定で呼び、次回請求を停止する（即時削除はしない）
   - `members.cancel_requested_at` を記録し、`members.access_end_at` をPAY.JP応答の終了時刻で更新する
   - ロール同期は行わない（終了日到達までは付与維持）
   - 成功時は `members.inflight_operation_*` をクリアする
@@ -330,6 +334,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - `email` (text)
 - `payjp_customer_id` (text, null許可, NOT NULL時のみunique)
 - `payjp_subscription_id` (text, null許可, NOT NULL時のみunique)
+- `payjp_initial_charge_id` (text, null許可, NOT NULL時のみunique)
 - `payjp_plan_id` (text)
 - `subscription_status` (text: active/trial/canceled/paused/deleted, null許可)
 - `first_trial_granted_at` (timestamptz, null)
@@ -420,6 +425,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 22. `planId` は `PAYJP_PLAN_IDS` の許可リスト照合を必須化し、購読作成APIで不正値を拒否する。
 23. 初回無料適用は `discord_user_id` 単位で一度のみ許可し、`first_trial_granted_at` を保存する。
 24. OAuth認可URLの `scope` は `identify` 固定とする（OAuth Lite）。
+25. OAuth `state` の生成・保管・検証は Discord OAuth2 の `State and Security` 推奨に準拠する。
 
 ## 9. 環境変数
 
@@ -456,7 +462,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 障害対応として同じ再同期処理を運用CLIから手動実行可能にする（公開HTTP endpointは設けない）
 - 手動再同期CLIは `operationId` または `discord_user_id` 指定に加えて、全会員対象でも再同期できる
 - 手動再同期CLIで `inflight_operation_*` が残留している場合は「`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> Discordロール再同期 -> `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` 更新」を1実行で行う（この反映後に到着した `event.created` がそれ未満の遅延Webhookは `ignored` としてよい）
-- 手動再同期CLIの `subscribe` 不確定失敗（`charge` 後 `subscription` 不確定）は、`operationId` から対象会員を特定し `members.payjp_customer_id` でPAY.JP現状態を確認する。`subscription` 未作成時のみ1回作成して `charge=1/subscription=1` を維持し、作成済みなら再作成しない
+- 手動再同期CLIの `subscribe` 不確定失敗（`charge` 後 `subscription` 不確定）は、`operationId` から対象会員を特定し `members.payjp_customer_id` でPAY.JP現状態を確認する。初回 `charge` は `members.payjp_initial_charge_id` を決定キーに既存課金を検知し、未実行時のみ1回実行する。`subscription` は未作成時のみ1回作成して `charge=1/subscription=1` を維持し、作成済みなら再作成しない
 - 手動再同期CLIの `cancel` 不確定失敗は、PAY.JP現状態を確認し、未cancel時のみcancel APIを1回実行して完了させる（cancel済みなら `members` 反映のみ行う）
 - 手動再同期CLIで `inflight_operation_*` はPAY.JP現状態と `members` 整合が確認できた場合のみ解除する。PAY.JP状態が確定不能な場合は解除しない
 - 手動再同期CLI/日次再同期ジョブで不整合が解消した対象会員の未解決 `member_impact_logs`（同一 `member_id` + `issue_code`）は、`resolved_at=now()` でクローズする
@@ -574,9 +580,9 @@ MVP（〜2026-04-20）では、以下は実装しない。
 ### 12.1 P0（Go-Live必須: 7件）
 
 1. OAuthは `state + __Host-oauth_session + 未使用 + TTL内` の原子的検証/消費が行われる。代表失敗ケース（`state` 不一致）で認可失敗し、callback/session で `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を返す。`GET /v1/auth/discord/start` の認可URL `scope` が `identify` 固定であることを確認する。
-2. `POST /v1/subscriptions` は `PAYJP_PLAN_IDS` 3プランに対応し、代表1プランで実課金E2E成功、残り2プランは設定整合テスト（実課金不要）で登録成功を確認する。`members.payjp_plan_id` 保存とロール付与が行われ、退会後再加入時は `first_trial_granted_at` が保持され trial 再適用なしとなる。初回は `trial_end=登録時点+3か月`、非初回は `trial_endなし`、課金intervalは `month` であることを確認する。Discord未参加時は `409`、Bot権限不足またはロール序列不足時は `503` で課金前に失敗する（いずれもPAY.JP APIは呼ばれない）。`Origin` 欠落/不一致/`Origin: null` は `403` で拒否され、`__Host-link_session` は認証前提検証通過後に消費され再利用不可であることを確認する。3Dセキュア失敗/中断/タイムアウト時は `POST /v1/subscriptions` が呼ばれないことを確認する。
+2. `POST /v1/subscriptions` は `PAYJP_PLAN_IDS` 3プランに対応し、代表1プランで実課金E2E成功、残り2プランは設定整合テスト（実課金不要）で登録成功を確認する。`members.payjp_plan_id` / `members.payjp_subscription_id` 保存とロール付与が行われ、初回ユーザーでは `members.payjp_initial_charge_id` も保存されることを確認する。退会後再加入時は `first_trial_granted_at` が保持され trial 再適用なしとなる。初回は `trial_end=登録時点+3か月`、非初回は `trial_endなし`、課金intervalは `month` であることを確認する。Discord未参加時は `409`、Bot権限不足またはロール序列不足時は `503` で課金前に失敗する（いずれもPAY.JP APIは呼ばれない）。`Origin` 欠落/不一致/`Origin: null` は `403` で拒否され、`__Host-link_session` は認証前提検証通過後に消費され再利用不可であることを確認する。3Dセキュア失敗/中断/タイムアウト時は `POST /v1/subscriptions` が呼ばれないことを確認する。
 3. 同一 `discord_user_id` への並列 `POST /v1/subscriptions` で二重購読が作成されず、`charge=1` / `subscription=1` が保たれる。既存 `active/trial` または `canceled && access_end_at > now` の契約では新規作成されない。
-4. 不確定失敗（`503`）の代表ケース（`charge` 後の `subscription` 不確定）を、テスト用注入経路で決定的に再現して検証する。運用CLIで `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。
+4. 不確定失敗（`503`）の代表ケース（`charge` 後の `subscription` 不確定）を、テスト用注入経路で決定的に再現して検証する。運用CLIで `members.payjp_initial_charge_id` を決定キーに既存課金を検知しつつ `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。
 5. `POST /v1/subscriptions/cancel` は受付開始日前を `409` で拒否し、受付期間内の初回実行はPAY.JP cancel APIが1回実行され `200` 成功となる。`cancel_requested_at` 既存時は「消費済みCookieの再送は `401`」「再OAuth後の再実行はPAY.JP再呼び出しなしで冪等成功（200）」を確認する。`503` 不確定失敗後はテスト用注入経路で決定的に再現し、`operationId` 確認 + 再同期で整合回復できることを確認する。`access_end_at` 未設定時は `409` で再同期要求になる。受付開始日の月末繰上げ境界（例: `access_end_at=3/31`）を確認する。Day10未達に伴う再実施時は、Day1で固定したA/Bユーザーの未使用側で初回 `200` 成功（PAY.JP cancel API実行あり）を確認する。
 6. `access_end_at` 到達時にロールが除去される（Webhookまたは日次再同期）。`paused/deleted` 到達時の剥奪に加え、日次再同期でPAY.JP subscription `404` を検知した会員が `deleted` 扱いで剥奪されることを確認する。
 7. Webhookで `event.id` 重複送信は二重処理されず、`event.created` が古いWebhookは `ignored` となり会員状態が巻き戻らない。`metadata.discord_user_id` と `data.id` 逆引き不一致・必須項目欠落は `failed` で `members` 非更新、トークン不一致は `401`、`subscription.created` は必須項目欠落時 `failed` / 充足時 `ignored` とする。`data.status` が不明値の場合は `failed` 記録・`members` 非更新・安全側のロール剥奪を確認する。加えて、認証/課金APIとWebhookで raw header/body がログ出力されないことを確認する。

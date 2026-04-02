@@ -83,7 +83,7 @@
 |---|---|---|
 | `401` | OAuth/link session不正・失効、Webhook token不一致 | callback, subscriptions, cancel, Webhook |
 | `403` | `Origin` 欠落/不一致/`null` | subscriptions, cancel |
-| `409` | ビジネス前提不成立（未参加、受付期間外、`access_end_at` 未設定など） | subscriptions, cancel |
+| `409` | ビジネス前提不成立（未参加、受付期間外、`access_end_at`/`payjp_subscription_id` 未設定など） | subscriptions, cancel |
 | `422` | 課金入力不正（例: 3DS `verified` 不成立。MVP完全認証方針で `attempted` も非許容） | subscriptions |
 | `503` | 不確定失敗または処理保留（`operationId` 返却、再試行はCLIのみ） | subscriptions, cancel, Webhook(DB障害時) |
 
@@ -91,7 +91,7 @@
 
 | テーブル | 主責務 | 主な更新主体 | 備考 |
 |---|---|---|---|
-| `members` | 会員・購読状態の正 | billing-service / sync-service / resync CLI | `inflight_operation_*`, `payjp_customer_id`, `access_end_at`, `first_trial_granted_at` を保持 |
+| `members` | 会員・購読状態の正 | billing-service / sync-service / resync CLI | `inflight_operation_*`, `payjp_customer_id`, `payjp_subscription_id`, `payjp_initial_charge_id`, `access_end_at`, `first_trial_granted_at` を保持 |
 | `payjp_events` | Webhook受信履歴と処理結果 | sync-service | `payjp_event_id` で冪等化（token検証通過イベントのみ） |
 | `oauth_states` | OAuth `state` ワンタイム検証 | auth-service | `state_hash + oauth_session_hash` をTTL付きで管理 |
 | `discord_link_sessions` | 課金前連携セッション | auth-service（発行）/ billing-service（消費） | `__Host-link_session` のワンタイム原本 |
@@ -103,6 +103,7 @@
 
 前提（フロント）:
 - `payjpToken` 生成時に `PAY.JP.js createToken` へ `three_d_secure: true` を指定し、`card.name`（カード名義）と `card.email` または `card.phone` を必須で渡す。
+- 3Dセキュア実施に伴う個人情報取り扱いへの同意をUIで取得し、同意なしは `createToken` を開始しない。
 
 1. `Origin` / `__Host-link_session` / `planId` を検証する（`Origin` は `scheme+host+port` 正規化比較）
 2. `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
@@ -112,10 +113,12 @@
 6. Discord参加・権限（ロール付与可能性）を検証し、不成立時は課金前に失敗させる
 7. `operationId` を保存し `inflight_operation_*`（`type=subscribe`）を設定する
 8. 認証前提検証通過時点で `__Host-link_session` を消費する（成功/失敗問わず再利用不可）
-9. PAY.JP書き込み（customer/charge/subscription）を実行する
-10. customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
-11. 初回のみ `charge` 後に `trial_end=+3か月` subscription作成し、非初回は `charge` を実行せず `trial_end` なしでsubscriptionのみ作成する
-12. `members` 更新、初回ロール同期（最大3回の短時間リトライ）、成功時のみ `inflight_operation_*` クリア。不確定失敗時は `503 + operationId` を返し、`inflight_operation_*` を保持する
+9. `payjpToken` を再取得し、`used=false` かつ `card.three_d_secure_status=verified` を検証する
+10. PAY.JP書き込み（customer/charge/subscription）を実行する
+11. customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
+12. 初回のみ `charge` を実行し、成功時点で `members.payjp_initial_charge_id` を即時保存する（非初回は `charge` を実行しない）
+13. 初回は `trial_end=+3か月`、非初回は `trial_end` なしでsubscriptionを作成し、成功時点で `members.payjp_subscription_id=subscription.id` を即時保存する
+14. `members` 更新、初回ロール同期（最大3回の短時間リトライ）、成功時のみ `inflight_operation_*` クリア。不確定失敗時は `503 + operationId` を返し、`inflight_operation_*` を保持する
 
 ### 5.2 退会申請（`POST /v1/subscriptions/cancel`）
 
@@ -124,12 +127,13 @@
 3. `active/trial/canceled` の既存購読が無い場合は `409` を返す
 4. `inflight_operation_*` 残留時は `503 + 既存operationId` で即終了する（PAY.JP書き込みは行わない）
 5. `access_end_at` 未設定は `409` を返し、再同期後の再実行を要求する
-6. 受付期間境界（1か月前同日00:00 JST、存在しない日は月末繰上げ）を判定し、受付前は `409` を返す
-7. 認証前提検証通過時点で `__Host-link_session` を消費する（成功/失敗問わず再利用不可）
-8. `cancel_requested_at` 既存ならPAY.JP再呼び出しなしで冪等 `200`
-9. `operationId` 保存後にPAY.JP cancel APIを1回実行
-10. `cancel_requested_at` と `access_end_at` を更新（ロールは終了日まで維持）
-11. 不確定失敗時は `503 + operationId` で保持し、復旧はCLIのみで実施する
+6. `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
+7. 受付期間境界（1か月前同日00:00 JST、存在しない日は月末繰上げ）を判定し、受付前は `409` を返す
+8. 認証前提検証通過時点で `__Host-link_session` を消費する（成功/失敗問わず再利用不可）
+9. `cancel_requested_at` 既存ならPAY.JP再呼び出しなしで冪等 `200`
+10. `operationId` 保存後に `members.payjp_subscription_id` 指定でPAY.JP cancel APIを1回実行
+11. `cancel_requested_at` と `access_end_at` を更新（ロールは終了日まで維持）
+12. 不確定失敗時は `503 + operationId` で保持し、復旧はCLIのみで実施する
 
 ### 5.3 Webhook（`POST /v1/payjp/webhook`）
 
@@ -153,7 +157,7 @@
 1. 日次ジョブ: 全会員照合、`access_end_at` 超過/`subscription 404` を補正（`inflight_operation_*` は解除しない）
    - 実行スケジュールは `DAILY_RESYNC_CRON` を本番値で固定し、Day10前（2026-04-17開始前）に凍結する
 2. 手動CLI: `operationId` / `discord_user_id` / 全会員を受け付け、`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> ロール再同期を行う
-3. `subscribe` 不確定失敗復旧では、`subscription` 未作成時のみ1回作成し、作成済みなら再作成しない（`charge=1/subscription=1` 維持）
+3. `subscribe` 不確定失敗復旧では、`members.payjp_initial_charge_id` を決定キーに既存charge有無を判定し、未作成時のみ1回実行する。`subscription` も未作成時のみ1回作成し、作成済みなら再作成しない（`charge=1/subscription=1` 維持）
 4. `cancel` 不確定失敗復旧では、未cancel時のみcancel APIを1回実行し、cancel済みなら `members` 反映のみ行う
 5. 手動CLIで `inflight_operation_*` 残留会員を復旧した場合は `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` を更新する
 6. `inflight_operation_*` は整合確認できた場合のみCLIで解除し、確定不能時は解除しない（自動解除禁止）
@@ -168,14 +172,16 @@
 1. `__Host-oauth_session` は `Domainなし + Secure + HttpOnly + SameSite=Lax + Path=/ + Max-Age=10m` を固定する
 2. `__Host-link_session` は `Domainなし + Secure + HttpOnly + SameSite=Lax + Path=/ + Max-Age=15m` を固定し、認証前提検証通過後に消費する（成功/失敗問わず再利用不可）
 3. `state` はワンタイムで原子的に検証/消費する（`state_hash + oauth_session_hash + 未使用 + TTL`）
-4. OAuth/linkトークンはURLに載せない（callback `Location` の query/fragment 禁止）
-5. Cookie連携API（`session/subscriptions/cancel`）は `FRONTEND_BASE_URL` のみを許可Originに固定し、資格情報付きリクエストを必須とする
-6. 課金系APIは `Origin` 厳密検証（`scheme+host+port` 正規化、`FRONTEND_BASE_URL` はorigin形式のみ。欠落/不一致/`Origin: null` は `403`）
-7. Webhookは `token/livemode/event.type allowlist/data.object` を検証し、allowlist は `subscription.created/updated/renewed/canceled/deleted/paused/resumed` に固定する
-8. `operationId + inflight_operation_*` をPAY.JP書き込み前に保存し、成功時のみクリアする
-9. 認証/課金APIおよびWebhookで raw header/body を保存しない。カード情報は保存・ログ出力しない。その他機密値は固定キーでマスクする
-10. `callback` / `session` 応答は `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を必須とする
-11. Cookie連携成立のため、本番はフロントとAPIを同一サイト（同一eTLD+1）に配置する
+4. OAuth `state` の生成・保管・検証は Discord OAuth2 の `State and Security` 推奨に準拠する
+5. OAuth/linkトークンはURLに載せない（callback `Location` の query/fragment 禁止）
+6. Cookie連携API（`session/subscriptions/cancel`）は `FRONTEND_BASE_URL` のみを許可Originに固定し、資格情報付きリクエストを必須とする
+7. 課金系APIは `Origin` 厳密検証（`scheme+host+port` 正規化、`FRONTEND_BASE_URL` はorigin形式のみ。欠落/不一致/`Origin: null` は `403`）
+8. 3Dセキュア実施に伴う個人情報取り扱いへの同意を購読前に取得し、同意なしは `createToken` を開始しない
+9. Webhookは `token/livemode/event.type allowlist/data.object` を検証し、allowlist は `subscription.created/updated/renewed/canceled/deleted/paused/resumed` に固定する
+10. `operationId + inflight_operation_*` をPAY.JP書き込み前に保存し、成功時のみクリアする
+11. 認証/課金APIおよびWebhookで raw header/body を保存しない。カード情報は保存・ログ出力しない。その他機密値は固定キーでマスクする
+12. `callback` / `session` 応答は `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を必須とする
+13. Cookie連携成立のため、本番はフロントとAPIを同一サイト（同一eTLD+1）に配置する
 
 ## 7. 障害時ポリシー（MVP固定）
 

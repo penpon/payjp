@@ -66,7 +66,8 @@
 
 - Red:
   - `planId` 許可外で `422` にならず通ってしまう
-  - 3DS `verified` 以外で課金が走る
+  - 3DS `verified` 以外（`card.three_d_secure_status != verified`）で課金が走る
+  - 3Dセキュア実施に伴う個人情報取り扱い同意が無くても `createToken` が開始される
   - `PAY.JP.js createToken` で `card.name` または `card.email` / `card.phone` が欠落してもトークン生成が進んでしまう
   - `Origin` 欠落/不一致/`null` を拒否できない
   - `Origin` 正規化比較（`scheme+host+port`）が崩れ、port違いを誤って通す
@@ -79,11 +80,14 @@
   - 消費済み `__Host-link_session` の再送で `401` にならず再実行できる
   - `members` 行が無いときに仮行作成されず、購読作成中状態が永続化されない
   - customer作成/再利用の確定後に `members.payjp_customer_id` が保存されず、`503` 復旧時の照合キーが欠落する
+  - 初回 `charge` 成功後に `members.payjp_initial_charge_id` が保存されず、再同期で既存課金を一意判定できない
+  - subscription作成成功後に `members.payjp_subscription_id` が保存されず、cancel/再同期/Webhook逆引きの照合キーが欠落する
   - 代表1プランの実課金E2E、残り2プランの設定整合確認が不足する
   - `subscription interval=month` の検証が無く、非month設定を見逃す
   - 課金APIログで raw header/body またはカード情報が保存される、あるいは固定キー機密マスクが行われない
 - Green:
   - `planId` allowlist検証、3DS token再取得検証、Origin厳密検証
+  - 3Dセキュア実施に伴う個人情報取り扱い同意が無い場合は `createToken` を開始しないことを検証する
   - フロントの `PAY.JP.js createToken` で `three_d_secure: true` + `card.name` + `card.email`（または `card.phone`）を必須化し、欠落時は `POST /v1/subscriptions` を送信しないことを検証する
   - `Origin` は `scheme+host+port` 正規化で比較し、`FRONTEND_BASE_URL` はorigin形式のみ許可
   - 事前Discord検証を課金前に実行
@@ -91,12 +95,14 @@
   - 認証前提検証通過時点で `__Host-link_session` を消費し、再送は `401`（PAY.JP API未呼び出し）
   - `members` 行が無い場合は `discord_user_id + email` で仮行を作成する
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
+  - 初回 `charge` 成功時点で `members.payjp_initial_charge_id` を即時保存する
+  - subscription作成成功時点で `members.payjp_subscription_id` を即時保存する
   - 初回 `charge + trial_end(+3か月)`、非初回 `trial_endなし`
   - 非初回は `charge` を実行せず subscriptionのみ作成する
   - 退会後再加入でも `first_trial_granted_at` を保持し、trial再適用なしを検証する
   - 代表1プランは実課金E2Eで成功を確認し、残り2プランは設定整合テストで登録成功を確認する
   - `subscription interval=month` を検証する
-  - `payjp_plan_id` / `first_trial_granted_at` / `access_end_at` 保存
+  - `payjp_plan_id` / `payjp_subscription_id` / `first_trial_granted_at` / `access_end_at` 保存（初回は `payjp_initial_charge_id` も保存）
   - 課金APIログで raw header/body 非保存、カード情報非保存/非出力、固定キー機密マスクを検証
 - Refactor:
   - 認証前提検証とPAY.JP書き込み境界の関数分離
@@ -138,6 +144,7 @@
   - `inflight_operation_id` 既存時に即 `503 + 既存operationId` にならず、PAY.JP書き込みが走る
   - `members` 行が無い場合に仮行作成されず、`operationId` 復旧時の会員特定に失敗する
   - customer作成/再利用の確定後に `members.payjp_customer_id` が保存されず、`operationId` 復旧照合ができない
+  - 初回 `charge` 成功後に `members.payjp_initial_charge_id` が保存されず、CLI復旧で既存課金検知ができない
   - 日次再同期で `inflight_operation_*` が誤って解除される
   - PAY.JP書き込み前の確定失敗で `inflight_operation_*` がクリアされない
   - PAY.JP書き込み後の確定失敗で整合未確認でも `inflight_operation_*` が誤ってクリアされる
@@ -149,12 +156,13 @@
   - PAY.JP書き込み前に `operationId` と `inflight_operation_*` 保存
   - `members` 行が無い場合は `discord_user_id + email` で仮行を作成する
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を保存し、CLI復旧の照合キーに使う
+  - 初回 `charge` 成功時点で `members.payjp_initial_charge_id` を保存し、CLI復旧の課金判定キーに使う
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId` を返し、PAY.JP書き込み0回
   - 日次再同期は `inflight_operation_*` を解除せず、解除は手動CLIのみ
   - PAY.JP書き込み前の確定失敗では `inflight_operation_*` をクリアする
   - PAY.JP書き込み後の確定失敗では整合確認できた場合のみ `inflight_operation_*` をクリアする
   - 不確定失敗で `503 + operationId` を返却し自動再試行禁止
-  - 手動再同期CLIで `operationId` 指定復旧し `charge=1/subscription=1` 維持
+  - 手動再同期CLIで `operationId` 指定復旧し、`members.payjp_initial_charge_id` を決定キーに `charge=1/subscription=1` を維持
   - CLI復旧時に `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` を更新し、旧 `event.created` は `ignored`
   - 手動CLI結果に `failed_count` を出力する
   - PAY.JP書き込み実行時/不確定失敗時の `operationId` 必須ログを検証する
@@ -179,6 +187,7 @@
   - 消費済み `__Host-link_session` 再送で `401` にならない
   - 並列 `cancel` でロックが効かず、PAY.JP cancel API が重複実行される
   - `active/trial/canceled` 既存購読が無いケースで `409` にならない
+  - `payjp_subscription_id` 未設定で `409` にならず、cancel APIが実行される
   - `cancel_requested_at` 既存時にPAY.JP cancel APIが再実行される
   - `inflight_operation_id` 既存時に即 `503 + 既存operationId` にならない
   - `inflight_operation_id` 既存時の `503` 応答で `__Host-link_session` が誤って消費される
@@ -196,7 +205,9 @@
   - `Origin` は `scheme+host+port` 正規化比較で厳密検証
   - `pg_advisory_xact_lock(hashtext(discord_user_id))` により並列 `cancel` を排他する
   - `active/trial/canceled` 既存購読が無い場合は `409`
+  - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
   - 初回cancelのみPAY.JP cancel API実行、消費済みCookie再送は `401`、再OAuth後再実行は冪等 `200`（PAY.JP再呼び出しなし）
+  - PAY.JP cancel APIは `members.payjp_subscription_id` 指定で実行する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId`（PAY.JP書き込み0回）
   - `inflight_operation_id` 既存時は `__Host-link_session` 未消費で返し、再OAuthなしで同一Cookie再送しても再度 `503` を返す
   - PAY.JP書き込み前の確定失敗では `inflight_operation_*` をクリアする
