@@ -147,7 +147,7 @@
   - `members` 行が無い場合に仮行作成されず、`operationId` 復旧時の会員特定に失敗する
   - customer作成/再利用の確定後に `members.payjp_customer_id` が保存されず、`operationId` 復旧照合ができない
   - 初回 `charge` 成功後に `members.payjp_initial_charge_id` が保存されず、CLI復旧で既存課金検知ができない
-  - `members.payjp_initial_charge_id` 欠落時に `GET /v1/charges?customer=...&since=...&until=...` の `metadata.operation_id=operationId` 検索を行わず、再課金が発生する
+  - `members.payjp_initial_charge_id` 欠落時に `GET /v1/charges?customer=...&since=...&until=...&limit=100`（`since/until` はUNIX秒）の `metadata.operation_id=operationId` 検索を行わず、再課金が発生する
   - `metadata.operation_id` 一致が複数件でもfail-closeにならず、復旧を継続してしまう
   - 日次再同期で `inflight_operation_*` が誤って解除される
   - PAY.JP書き込み前の確定失敗で `inflight_operation_*` がクリアされない
@@ -161,7 +161,7 @@
   - `members` 行が無い場合は `discord_user_id + email` で仮行を作成する
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を保存し、CLI復旧の照合キーに使う
   - 初回 `charge` 成功時点で `members.payjp_initial_charge_id` を保存し、CLI復旧の課金判定キーに使う
-  - `members.payjp_initial_charge_id` 欠落時は `GET /v1/charges?customer=...&since=...&until=...` で `metadata.operation_id=operationId` 一致を既存課金として採用し、`members.payjp_initial_charge_id` を補正保存する
+  - `members.payjp_initial_charge_id` 欠落時は `GET /v1/charges?customer=...&since=...&until=...&limit=100`（`since/until` はUNIX秒）で `metadata.operation_id=operationId` 一致を既存課金として採用し、`members.payjp_initial_charge_id` を補正保存する
   - `metadata.operation_id` 一致0件のみchargeを1回実行し、一致2件以上は確定不能としてfail-closeで停止する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId` を返し、PAY.JP書き込み0回
   - 日次再同期は `inflight_operation_*` を解除せず、解除は手動CLIのみ
@@ -169,6 +169,7 @@
   - PAY.JP書き込み後の確定失敗では整合確認できた場合のみ `inflight_operation_*` をクリアする
   - 不確定失敗で `503 + operationId` を返却し自動再試行禁止
   - 手動再同期CLIで `operationId` 指定復旧し、`members.payjp_initial_charge_id` または `metadata.operation_id=operationId` を決定キーに `charge=1/subscription=1` を維持
+  - `members.payjp_initial_charge_id` を意図的に欠落させたケースでも、`metadata.operation_id=operationId` 経路で復旧できることを必須とする
   - CLI復旧時に `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` を更新し、旧 `event.created` は `ignored`
   - 手動CLI結果に `failed_count` を出力する
   - PAY.JP書き込み実行時/不確定失敗時の `operationId` 必須ログを検証する
@@ -195,6 +196,7 @@
   - `active/trial/canceled` 既存購読が無いケースで `409` にならない
   - `payjp_subscription_id` 未設定で `409` にならず、cancel APIが実行される
   - `payjp_subscription_id` 欠落時の再構築で `GET /v1/customers/:id/subscriptions` を使わず、手動判断に依存して誤ったsubscriptionを採用する
+  - `metadata.discord_user_id` 欠落かつ `status in (active,trial,canceled,paused)` の候補が1件のみのケースで補正保存できず、退会不能になる
   - `payjp_subscription_id` 再構築候補が0件/複数件でもfail-closeで停止せず、cancelが実行される
   - `cancel_requested_at` 既存時にPAY.JP cancel APIが再実行される
   - `inflight_operation_id` 既存時に即 `503 + 既存operationId` にならない
@@ -215,6 +217,7 @@
   - `active/trial/canceled` 既存購読が無い場合は `409`
   - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
   - `payjp_subscription_id` 欠落時は `GET /v1/customers/:id/subscriptions`（必要に応じてページング）で候補取得し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == discord_user_id` が1件のみの場合に補正保存する
+  - `metadata.discord_user_id` 欠落時は、`status in (active,trial,canceled,paused)` の候補が1件のみの場合に限りその1件を補正保存し、0件または複数件はfail-closeで停止する
   - 候補が0件または複数件の場合は確定不能としてfail-closeで停止し、`inflight_operation_*` を解除せずcancelを実行しない
   - 初回cancelのみPAY.JP cancel API実行、消費済みCookie再送は `401`、再OAuth後再実行は冪等 `200`（PAY.JP再呼び出しなし）
   - PAY.JP cancel APIは `members.payjp_subscription_id` 指定で実行する
@@ -284,6 +287,7 @@
   - token不一致で `401` にならない
   - token不一致時に `payjp_events` に記録される、または分離ログ4キーが欠落する
   - `subscription.created` の `failed/ignored` 分岐が誤る
+  - payloadに `data.metadata.operation_id` があるのに `payjp_events` へ保存されない
   - 不明 `data.status` で fail-close + 安全側剥奪にならない
   - fail-close入力（検証失敗）で `200` を返さず、PAY.JP再送を誘発する
   - DB受理不能以外で `503` を返す
@@ -301,6 +305,7 @@
   - token不一致は `401` + `payjp_events` 未登録 + 構造化ログ4キー（`event/received_at/remote_ip/reason`）記録
   - fail-close入力（検証失敗）は `200`、token不一致のみ `401`、DB受理不能のみ `503` を検証する
   - `subscription.created` は欠落時 `failed`、充足時 `ignored`
+  - `data.metadata.operation_id` が存在するイベントは `payjp_events.data_metadata_operation_id` に保存し、未存在時は `NULL` で記録する
   - 不明statusは `failed` 記録 + `members` 非更新 + ロール剥奪
   - raw header/body 非保存、カード情報非保存/非出力、固定キー機密マスク（例: `token/authorization`）を検証
 - Refactor:

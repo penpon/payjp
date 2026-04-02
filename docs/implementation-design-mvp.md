@@ -157,8 +157,8 @@
 1. 日次ジョブ: 全会員照合、`access_end_at` 超過/`subscription 404` を補正（`inflight_operation_*` は解除しない）
    - 実行スケジュールは `DAILY_RESYNC_CRON` を本番値で固定し、Day10前（2026-04-17開始前）に凍結する
 2. 手動CLI: `operationId` / `discord_user_id` / 全会員を受け付け、`operationId` 突合 -> PAY.JP現状態確認 -> `members` 反映 -> ロール再同期を行う
-3. `subscribe` 不確定失敗復旧では、初回charge既存判定を優先順位で固定する: (a) `members.payjp_initial_charge_id` がある場合はそれを正、(b) 無い場合は `GET /v1/charges?customer=<payjp_customer_id>&since=<inflight_operation_started_at-3600>&until=<inflight_operation_started_at+86400>` の `metadata.operation_id == operationId` 一致を既存課金として採用し `members.payjp_initial_charge_id` を補正保存（再課金禁止）、(c) 一致0件のみchargeを1回実行、(d) 一致2件以上は確定不能としてfail-closeで停止（解除禁止）。`subscription` も未作成時のみ1回作成し、作成済みなら再作成しない（`charge=1/subscription=1` 維持）
-4. `cancel` 不確定失敗復旧および `payjp_subscription_id` 欠落時は、`members.payjp_customer_id` を前提に `GET /v1/customers/:id/subscriptions`（必要に応じて `offset` でページング）で候補を取得し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == members.discord_user_id` の候補を評価する。1件なら `members.payjp_subscription_id` を補正保存のうえ未cancel時のみcancel APIを1回実行し、0件または複数件は確定不能としてfail-closeで停止する（`members` 反映・解除は行わない）
+3. `subscribe` 不確定失敗復旧では、初回charge既存判定を優先順位で固定する: (a) `members.payjp_initial_charge_id` がある場合はそれを正、(b) 無い場合は `GET /v1/charges?customer=<payjp_customer_id>&since=<inflight_operation_started_at_unix-3600>&until=<inflight_operation_started_at_unix+604800>&limit=100` の `metadata.operation_id == operationId` 一致を既存課金として採用し `members.payjp_initial_charge_id` を補正保存（再課金禁止）、(c) 一致0件のみchargeを1回実行、(d) 一致2件以上は確定不能としてfail-closeで停止（解除禁止）。`since`/`until` はPAY.JP仕様に合わせてUNIX秒（UTC）で渡す。`subscription` も未作成時のみ1回作成し、作成済みなら再作成しない（`charge=1/subscription=1` 維持）
+4. `cancel` 不確定失敗復旧および `payjp_subscription_id` 欠落時は、`members.payjp_customer_id` を前提に `GET /v1/customers/:id/subscriptions`（必要に応じて `offset` でページング）で候補を取得し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == members.discord_user_id` の候補を評価する（`metadata.discord_user_id` 欠落時は、同じ `status` 条件の候補が1件のみの場合に限りその1件を採用）。1件なら `members.payjp_subscription_id` を補正保存のうえ未cancel時のみcancel APIを1回実行し、0件または複数件は確定不能としてfail-closeで停止する（`members` 反映・解除は行わない）
 5. 手動CLIで `inflight_operation_*` 残留会員を復旧した場合は `last_payjp_event_created_at = max(既存値, 再同期開始Unix秒)` を更新する
 6. `inflight_operation_*` は整合確認できた場合のみCLIで解除し、確定不能時は解除しない（自動解除禁止）
 7. 手動CLIは `failed_count`（`member_impact_logs.resolved_at IS NULL` 件数）を必須出力し、完了条件は `failed_count=0`
@@ -203,6 +203,7 @@
 - Webhook token不一致ログは `event`, `received_at`, `remote_ip`, `reason` を必須
 - Webhook token不一致イベントは `payjp_events` 一意領域に入れない（分離ログのみ）
 - `payjp_events.process_status` は `succeeded/failed/ignored` を記録
+- `payjp_events` には `data.metadata.operation_id`（存在時）を保存し、`operationId` をキーとした調査導線を閉じる
 - 失敗時は調査に必要な最小理由のみ記録し、カード情報は保存・ログ出力しない。その他機密値は固定キーでマスク
 - `member_impact_logs` で未解決影響を追跡し、再同期解消時は同一 `member_id + issue_code` の `resolved_at` を更新
 - 毎朝の運用確認指標は `payjp_events.process_status=failed` 件数、課金/解約APIの `503/5xx` 件数、`member_impact_logs.resolved_at IS NULL` 件数の3点を必須とする
