@@ -1,0 +1,17 @@
+{
+  "featureName": "auth-service",
+  "mode": "strict",
+  "language": "typescript",
+  "currentPhase": "init",
+  "phaseHistory": [],
+  "iterations": {},
+  "proofObligations": [],
+  "traceability": {
+    "epicId": "VCSDD-auth-service-1775432117927",
+    "beads": []
+  },
+  "gates": {},
+  "sprintCount": 0,
+  "createdAt": "2026-04-05T23:35:17.926Z",
+  "updatedAt": "2026-04-05T23:35:17.926Z"
+}

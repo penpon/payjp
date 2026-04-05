@@ -1,0 +1,17 @@
+{
+  "featureName": "billing-service",
+  "mode": "strict",
+  "language": "typescript",
+  "currentPhase": "init",
+  "phaseHistory": [],
+  "iterations": {},
+  "proofObligations": [],
+  "traceability": {
+    "epicId": "VCSDD-billing-service-1775432117933",
+    "beads": []
+  },
+  "gates": {},
+  "sprintCount": 0,
+  "createdAt": "2026-04-05T23:35:17.933Z",
+  "updatedAt": "2026-04-05T23:35:17.933Z"
+}

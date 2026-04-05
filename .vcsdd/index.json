@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "features": {
+    "auth-service": {
+      "status": "active",
+      "createdAt": "2026-04-05T23:35:17.926Z",
+      "mode": "strict",
+      "language": "typescript",
+      "currentPhase": "init",
+      "updatedAt": "2026-04-05T23:35:17.926Z"
+    },
+    "billing-service": {
+      "status": "active",
+      "createdAt": "2026-04-05T23:35:17.933Z",
+      "mode": "strict",
+      "language": "typescript",
+      "currentPhase": "init",
+      "updatedAt": "2026-04-05T23:35:17.933Z"
+    },
+    "sync-service": {
+      "status": "active",
+      "createdAt": "2026-04-05T23:35:17.935Z",
+      "mode": "strict",
+      "language": "typescript",
+      "currentPhase": "init",
+      "updatedAt": "2026-04-05T23:35:17.935Z"
+    }
+  },
+  "activeFeature": "sync-service"
+}

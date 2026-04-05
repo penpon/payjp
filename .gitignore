@@ -1,1 +1,54 @@
+# OS
 .DS_Store
+._*
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.npm
+
+# TypeScript
+*.tsbuildinfo
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Test
+coverage/
+.nyc_output/
+
+# Temp
+*.tmp
+*.temp
+
+# Git worktree
+feature/
+
+# Security (証明書・秘密鍵)
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Monorepo cache
+.turbo/
+
+# Docker / DB volume
+postgres-data/
+docker-data/

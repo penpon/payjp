@@ -3,7 +3,6 @@
 - 正本仕様: `2weeks-spec.md`
 - 採番ルール: `2. スコープ` の9項目を `R1-R9` として扱う
 - TDD方針: t_wada式 `Red -> Green -> Refactor` を最小粒度で固定する
-- 参照調査（正本）: `deep-research-report.md`（`deepresearch.md` は互換名）
 
 ## 1. R1-R9 -> テストID 対応表
 

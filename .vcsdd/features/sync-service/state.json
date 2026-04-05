@@ -1,0 +1,17 @@
+{
+  "featureName": "sync-service",
+  "mode": "strict",
+  "language": "typescript",
+  "currentPhase": "init",
+  "phaseHistory": [],
+  "iterations": {},
+  "proofObligations": [],
+  "traceability": {
+    "epicId": "VCSDD-sync-service-1775432117935",
+    "beads": []
+  },
+  "gates": {},
+  "sprintCount": 0,
+  "createdAt": "2026-04-05T23:35:17.935Z",
+  "updatedAt": "2026-04-05T23:35:17.935Z"
+}
