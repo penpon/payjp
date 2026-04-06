@@ -13,7 +13,7 @@ vi.mock('../api.js', () => ({
   },
 }));
 
-import { checkSession, SessionCheckError, startOAuth } from '../api.js';
+import { checkSession, SessionCheckError } from '../api.js';
 
 describe('main init()', () => {
   let appDiv: HTMLDivElement;
