@@ -2,7 +2,7 @@
   "featureName": "auth-service",
   "mode": "strict",
   "language": "typescript",
-  "currentPhase": "1c",
+  "currentPhase": "2a",
   "phaseHistory": [
     {
       "phase": "init",
@@ -22,6 +22,16 @@
       "phase": "1c",
       "completedAt": "2026-04-06T00:00:00.000Z",
       "artifacts": ["reviews/spec/iteration-2/output/verdict.json"]
+    },
+    {
+      "phase": "2a",
+      "startedAt": "2026-04-06T14:10:00.000Z",
+      "artifacts": [
+        "packages/auth-service/src/core/__tests__/pure-core.test.ts",
+        "packages/auth-service/src/__tests__/integration/auth-flow.test.ts"
+      ],
+      "evidence": "evidence/sprint-1-red-phase.log",
+      "testSummary": "65 failed | 2 passed (67 total) — Red phase confirmed"
     }
   ],
   "iterations": {

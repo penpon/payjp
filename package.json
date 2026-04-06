@@ -1,0 +1,9 @@
+{
+  "name": "hayane-payjp",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "npm -w packages/auth-service run test",
+    "test:auth": "npm -w packages/auth-service run test"
+  }
+}

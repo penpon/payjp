@@ -1,0 +1,1160 @@
+new-feature-tests: FAIL
+regression-baseline: PASS
+
+---
+
+
+> test
+> npm -w packages/auth-service run test
+
+
+> @hayane/auth-service@0.0.1 test
+> vitest run
+
+
+ RUN  v3.2.4 /Users/nana/workspace/hayane_payjp/packages/auth-service
+
+ ❯ src/__tests__/integration/auth-flow.test.ts (29 tests | 29 failed) 20ms
+   × PROP-AUTH-010: consumeOAuthState atomic — concurrent invocations return success exactly once > concurrent calls with same stateHash: only one resolves non-null 9ms
+     → expected +0 to be 1 // Object.is equality
+   × PROP-AUTH-011: callback 401 for all four verification failure modes > state hash mismatch causes 401 1ms
+     → Not implemented
+   × PROP-AUTH-011: callback 401 for all four verification failure modes > session hash mismatch causes 401 0ms
+     → Not implemented
+   × PROP-AUTH-011: callback 401 for all four verification failure modes > expired state causes 401 0ms
+     → Not implemented
+   × PROP-AUTH-011: callback 401 for all four verification failure modes > already used state causes 401 0ms
+     → Not implemented
+   × PROP-AUTH-012: callback 302 Location contains no token in query or fragment > Location URL has no oauth_session or link_session token in query string 0ms
+     → Not implemented
+   × PROP-AUTH-013: callback response always includes Cache-Control: no-store and Referrer-Policy: no-referrer > success path includes required security headers 0ms
+     → Not implemented
+   × PROP-AUTH-013: callback response always includes Cache-Control: no-store and Referrer-Policy: no-referrer > failure path (401) also includes required security headers 0ms
+     → Not implemented
+   × PROP-AUTH-014: session response always includes Cache-Control: no-store and Referrer-Policy: no-referrer > GET /v1/auth/discord/session includes required security headers 0ms
+     → Not implemented
+   × PROP-AUTH-015: session returns 403 when Origin does not match FRONTEND_BASE_URL > mismatched origin → 403 0ms
+     → Not implemented
+   × PROP-AUTH-015: session returns 403 when Origin does not match FRONTEND_BASE_URL > Origin: null → 403 0ms
+     → Not implemented
+   × PROP-AUTH-016: session response includes CORS headers > Access-Control-Allow-Credentials: true is present 0ms
+     → Not implemented
+   × PROP-AUTH-016: session response includes CORS headers > Access-Control-Allow-Origin matches FRONTEND_BASE_URL 0ms
+     → Not implemented
+   × PROP-AUTH-017: start Set-Cookie for __Host-oauth_session has exact attributes > Set-Cookie contains Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=600; no Domain 0ms
+     → Not implemented
+   × PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact attributes > Set-Cookie contains Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=900; no Domain 0ms
+     → Not implemented
+   × PROP-AUTH-019: start Discord authorization URL has scope=identify > Location URL in 302 response has scope=identify 0ms
+     → Not implemented
+   × PROP-AUTH-020: process exits non-zero when any required env var is missing > missing DISCORD_CLIENT_ID causes non-zero exit 0ms
+     → Not implemented
+   × PROP-AUTH-020: process exits non-zero when any required env var is missing > missing DISCORD_CLIENT_SECRET causes non-zero exit 0ms
+     → Not implemented
+   × PROP-AUTH-021: callback 401 when state TTL expired > expired state returns null → 401 (mocked clock) 0ms
+     → Not implemented
+   × PROP-AUTH-022: session 401 when link session TTL expired > expired link session causes 401 (mocked clock) 0ms
+     → Not implemented
+   × PROP-AUTH-023: log entries contain no raw sensitive values > structuredLog does not write raw cookie values 0ms
+     → Not implemented
+   × PROP-AUTH-023: log entries contain no raw sensitive values > structuredLog does not write raw code values 0ms
+     → Not implemented
+   × PROP-AUTH-024: auth-service does not write to billing tables > members table row count does not change during any auth flow 0ms
+     → Not implemented
+   × PROP-AUTH-024: auth-service does not write to billing tables > payjp_events table row count does not change during any auth flow 0ms
+     → Not implemented
+   × PROP-AUTH-024: auth-service does not write to billing tables > member_impact_logs table row count does not change during any auth flow 0ms
+     → Not implemented
+   × PROP-AUTH-029: generateSecureRandomToken has at least 128 bits of entropy > token is a hex string of at least 32 characters (>= 16 bytes = 128 bits) 0ms
+     → Not implemented
+   × PROP-AUTH-029: generateSecureRandomToken has at least 128 bits of entropy > two consecutive calls return different tokens 0ms
+     → Not implemented
+   × Discord API shell functions return expected results > exchangeDiscordCode returns a valid access token string 0ms
+     → Not implemented
+   × Discord API shell functions return expected results > fetchDiscordUserId returns a discord user id string 0ms
+     → Not implemented
+ ❯ src/core/__tests__/pure-core.test.ts (38 tests | 38 failed) 612ms
+   × PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > property: arbitrary clientId/redirectUri/state always yields URL with scope=identify and no extra scopes 593ms
+     → Property failed after 1 tests
+{ seed: -1564147471, path: "0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: [" ","http://a.aa"," "]
+Shrunk 12 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > URL base is https://discord.com/oauth2/authorize 1ms
+     → Not implemented
+   × PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > state query parameter is present in URL 0ms
+     → Not implemented
+   × PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > response_type=code is present 1ms
+     → Not implemented
+   × PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 1: state_hash mismatch → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 2: oauth_session_hash mismatch → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 3: expired (expires_at <= now) → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 4: already used (used_at !== null) → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-003: validateOAuthStateRecord succeeds only when all conditions hold > property: valid record with matching hashes and before expiry always succeeds 2ms
+     → Property failed after 1 tests
+{ seed: 647451638, path: "0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["00000000-0000-1000-8000-000000000000"," "," "]
+Shrunk 8 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-AUTH-004: isExpired boundary > case 1: expires_at > now → false (まだ有効) 0ms
+     → Not implemented
+   × PROP-AUTH-004: isExpired boundary > case 2: expires_at < now → true (期限切れ) 0ms
+     → Not implemented
+   × PROP-AUTH-004: isExpired boundary > case 3: expires_at === now → true (排他境界 — 同刻は期限切れ) 0ms
+     → Not implemented
+   × PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive values > property: arbitrary strings for sensitive keys are always masked to [REDACTED] 1ms
+     → Property failed after 1 tests
+{ seed: 1614133344, path: "0:0:0", endOnFailure: true }
+Counterexample: [" "]
+Shrunk 2 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive values > masks all sensitive keys simultaneously 0ms
+     → Not implemented
+   × PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive values > non-sensitive fields pass through unchanged 0ms
+     → Not implemented
+   × PROP-AUTH-006: buildCookieAttributes for __Host-oauth_session > returns exact required attributes with Max-Age=600 0ms
+     → Not implemented
+   × PROP-AUTH-007: buildCookieAttributes for __Host-link_session > returns exact required attributes with Max-Age=900 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 1: scheme mismatch (http vs https) → false 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 2: host mismatch → false 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 3: port mismatch → false 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 4: origin="null" string → false 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 5: case difference in host → false (大文字小文字区別) 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 6: exact match → true 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 7: exact match with port → true 0ms
+     → Not implemented
+   × PROP-AUTH-008: isSameOrigin rejects various mismatches > case 8: trailing slash in request origin → false or normalized 0ms
+     → Not implemented
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects empty string 0ms
+     → Not implemented
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects URL with trailing slash 0ms
+     → Not implemented
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects URL with path segment 0ms
+     → Not implemented
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects URL with path and trailing slash 0ms
+     → Not implemented
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > property: strings with trailing slash always rejected 2ms
+     → Property failed after 1 tests
+{ seed: 416867582, path: "0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["http://a.aa"]
+Shrunk 6 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > accepts valid origin-only URL without path 0ms
+     → Not implemented
+   × PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > accepts valid origin with explicit port 0ms
+     → Not implemented
+   × PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually > case 1: token hash mismatch → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually > case 2: expired → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually > case 3: already used → { ok: false } 0ms
+     → Not implemented
+   × PROP-AUTH-028: validateLinkSessionRecord succeeds when all conditions hold > property: valid record with matching token hash and before expiry always succeeds 2ms
+     → Property failed after 1 tests
+{ seed: -424164487, path: "0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["00000000-0000-1000-8000-000000000000"," "," "]
+Shrunk 8 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × isUsed: null → false, non-null → true > null → false (未使用) 0ms
+     → Not implemented
+   × isUsed: null → false, non-null → true > non-null Date → true (使用済み) 0ms
+     → Not implemented
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 67 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-010: consumeOAuthState atomic — concurrent invocations return success exactly once > concurrent calls with same stateHash: only one resolves non-null
+AssertionError: expected +0 to be 1 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+ ❯ src/__tests__/integration/auth-flow.test.ts:39:30
+     37|       (r) => r.status === 'fulfilled' && r.value !== null,
+     38|     );
+     39|     expect(successes.length).toBe(1);
+       |                              ^
+     40|   });
+     41| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-011: callback 401 for all four verification failure modes > state hash mismatch causes 401
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:51:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-011: callback 401 for all four verification failure modes > session hash mismatch causes 401
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:58:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-011: callback 401 for all four verification failure modes > expired state causes 401
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:65:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-011: callback 401 for all four verification failure modes > already used state causes 401
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:72:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-012: callback 302 Location contains no token in query or fragment > Location URL has no oauth_session or link_session token in query string
+Error: Not implemented
+ ❯ saveDiscordLinkSession src/shell/index.ts:46:9
+     44|   },
+     45| ): Promise<void> {
+     46|   throw new Error('Not implemented');
+       |         ^
+     47| }
+     48| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:86:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-013: callback response always includes Cache-Control: no-store and Referrer-Policy: no-referrer > success path includes required security headers
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:107:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-013: callback response always includes Cache-Control: no-store and Referrer-Policy: no-referrer > failure path (401) also includes required security headers
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:115:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-014: session response always includes Cache-Control: no-store and Referrer-Policy: no-referrer > GET /v1/auth/discord/session includes required security headers
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:129:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-015: session returns 403 when Origin does not match FRONTEND_BASE_URL > mismatched origin → 403
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:143:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-015: session returns 403 when Origin does not match FRONTEND_BASE_URL > Origin: null → 403
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:149:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-016: session response includes CORS headers > Access-Control-Allow-Credentials: true is present
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:161:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-016: session response includes CORS headers > Access-Control-Allow-Origin matches FRONTEND_BASE_URL
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:167:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-017: start Set-Cookie for __Host-oauth_session has exact attributes > Set-Cookie contains Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=600; no Domain
+Error: Not implemented
+ ❯ saveOAuthState src/shell/index.ts:17:9
+     15|   },
+     16| ): Promise<void> {
+     17|   throw new Error('Not implemented');
+       |         ^
+     18| }
+     19| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:180:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact attributes > Set-Cookie contains Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=900; no Domain
+Error: Not implemented
+ ❯ saveDiscordLinkSession src/shell/index.ts:46:9
+     44|   },
+     45| ): Promise<void> {
+     46|   throw new Error('Not implemented');
+       |         ^
+     47| }
+     48| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:196:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-019: start Discord authorization URL has scope=identify > Location URL in 302 response has scope=identify
+Error: Not implemented
+ ❯ saveOAuthState src/shell/index.ts:17:9
+     15|   },
+     16| ): Promise<void> {
+     17|   throw new Error('Not implemented');
+       |         ^
+     18| }
+     19| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:213:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-020: process exits non-zero when any required env var is missing > missing DISCORD_CLIENT_ID causes non-zero exit
+Error: Not implemented
+ ❯ exchangeDiscordCode src/shell/index.ts:54:9
+     52|   _env: { clientId: string; clientSecret: string; redirectUri: string …
+     53| ): Promise<string> {
+     54|   throw new Error('Not implemented');
+       |         ^
+     55| }
+     56| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:231:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-020: process exits non-zero when any required env var is missing > missing DISCORD_CLIENT_SECRET causes non-zero exit
+Error: Not implemented
+ ❯ exchangeDiscordCode src/shell/index.ts:54:9
+     52|   _env: { clientId: string; clientSecret: string; redirectUri: string …
+     53| ): Promise<string> {
+     54|   throw new Error('Not implemented');
+       |         ^
+     55| }
+     56| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:240:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-021: callback 401 when state TTL expired > expired state returns null → 401 (mocked clock)
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:257:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-022: session 401 when link session TTL expired > expired link session causes 401 (mocked clock)
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:271:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-023: log entries contain no raw sensitive values > structuredLog does not write raw cookie values
+Error: Not implemented
+ ❯ structuredLog src/shell/index.ts:68:9
+     66|   _entry: Record<string, unknown>,
+     67| ): void {
+     68|   throw new Error('Not implemented');
+       |         ^
+     69| }
+     70| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:291:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-023: log entries contain no raw sensitive values > structuredLog does not write raw code values
+Error: Not implemented
+ ❯ structuredLog src/shell/index.ts:68:9
+     66|   _entry: Record<string, unknown>,
+     67| ): void {
+     68|   throw new Error('Not implemented');
+       |         ^
+     69| }
+     70| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:303:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-024: auth-service does not write to billing tables > members table row count does not change during any auth flow
+Error: Not implemented
+ ❯ saveOAuthState src/shell/index.ts:17:9
+     15|   },
+     16| ): Promise<void> {
+     17|   throw new Error('Not implemented');
+       |         ^
+     18| }
+     19| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:317:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-024: auth-service does not write to billing tables > payjp_events table row count does not change during any auth flow
+Error: Not implemented
+ ❯ saveDiscordLinkSession src/shell/index.ts:46:9
+     44|   },
+     45| ): Promise<void> {
+     46|   throw new Error('Not implemented');
+       |         ^
+     47| }
+     48| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:328:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-024: auth-service does not write to billing tables > member_impact_logs table row count does not change during any auth flow
+Error: Not implemented
+ ❯ consumeOAuthState src/shell/index.ts:33:9
+     31|   created_at: Date;
+     32| } | null> {
+     33|   throw new Error('Not implemented');
+       |         ^
+     34| }
+     35| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:339:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-029: generateSecureRandomToken has at least 128 bits of entropy > token is a hex string of at least 32 characters (>= 16 bytes = 128 bits)
+Error: Not implemented
+ ❯ generateSecureRandomToken src/shell/index.ts:4:9
+      2| // REQ-AUTH-009: crypto.randomBytes による安全なトークン生成
+      3| export async function generateSecureRandomToken(): Promise<string> {
+      4|   throw new Error('Not implemented');
+       |         ^
+      5| }
+      6| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:351:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > PROP-AUTH-029: generateSecureRandomToken has at least 128 bits of entropy > two consecutive calls return different tokens
+Error: Not implemented
+ ❯ generateSecureRandomToken src/shell/index.ts:4:9
+      2| // REQ-AUTH-009: crypto.randomBytes による安全なトークン生成
+      3| export async function generateSecureRandomToken(): Promise<string> {
+      4|   throw new Error('Not implemented');
+       |         ^
+      5| }
+      6| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:360:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > Discord API shell functions return expected results > exchangeDiscordCode returns a valid access token string
+Error: Not implemented
+ ❯ exchangeDiscordCode src/shell/index.ts:54:9
+     52|   _env: { clientId: string; clientSecret: string; redirectUri: string …
+     53| ): Promise<string> {
+     54|   throw new Error('Not implemented');
+       |         ^
+     55| }
+     56| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:372:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/67]⎯
+
+ FAIL  src/__tests__/integration/auth-flow.test.ts > Discord API shell functions return expected results > fetchDiscordUserId returns a discord user id string
+Error: Not implemented
+ ❯ fetchDiscordUserId src/shell/index.ts:61:9
+     59|   _accessToken: string,
+     60| ): Promise<string> {
+     61|   throw new Error('Not implemented');
+       |         ^
+     62| }
+     63| 
+ ❯ src/__tests__/integration/auth-flow.test.ts:382:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > property: arbitrary clientId/redirectUri/state always yields URL with scope=identify and no extra scopes
+Error: Property failed after 1 tests
+{ seed: -1564147471, path: "0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: [" ","http://a.aa"," "]
+Shrunk 12 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:54:8
+     52| describe('PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope…
+     53|   it('property: arbitrary clientId/redirectUri/state always yields URL…
+     54|     fc.assert(
+       |        ^
+     55|       fc.property(
+     56|         fc.string({ minLength: 1 }),
+
+Caused by: Error: Not implemented
+ ❯ buildDiscordAuthorizationUrl src/core/index.ts:16:9
+ ❯ src/core/__tests__/pure-core.test.ts:60:23
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:54:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > URL base is https://discord.com/oauth2/authorize
+Error: Not implemented
+ ❯ buildDiscordAuthorizationUrl src/core/index.ts:16:9
+     14|   state: string,
+     15| ): string {
+     16|   throw new Error('Not implemented');
+       |         ^
+     17| }
+     18| 
+ ❯ src/core/__tests__/pure-core.test.ts:73:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > state query parameter is present in URL
+Error: Not implemented
+ ❯ buildDiscordAuthorizationUrl src/core/index.ts:16:9
+     14|   state: string,
+     15| ): string {
+     16|   throw new Error('Not implemented');
+       |         ^
+     17| }
+     18| 
+ ❯ src/core/__tests__/pure-core.test.ts:80:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > response_type=code is present
+Error: Not implemented
+ ❯ buildDiscordAuthorizationUrl src/core/index.ts:16:9
+     14|   state: string,
+     15| ): string {
+     16|   throw new Error('Not implemented');
+       |         ^
+     17| }
+     18| 
+ ❯ src/core/__tests__/pure-core.test.ts:86:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 1: state_hash mismatch → { ok: false }
+Error: Not implemented
+ ❯ validateOAuthStateRecord src/core/index.ts:53:9
+     51|   now: Date,
+     52| ): ValidationResult {
+     53|   throw new Error('Not implemented');
+       |         ^
+     54| }
+     55| 
+ ❯ src/core/__tests__/pure-core.test.ts:98:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 2: oauth_session_hash mismatch → { ok: false }
+Error: Not implemented
+ ❯ validateOAuthStateRecord src/core/index.ts:53:9
+     51|   now: Date,
+     52| ): ValidationResult {
+     53|   throw new Error('Not implemented');
+       |         ^
+     54| }
+     55| 
+ ❯ src/core/__tests__/pure-core.test.ts:108:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 3: expired (expires_at <= now) → { ok: false }
+Error: Not implemented
+ ❯ validateOAuthStateRecord src/core/index.ts:53:9
+     51|   now: Date,
+     52| ): ValidationResult {
+     53|   throw new Error('Not implemented');
+       |         ^
+     54| }
+     55| 
+ ❯ src/core/__tests__/pure-core.test.ts:122:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-002: validateOAuthStateRecord fails for each condition individually > case 4: already used (used_at !== null) → { ok: false }
+Error: Not implemented
+ ❯ validateOAuthStateRecord src/core/index.ts:53:9
+     51|   now: Date,
+     52| ): ValidationResult {
+     53|   throw new Error('Not implemented');
+       |         ^
+     54| }
+     55| 
+ ❯ src/core/__tests__/pure-core.test.ts:136:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-003: validateOAuthStateRecord succeeds only when all conditions hold > property: valid record with matching hashes and before expiry always succeeds
+Error: Property failed after 1 tests
+{ seed: 647451638, path: "0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["00000000-0000-1000-8000-000000000000"," "," "]
+Shrunk 8 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:152:8
+    150| describe('PROP-AUTH-003: validateOAuthStateRecord succeeds only when a…
+    151|   it('property: valid record with matching hashes and before expiry al…
+    152|     fc.assert(
+       |        ^
+    153|       fc.property(
+    154|         fc.uuid(),
+
+Caused by: Error: Not implemented
+ ❯ validateOAuthStateRecord src/core/index.ts:53:9
+ ❯ src/core/__tests__/pure-core.test.ts:168:26
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:152:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-004: isExpired boundary > case 1: expires_at > now → false (まだ有効)
+Error: Not implemented
+ ❯ isExpired src/core/index.ts:37:9
+     35| // REQ-AUTH-012, REQ-AUTH-013: expires_at <= now → true (排他境界)
+     36| export function isExpired(expiresAt: Date, now: Date): boolean {
+     37|   throw new Error('Not implemented');
+       |         ^
+     38| }
+     39| 
+ ❯ src/core/__tests__/pure-core.test.ts:185:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-004: isExpired boundary > case 2: expires_at < now → true (期限切れ)
+Error: Not implemented
+ ❯ isExpired src/core/index.ts:37:9
+     35| // REQ-AUTH-012, REQ-AUTH-013: expires_at <= now → true (排他境界)
+     36| export function isExpired(expiresAt: Date, now: Date): boolean {
+     37|   throw new Error('Not implemented');
+       |         ^
+     38| }
+     39| 
+ ❯ src/core/__tests__/pure-core.test.ts:191:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-004: isExpired boundary > case 3: expires_at === now → true (排他境界 — 同刻は期限切れ)
+Error: Not implemented
+ ❯ isExpired src/core/index.ts:37:9
+     35| // REQ-AUTH-012, REQ-AUTH-013: expires_at <= now → true (排他境界)
+     36| export function isExpired(expiresAt: Date, now: Date): boolean {
+     37|   throw new Error('Not implemented');
+       |         ^
+     38| }
+     39| 
+ ❯ src/core/__tests__/pure-core.test.ts:196:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive values > property: arbitrary strings for sensitive keys are always masked to [REDACTED]
+Error: Property failed after 1 tests
+{ seed: 1614133344, path: "0:0:0", endOnFailure: true }
+Counterexample: [" "]
+Shrunk 2 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:208:8
+    206| 
+    207|   it('property: arbitrary strings for sensitive keys are always masked…
+    208|     fc.assert(
+       |        ^
+    209|       fc.property(
+    210|         fc.string({ minLength: 1 }),
+
+Caused by: Error: Not implemented
+ ❯ maskSensitiveLogFields src/core/index.ts:80:9
+ ❯ src/core/__tests__/pure-core.test.ts:214:28
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:208:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive values > masks all sensitive keys simultaneously
+Error: Not implemented
+ ❯ maskSensitiveLogFields src/core/index.ts:80:9
+     78|   logEntry: Record<string, unknown>,
+     79| ): Record<string, unknown> {
+     80|   throw new Error('Not implemented');
+       |         ^
+     81| }
+     82| 
+ ❯ src/core/__tests__/pure-core.test.ts:235:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive values > non-sensitive fields pass through unchanged
+Error: Not implemented
+ ❯ maskSensitiveLogFields src/core/index.ts:80:9
+     78|   logEntry: Record<string, unknown>,
+     79| ): Record<string, unknown> {
+     80|   throw new Error('Not implemented');
+       |         ^
+     81| }
+     82| 
+ ❯ src/core/__tests__/pure-core.test.ts:245:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-006: buildCookieAttributes for __Host-oauth_session > returns exact required attributes with Max-Age=600
+Error: Not implemented
+ ❯ buildCookieAttributes src/core/index.ts:72:9
+     70|   maxAge: number,
+     71| ): CookieAttributes {
+     72|   throw new Error('Not implemented');
+       |         ^
+     73| }
+     74| 
+ ❯ src/core/__tests__/pure-core.test.ts:257:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-007: buildCookieAttributes for __Host-link_session > returns exact required attributes with Max-Age=900
+Error: Not implemented
+ ❯ buildCookieAttributes src/core/index.ts:72:9
+     70|   maxAge: number,
+     71| ): CookieAttributes {
+     72|   throw new Error('Not implemented');
+       |         ^
+     73| }
+     74| 
+ ❯ src/core/__tests__/pure-core.test.ts:276:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 1: scheme mismatch (http vs https) → false
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:294:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 2: host mismatch → false
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:298:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 3: port mismatch → false
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:302:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 4: origin="null" string → false
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:306:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 5: case difference in host → false (大文字小文字区別)
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:310:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 6: exact match → true
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:314:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 7: exact match with port → true
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:318:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-008: isSameOrigin rejects various mismatches > case 8: trailing slash in request origin → false or normalized
+Error: Not implemented
+ ❯ isSameOrigin src/core/index.ts:89:9
+     87|   allowedOrigin: string,
+     88| ): boolean {
+     89|   throw new Error('Not implemented');
+       |         ^
+     90| }
+     91| 
+ ❯ src/core/__tests__/pure-core.test.ts:323:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects empty string
+Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+     93| // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）
+     94| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+     95|   throw new Error('Not implemented');
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:333:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects URL with trailing slash
+Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+     93| // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）
+     94| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+     95|   throw new Error('Not implemented');
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:338:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[56/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects URL with path segment
+Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+     93| // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）
+     94| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+     95|   throw new Error('Not implemented');
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:343:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[57/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > rejects URL with path and trailing slash
+Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+     93| // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）
+     94| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+     95|   throw new Error('Not implemented');
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:348:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[58/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > property: strings with trailing slash always rejected
+Error: Property failed after 1 tests
+{ seed: 416867582, path: "0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["http://a.aa"]
+Shrunk 6 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:353:8
+    351| 
+    352|   it('property: strings with trailing slash always rejected', () => {
+    353|     fc.assert(
+       |        ^
+    354|       fc.property(
+    355|         fc.webUrl().filter((u) => !u.endsWith('/')),
+
+Caused by: Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+ ❯ src/core/__tests__/pure-core.test.ts:358:26
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:353:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[59/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > accepts valid origin-only URL without path
+Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+     93| // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）
+     94| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+     95|   throw new Error('Not implemented');
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:367:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[60/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats > accepts valid origin with explicit port
+Error: Not implemented
+ ❯ validateFrontendBaseUrl src/core/index.ts:95:9
+     93| // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）
+     94| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+     95|   throw new Error('Not implemented');
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:372:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[61/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually > case 1: token hash mismatch → { ok: false }
+Error: Not implemented
+ ❯ validateLinkSessionRecord src/core/index.ts:63:9
+     61|   now: Date,
+     62| ): ValidationResult {
+     63|   throw new Error('Not implemented');
+       |         ^
+     64| }
+     65| 
+ ❯ src/core/__tests__/pure-core.test.ts:383:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[62/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually > case 2: expired → { ok: false }
+Error: Not implemented
+ ❯ validateLinkSessionRecord src/core/index.ts:63:9
+     61|   now: Date,
+     62| ): ValidationResult {
+     63|   throw new Error('Not implemented');
+       |         ^
+     64| }
+     65| 
+ ❯ src/core/__tests__/pure-core.test.ts:396:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[63/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually > case 3: already used → { ok: false }
+Error: Not implemented
+ ❯ validateLinkSessionRecord src/core/index.ts:63:9
+     61|   now: Date,
+     62| ): ValidationResult {
+     63|   throw new Error('Not implemented');
+       |         ^
+     64| }
+     65| 
+ ❯ src/core/__tests__/pure-core.test.ts:409:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[64/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-AUTH-028: validateLinkSessionRecord succeeds when all conditions hold > property: valid record with matching token hash and before expiry always succeeds
+Error: Property failed after 1 tests
+{ seed: -424164487, path: "0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["00000000-0000-1000-8000-000000000000"," "," "]
+Shrunk 8 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:424:8
+    422| describe('PROP-AUTH-028: validateLinkSessionRecord succeeds when all c…
+    423|   it('property: valid record with matching token hash and before expir…
+    424|     fc.assert(
+       |        ^
+    425|       fc.property(
+    426|         fc.uuid(),
+
+Caused by: Error: Not implemented
+ ❯ validateLinkSessionRecord src/core/index.ts:63:9
+ ❯ src/core/__tests__/pure-core.test.ts:440:26
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:424:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[65/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > isUsed: null → false, non-null → true > null → false (未使用)
+Error: Not implemented
+ ❯ isUsed src/core/index.ts:42:9
+     40| // REQ-AUTH-002, REQ-AUTH-004: used_at が null なら未使用
+     41| export function isUsed(usedAt: Date | null): boolean {
+     42|   throw new Error('Not implemented');
+       |         ^
+     43| }
+     44| 
+ ❯ src/core/__tests__/pure-core.test.ts:454:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[66/67]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > isUsed: null → false, non-null → true > non-null Date → true (使用済み)
+Error: Not implemented
+ ❯ isUsed src/core/index.ts:42:9
+     40| // REQ-AUTH-002, REQ-AUTH-004: used_at が null なら未使用
+     41| export function isUsed(usedAt: Date | null): boolean {
+     42|   throw new Error('Not implemented');
+       |         ^
+     43| }
+     44| 
+ ❯ src/core/__tests__/pure-core.test.ts:458:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[67/67]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  67 failed (67)
+   Start at  09:38:56
+   Duration  1.26s (transform 93ms, setup 0ms, collect 156ms, tests 632ms, environment 1ms, prepare 261ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nana/workspace/hayane_payjp/packages/auth-service
+npm error workspace @hayane/auth-service@0.0.1
+npm error location /Users/nana/workspace/hayane_payjp/packages/auth-service
+npm error command failed
+npm error command sh -c vitest run
