@@ -11,6 +11,30 @@
       "mcp__plugin_context7_context7__*"
     ]
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo $CLAUDE_FILE_PATH | grep -qE '\\.env' && echo 'BLOCK: .env files should not be edited by Claude' && exit 1 || exit 0"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx biome check --write --files-ignore-unknown=true $CLAUDE_FILE_PATH 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "context7@claude-plugins-official": true,
     "ui-ux-pro-max@ui-ux-pro-max-skill": true,
@@ -24,6 +48,7 @@
     "ralph-loop@claude-plugins-official": true,
     "feature-dev@claude-plugins-official": true,
     "commit-commands@claude-plugins-official": true,
-    "vcsdd@vcsdd-claude-code": true
+    "vcsdd@vcsdd-claude-code": true,
+    "claude-code-setup@claude-plugins-official": true
   }
 }

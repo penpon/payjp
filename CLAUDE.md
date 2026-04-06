@@ -48,6 +48,11 @@ HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは Git
 - Milestone: `MVP Go-Live`（2026-04-20）
 - Issue一覧: #1〜#10（依存関係は各Issueのbodyに記載）
 
+#### ブランチ運用
+
+- Issue着手時は必ず作業ブランチを切る（例: `feat/issue-3-billing-routes`）
+- main ブランチで直接実装しない
+
 #### 実装フェーズ — タスク特性に応じてツールを選択
 
 | ツール | 用途 | 適するIssue |
