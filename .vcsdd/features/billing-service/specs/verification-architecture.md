@@ -43,7 +43,7 @@ I/O-dependent functions. Tested via integration tests with real DB and/or mocked
 | Symbol | Side Effect | Test Strategy |
 |--------|-------------|---------------|
 | `generateOperationId()` | `crypto.randomUUID` | Integration: UUID format check |
-| `acquireAdvisoryLock(db, discordUserId)` | `pg_advisory_xact_lock(hashtext(...))` | Integration: concurrent race test |
+| `acquireAdvisoryLock(db, discordUserId)` | `pg_advisory_lock(discord_user_id::bigint)` | Integration: concurrent race test |
 | `findMember(db, discordUserId)` | DB SELECT `members` | Integration: row found/not found |
 | `createProvisionalMember(db, discordUserId, email)` | DB INSERT `members` | Integration: row created with expected fields |
 | `saveInflightOperation(db, memberId, operationId, type)` | DB UPDATE `members.inflight_operation_*` | Integration: fields set correctly |

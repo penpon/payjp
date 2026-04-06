@@ -44,9 +44,9 @@ export interface DbClient {
       inflight_operation_started_at: null;
     },
   ): Promise<Member>;
-  acquireAdvisoryLock(key: string): Promise<boolean>;
-  releaseAdvisoryLock(key: string): Promise<void>;
-  withTransactionLock<T>(key: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
+  acquireAdvisoryLock(discordUserId: string): Promise<boolean>;
+  releaseAdvisoryLock(discordUserId: string): Promise<void>;
+  withTransactionLock<T>(discordUserId: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
 }
 
 /** Subset of DbClient available inside a transaction (no nested transactions/locks) */
@@ -292,8 +292,10 @@ async function queryUpdateMemberAfterCancel(
 // --- PgDbClient (pool-based, with advisory lock support) ---
 
 export class PgDbClient implements DbClient {
-  // Legacy advisory lock: session-scoped. Prefer withTransactionLock for new code.
-  private lockClient: { client: pg.PoolClient; key: string } | null = null;
+  // Session-scoped advisory locks keyed by discord user id.
+  // Used by subscribe/cancel for cross-API-call locking.
+  // withTransactionLock is available for transaction-scoped locking (e.g. webhook).
+  private lockClients = new Map<string, pg.PoolClient>();
 
   constructor(private pool: pg.Pool) {}
 
@@ -328,18 +330,17 @@ export class PgDbClient implements DbClient {
     return queryUpdateMemberAfterCancel(this.pool, memberId, params);
   }
 
-  async acquireAdvisoryLock(key: string): Promise<boolean> {
-    if (this.lockClient !== null) {
-      throw new Error('Advisory lock already held. Release before acquiring again.');
+  async acquireAdvisoryLock(discordUserId: string): Promise<boolean> {
+    if (this.lockClients.has(discordUserId)) {
+      return false;
     }
     const client = await this.pool.connect();
     try {
-      const result = await client.query<{ pg_try_advisory_lock: boolean }>(
-        'SELECT pg_try_advisory_lock(hashtext($1))',
-        [key],
-      );
+      const result = await client.query<{ pg_try_advisory_lock: boolean }>('SELECT pg_try_advisory_lock($1::bigint)', [
+        discordUserId,
+      ]);
       if (result.rows[0].pg_try_advisory_lock) {
-        this.lockClient = { client, key };
+        this.lockClients.set(discordUserId, client);
         return true;
       }
       client.release();
@@ -350,27 +351,28 @@ export class PgDbClient implements DbClient {
     }
   }
 
-  async releaseAdvisoryLock(key: string): Promise<void> {
-    if (!this.lockClient) {
+  async releaseAdvisoryLock(discordUserId: string): Promise<void> {
+    const client = this.lockClients.get(discordUserId);
+    if (!client) {
+      if (this.lockClients.size > 0) {
+        const heldKeys = Array.from(this.lockClients.keys()).join(', ');
+        throw new Error(`Lock key mismatch: holding "${heldKeys}", tried to release "${discordUserId}"`);
+      }
       throw new Error('No advisory lock is currently held');
     }
-    if (this.lockClient.key !== key) {
-      throw new Error(`Lock key mismatch: holding "${this.lockClient.key}", tried to release "${key}"`);
-    }
-    const { client } = this.lockClient;
-    this.lockClient = null;
+    this.lockClients.delete(discordUserId);
     try {
-      await client.query('SELECT pg_advisory_unlock(hashtext($1))', [key]);
+      await client.query('SELECT pg_advisory_unlock($1::bigint)', [discordUserId]);
     } finally {
       client.release();
     }
   }
 
-  async withTransactionLock<T>(key: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T> {
+  async withTransactionLock<T>(discordUserId: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
+      await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [discordUserId]);
       const txDb = new PgTransactionClient(client);
       const result = await fn(txDb);
       await client.query('COMMIT');
@@ -385,7 +387,7 @@ export class PgDbClient implements DbClient {
             message: 'ROLLBACK failed after transaction error',
             rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
             originalError: err instanceof Error ? (err as Error).message : String(err),
-            lockKey: key,
+            lockKey: discordUserId,
           }),
         );
       }

@@ -1,7 +1,9 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
+import type { BillingDeps } from '@hayane/billing-service';
 import Fastify, { type FastifyError } from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
+import { billingRoutes } from './routes/billing.routes.js';
 
 export interface AppConfig {
   readonly frontendBaseUrl: string;
@@ -12,7 +14,7 @@ export interface AppConfig {
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
-export function buildApp(config: AppConfig) {
+export function buildApp(config: AppConfig, billingDeps?: BillingDeps) {
   const app = Fastify({ logger: false });
 
   app.register(fastifyCookie);
@@ -54,6 +56,10 @@ export function buildApp(config: AppConfig) {
   });
 
   app.register(authRoutes, { config });
+
+  if (billingDeps) {
+    app.register(billingRoutes, { billingDeps });
+  }
 
   return app;
 }

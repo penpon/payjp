@@ -1,7 +1,8 @@
 /**
  * Cancel Orchestration — Phase 2b (Green)
  *
- * REQ-BILL-019〜025 の 12 ステップ順序に従い実装する。
+ * 仕様書 §5.2 の 12 ステップ（REQ-BILL-019〜025）に対応する。
+ * Step 1 はサブステップ 1b, 1c に分割して実装。
  */
 import {
   buildCancelResponse,
@@ -48,9 +49,8 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     };
   }
 
-  // Step 2: Advisory lock
-  const lockKey = `cancel:${req.discordUserId}`;
-  const lockAcquired = await db.acquireAdvisoryLock(lockKey);
+  // Step 2: Advisory lock (spec §5.2 step 2)
+  const lockAcquired = await db.acquireAdvisoryLock(req.discordUserId);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
@@ -90,7 +90,6 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
 
     // Step 7: Acceptance boundary check
     const acceptanceStart = calculateCancelAcceptanceStart(member.access_end_at, JST_OFFSET_MINUTES);
-    // nowJst: add 9 hours to UTC to get JST for comparison
     const nowJst = new Date(now.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
     const acceptanceStartJst = new Date(acceptanceStart.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
     if (!isCancelAcceptable(nowJst, acceptanceStartJst)) {
@@ -153,7 +152,6 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
 
     // Step 12: State update + clear inflight
     // PAY.JP cancel is complete — DB update failure retains inflight for CLI resolution
-    const canceledAt = now;
     const accessEndAt = canceledSubscription.current_period_end
       ? new Date(canceledSubscription.current_period_end * 1000)
       : member.access_end_at;
@@ -161,7 +159,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     let updatedMember: Awaited<ReturnType<typeof db.updateMemberAfterCancel>>;
     try {
       updatedMember = await db.updateMemberAfterCancel(member.id, {
-        cancel_requested_at: canceledAt,
+        cancel_requested_at: now,
         subscription_status: 'canceled',
         access_end_at: accessEndAt,
         inflight_operation_id: null,
@@ -181,6 +179,10 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
 
     return { ok: true, data: buildCancelResponse(updatedMember) };
   } finally {
-    await db.releaseAdvisoryLock(lockKey);
+    try {
+      await db.releaseAdvisoryLock(req.discordUserId);
+    } catch {
+      // Lock release failure must not mask the billing response
+    }
   }
 }
