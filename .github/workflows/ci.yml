@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Biome lint & format
+        run: npx biome check .
+      - name: TypeScript typecheck
+        run: npx tsc -b --noEmit
+      - name: Tests
+        run: npm test
