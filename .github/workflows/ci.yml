@@ -17,6 +17,6 @@ jobs:
       - name: Biome lint & format
         run: npx biome check .
       - name: TypeScript typecheck
-        run: npx tsc -b --noEmit
+        run: npx tsc --noEmit -p packages/shared/tsconfig.json && npx tsc --noEmit -p packages/auth-service/tsconfig.json && npx tsc --noEmit -p packages/billing-service/tsconfig.json && npx tsc --noEmit -p packages/sync-service/tsconfig.json && npx tsc --noEmit -p packages/server/tsconfig.json
       - name: Tests
         run: npm test
