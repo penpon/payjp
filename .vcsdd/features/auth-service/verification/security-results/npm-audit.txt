@@ -1,0 +1,28 @@
+# npm audit output — auth-service
+# Date: 2026-04-06
+# Command: npm audit --json
+
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {},
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "dependencies": {
+      "prod": 5,
+      "dev": 103,
+      "optional": 52,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 107
+    }
+  }
+}
+
+# Result: 0 vulnerabilities found across 107 dependencies

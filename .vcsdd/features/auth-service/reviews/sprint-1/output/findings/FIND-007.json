@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-007",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "major",
+  "description": "REQ-AUTH-004 specifies that GET /v1/auth/discord/session with absent __Host-link_session cookie must return 401. REQ-AUTH-002 specifies that absent 'state' query param, absent 'code' query param, or absent __Host-oauth_session cookie each independently returns 401. No integration test exercises the 'absent input' edge cases. handleAuthRequest does not accept cookies or query parameters at all, so these flows cannot be tested through the current integration harness. The handleAuthRequest for /v1/auth/discord/session (shell/index.ts:138-145) always returns 200 with { linked: true } for any request with a matching origin, regardless of whether a link session cookie is present or valid.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "138-145",
+    "snippet": "if (endpoint === '/v1/auth/discord/session') {\n    const origin = headers['origin'] || '';\n    if (!isSameOrigin(origin, frontendBaseUrl)) {\n      return { statusCode: 403, headers: secHeaders };\n    }\n    const corsHeaders = getCorsHeaders(frontendBaseUrl);\n    return { statusCode: 200, headers: { ...secHeaders, ...corsHeaders }, body: { linked: true } };\n  }"
+  },
+  "routeToPhase": "2b"
+}

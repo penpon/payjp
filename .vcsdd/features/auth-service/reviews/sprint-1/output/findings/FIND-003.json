@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-003",
+  "dimension": "implementation_correctness",
+  "category": "requirement_mismatch",
+  "severity": "critical",
+  "description": "handleAuthRequest for '/v1/auth/discord/callback' at shell/index.ts:147-149 does NOT implement the callback flow specified in REQ-AUTH-002. The implementation returns a hardcoded 302 with Location header but: (1) does not receive or validate query params 'code' and 'state', (2) does not receive or validate the __Host-oauth_session cookie, (3) does not call consumeOAuthState for atomic state verification, (4) does not call exchangeDiscordCode or fetchDiscordUserId, (5) does not call saveDiscordLinkSession, (6) does not issue a __Host-link_session Set-Cookie header. The function always returns 302 regardless of input, making it incapable of returning 401 for any failure mode. This means PROP-AUTH-011 through PROP-AUTH-013 integration tests that claim to test 'via handleAuthRequest' for callback are not actually testing the callback flow — they test other endpoints or call lower-level functions directly.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "147-149",
+    "snippet": "if (endpoint === '/v1/auth/discord/callback') {\n    const locationUrl = buildCallbackRedirectUrl(frontendBaseUrl);\n    return { statusCode: 302, headers: { ...secHeaders, Location: locationUrl } };\n  }"
+  },
+  "routeToPhase": "2b"
+}

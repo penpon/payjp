@@ -23,9 +23,14 @@ Deterministic, side-effect-free functions. No I/O. Fully unit-testable without m
 | `validateOAuthStateRecord(record, sessionHash, stateHash, now)` | `OAuthStateRecord × string × string × Date` | `ValidationResult` | All four conditions AND'd; each failure independent |
 | `validateLinkSessionRecord(record, tokenHash, now)` | `LinkSessionRecord × string × Date` | `ValidationResult` | TTL + used_at check |
 | `buildCookieAttributes(name, maxAge)` | `CookieName × number` | `CookieAttributes` | Exact attribute set per cookie name; Domain absent |
+| `serializeCookieAttributes(attrs, value)` | `CookieAttributes × string` | `string` | Set-Cookie header string; no Domain attribute emitted |
 | `maskSensitiveLogFields(entry)` | `Record<string, unknown>` | `Record<string, unknown>` | Fixed-key masking; no sensitive values leak |
 | `isSameOrigin(requestOrigin, allowedOrigin)` | `string × string` | `boolean` | scheme+host+port normalization; trailing slash stripped |
 | `validateFrontendBaseUrl(raw)` | `string` | `ValidationResult` | Origin-only regex; no trailing slash; no path |
+| `buildCallbackRedirectUrl(frontendBaseUrl)` | `string` | `string` | Returns FRONTEND_BASE_URL with no query or fragment |
+| `getSecurityHeaders()` | `void` | `Record<string, string>` | Cache-Control: no-store; Referrer-Policy: no-referrer |
+| `getCorsHeaders(frontendBaseUrl)` | `string` | `Record<string, string>` | Access-Control-Allow-Credentials: true; Access-Control-Allow-Origin = frontendBaseUrl |
+| `validateRequiredEnvVars(env)` | `Record<string, string \| undefined>` | `EnvVarValidationResult` | Detects each individually missing required env var |
 
 ### Effectful Shell
 I/O-dependent functions. Tested via integration tests or mocks.
@@ -39,6 +44,10 @@ I/O-dependent functions. Tested via integration tests or mocks.
 | `exchangeDiscordCode(code, env)` | HTTP POST to Discord token endpoint | Integration with mock Discord server |
 | `fetchDiscordUserId(accessToken)` | HTTP GET to Discord `/users/@me` | Integration with mock Discord server |
 | `structuredLog(entry)` | Write to log sink | Unit: verify masking applied before sink write |
+| `handleAuthRequest(request, config)` | Orchestrates all shell I/O for start/callback/session endpoints; calls saveOAuthState, consumeOAuthState, saveDiscordLinkSession, exchangeDiscordCode, fetchDiscordUserId | Tier 2 integration: PROP-AUTH-013–019, PROP-AUTH-018 Set-Cookie attributes |
+| `stateHash(raw)` | `crypto.createHash('sha256')` — moved from pure core; deterministic but uses platform crypto | Shell unit: deterministic output verified via integration paths |
+| `oauthSessionHash(raw)` | `crypto.createHash('sha256')` | Shell unit: verified via integration paths |
+| `linkSessionTokenHash(raw)` | `crypto.createHash('sha256')` | Shell unit: verified via integration paths |
 
 ---
 
@@ -71,6 +80,12 @@ I/O-dependent functions. Tested via integration tests or mocks.
 | PROP-AUTH-023 | auth-service log entries for any auth endpoint contain no raw Cookie, Authorization, Set-Cookie, code, or token values | REQ-AUTH-010 | 2 | true | Integration test: inspect captured log output |
 | PROP-AUTH-024 | auth-service does not write to `members`, `payjp_events`, or `member_impact_logs` tables under any auth flow | NFR-AUTH-004 | 2 | true | Integration test: table row counts invariant |
 | PROP-AUTH-025 | `FRONTEND_BASE_URL` with trailing slash causes startup failure | REQ-AUTH-011 | 3 | true | Manual validation in staging environment |
+| PROP-AUTH-031 | `buildCallbackRedirectUrl` returns FRONTEND_BASE_URL with no query/fragment | REQ-AUTH-006 | 1 | true | Vitest unit test |
+| PROP-AUTH-032 | `getSecurityHeaders` returns Cache-Control: no-store and Referrer-Policy: no-referrer | REQ-AUTH-014 | 1 | true | Vitest unit test |
+| PROP-AUTH-033 | `getCorsHeaders` returns Access-Control-Allow-Credentials: true and Access-Control-Allow-Origin: &lt;frontendBaseUrl&gt; | REQ-AUTH-004 | 1 | true | Vitest unit test |
+| PROP-AUTH-034 | `validateRequiredEnvVars` detects each individually missing required env var | REQ-AUTH-011 | 1 | true | Vitest unit test |
+| PROP-AUTH-035 | `getStoreCounts` reports accurate store counts for service boundary verification | NFR-AUTH-004 | 2 | true | Integration test |
+| PROP-AUTH-036 | `checkHealth` returns ok when store accessible, error when unavailable | REQ-AUTH-015 | 2 | true | Integration test |
 | PROP-AUTH-026 | Cookie connectivity verified in browser: `__Host-` cookies set and sent on same eTLD+1 | NFR-AUTH-003 | 3 | false | Manual / E2E smoke test |
 | PROP-AUTH-027 | `validateLinkSessionRecord` returns failure for each individual condition failure (token hash mismatch, expired, already used) — exhaustive case table | REQ-AUTH-004, REQ-AUTH-013 | 1 | true | Vitest unit tests (exhaustive case table) |
 | PROP-AUTH-028 | `validateLinkSessionRecord` returns success only when all conditions hold simultaneously | REQ-AUTH-004 | 1 | true | Vitest property test (fast-check arbitraries) |
@@ -150,19 +165,19 @@ Covers browser behavior, production configuration, eTLD+1 cookie scoping, and pe
 | REQ-AUTH-001 | PROP-AUTH-001, PROP-AUTH-006, PROP-AUTH-017, PROP-AUTH-019 | scope=identify; Set-Cookie attributes |
 | REQ-AUTH-002 | PROP-AUTH-002, PROP-AUTH-003, PROP-AUTH-011, PROP-AUTH-013, PROP-AUTH-018 | 401 matrix; Cache-Control; Referrer-Policy; callback Location no-token |
 | REQ-AUTH-003 | PROP-AUTH-010 | atomic consumption |
-| REQ-AUTH-004 | PROP-AUTH-014, PROP-AUTH-015, PROP-AUTH-016 | session CORS; Cache-Control; Access-Control-Allow-Credentials |
+| REQ-AUTH-004 | PROP-AUTH-014, PROP-AUTH-015, PROP-AUTH-016, PROP-AUTH-033 | session CORS; Cache-Control; Access-Control-Allow-Credentials |
 | REQ-AUTH-005 | PROP-AUTH-006, PROP-AUTH-007, PROP-AUTH-017, PROP-AUTH-018 | Set-Cookie exact attributes |
-| REQ-AUTH-006 | PROP-AUTH-012 | Location no-token |
+| REQ-AUTH-006 | PROP-AUTH-012, PROP-AUTH-031 | Location no-token; buildCallbackRedirectUrl returns base URL |
 | REQ-AUTH-007 | PROP-AUTH-001, PROP-AUTH-019 | scope=identify |
 | REQ-AUTH-008 | PROP-AUTH-008, PROP-AUTH-015, PROP-AUTH-016 | Origin validation; 403 |
 | REQ-AUTH-009 | PROP-AUTH-029 | state entropy |
 | REQ-AUTH-010 | PROP-AUTH-005, PROP-AUTH-023 | log masking |
-| REQ-AUTH-011 | PROP-AUTH-009, PROP-AUTH-020, PROP-AUTH-025 | startup validation |
+| REQ-AUTH-011 | PROP-AUTH-009, PROP-AUTH-020, PROP-AUTH-025, PROP-AUTH-034 | startup validation |
 | REQ-AUTH-012 | PROP-AUTH-004, PROP-AUTH-021 | TTL boundary |
 | REQ-AUTH-013 | PROP-AUTH-004, PROP-AUTH-022, PROP-AUTH-027 | TTL boundary |
-| REQ-AUTH-014 | PROP-AUTH-013, PROP-AUTH-014 | response headers |
-| REQ-AUTH-015 | (integration test: health check endpoint) | health check |
+| REQ-AUTH-014 | PROP-AUTH-013, PROP-AUTH-014, PROP-AUTH-032 | response headers |
+| REQ-AUTH-015 | PROP-AUTH-036 | health check |
 | NFR-AUTH-001 | PROP-AUTH-010 | atomicity |
 | NFR-AUTH-002 | PROP-AUTH-030 | performance bounds |
 | NFR-AUTH-003 | PROP-AUTH-026 | hash-based validation; no cookie signing |
-| NFR-AUTH-004 | PROP-AUTH-024 | service boundary |
+| NFR-AUTH-004 | PROP-AUTH-024, PROP-AUTH-035 | service boundary |

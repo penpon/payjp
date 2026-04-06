@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-012",
+  "dimension": "structural_integrity",
+  "category": "purity_boundary",
+  "severity": "minor",
+  "description": "The contract's Known Limitations section acknowledges that PROP-AUTH-010 (concurrent atomicity) 'uses single-threaded Map — true DB-level atomicity requires PostgreSQL SELECT FOR UPDATE'. However, the contract simultaneously claims PROP-AUTH-010 status is 'tested' and the test at integration/auth-flow.test.ts:31-55 uses Promise.allSettled to test concurrency. In a single-threaded JavaScript runtime with synchronous Map operations, both promises execute sequentially (not truly concurrently), so the test does not actually verify atomicity. The test passes only because of single-threaded execution order, not because of any atomic locking mechanism.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "31-55",
+    "snippet": "const [r1, r2] = await Promise.allSettled([\n  consumeOAuthState(db, stateHashVal, sessionHashVal),\n  consumeOAuthState(db, stateHashVal, sessionHashVal),\n]);"
+  },
+  "routeToPhase": "2b"
+}

@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "minor",
+  "description": "PROP-AUTH-020 (Tier 2, REQ-AUTH-011) is described by verification-architecture.md as 'Integration test: spawn process with missing vars'. The actual test at auth-flow.test.ts:316-365 calls validateRequiredEnvVars (a pure core function) with missing env vars and checks the return value. This is functionally identical to PROP-AUTH-034 (Tier 1) which tests the exact same function with the same approach in pure-core.test.ts:569-635. The Tier 2 test does not spawn a process, does not test the integration of env var validation with the startup sequence, and provides zero additional integration-boundary confidence beyond Tier 1. The contract describes this as 'tested (calls validateRequiredEnvVars for each missing var)' which is accurate for what the test does, but misrepresents the Tier 2 integration requirement from the verification architecture.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "316-365",
+    "snippet": "it('missing DISCORD_CLIENT_ID is detected by validateRequiredEnvVars', () => {\n    const result = validateRequiredEnvVars({ ...BASE_ENV, DISCORD_CLIENT_ID: undefined });\n    expect(result.ok).toBe(false);\n  });"
+  },
+  "routeToPhase": "2b"
+}

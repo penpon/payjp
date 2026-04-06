@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-004",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "major",
+  "description": "PROP-AUTH-010 claims to test 'consumeOAuthState atomic — concurrent invocations return success exactly once' (REQ-AUTH-003, NFR-AUTH-001). However, the test at auth-flow.test.ts:38-63 uses Promise.allSettled with two calls on a synchronous single-threaded JavaScript Map. Node.js's event loop guarantees that one Promise resolves completely before the second starts (both are async functions that synchronously access the Map). This test CANNOT demonstrate true concurrency or atomicity. The Known Limitations section (sprint-1.md:114) acknowledges this but the contract still lists PROP-AUTH-010 as 'tested'. True atomicity testing requires PostgreSQL SELECT FOR UPDATE as stated in NFR-AUTH-001. The test passes trivially due to single-threaded execution order, not due to any atomicity mechanism.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "39-62",
+    "snippet": "const [r1, r2] = await Promise.allSettled([\n  consumeOAuthState(db, stateHashVal, sessionHashVal),\n  consumeOAuthState(db, stateHashVal, sessionHashVal),\n]);\nconst successes = [r1, r2].filter(\n  (r) => r.status === 'fulfilled' && r.value !== null,\n);\nexpect(successes.length).toBe(1);"
+  },
+  "routeToPhase": "2b"
+}

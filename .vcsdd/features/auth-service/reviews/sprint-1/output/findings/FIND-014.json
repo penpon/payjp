@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-014",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "minor",
+  "description": "The handleAuthRequest function at shell/index.ts:131-165 exists in production source code but is not listed in the behavioral spec's purity boundary analysis or the verification architecture's effectful shell table. It is an undocumented function that appears to have been created solely for integration testing. The contract (sprint-1.md:115) acknowledges it as 'a minimal shell handler that composes core functions' but its signature and behavior are not specified anywhere in the authoritative specs. This creates a spec gap: production code exists that is not covered by the specification.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "131-165",
+    "snippet": "export function handleAuthRequest(\n  endpoint: string,\n  headers: Record<string, string>,\n  frontendBaseUrl: string,\n): { statusCode: number; headers: Record<string, string>; body?: unknown } {"
+  },
+  "routeToPhase": "1c"
+}

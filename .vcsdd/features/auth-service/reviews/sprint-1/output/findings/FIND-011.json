@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-011",
+  "dimension": "structural_integrity",
+  "category": "test_quality",
+  "severity": "minor",
+  "description": "PROP-AUTH-012 integration test at auth-flow.test.ts:130-152 claims to verify 'callback 302 Location contains no token in query or fragment' (REQ-AUTH-006). However, the test calls buildCallbackRedirectUrl directly (a pure core function) rather than exercising handleAuthRequest for callback. This makes it functionally identical to PROP-AUTH-031 in pure-core.test.ts:470-507. A Tier 2 integration test should exercise the composition — calling through the shell handler — but instead it duplicates the Tier 1 unit test with an added saveDiscordLinkSession call that has no bearing on the Location URL assertion. The test also does not assert that the handleAuthRequest callback response Location header lacks tokens.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "131-152",
+    "snippet": "it('buildCallbackRedirectUrl produces URL with no sensitive keys in query or fragment', async () => {\n    const frontendBaseUrl = 'https://frontend.example.com';\n    const db = null;\n    await saveDiscordLinkSession(db, { ... });\n    const locationUrl = buildCallbackRedirectUrl(frontendBaseUrl);\n    expect(locationUrl).toBe(frontendBaseUrl);\n    ..."
+  },
+  "routeToPhase": "2b"
+}

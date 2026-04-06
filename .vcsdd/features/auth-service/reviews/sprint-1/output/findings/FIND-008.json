@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-008",
+  "dimension": "edge_case_coverage",
+  "category": "security_surface",
+  "severity": "major",
+  "description": "REQ-AUTH-008 specifies that requests with absent Origin header should be handled according to deployment context. The spec says 'Requests with absent Origin header: behavior depends on deployment (same-origin browser requests will have no Origin)'. In handleAuthRequest at shell/index.ts:139, when no 'origin' header is present, the code defaults to empty string: `const origin = headers['origin'] || ''`. An empty string passed to isSameOrigin will fail the URL parse at core/index.ts:143 (`new URL('')`) and return false, causing a 403. This means same-origin browser requests without an Origin header (which is valid per RFC 6454 for same-origin requests) will be rejected with 403. The spec indicates this should be acceptable for same-origin requests. This is an unresolved design ambiguity with security implications: either same-origin requests without Origin are blocked (breaking legitimate use), or a missing Origin is allowed (potentially permitting non-browser clients). No test covers the absent-Origin scenario.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "139",
+    "snippet": "const origin = headers['origin'] || '';"
+  },
+  "routeToPhase": "2b"
+}

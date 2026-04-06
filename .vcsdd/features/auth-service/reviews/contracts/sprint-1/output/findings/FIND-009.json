@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-009",
+  "dimension": "verification_readiness",
+  "category": "verification_tool_mismatch",
+  "severity": "major",
+  "description": "The contract's grading dimensions (spec_fidelity/test_coverage/code_correctness/security_compliance/purity_boundary with percentage weights 25/25/25/15/10) do not match the VCSDD standard review dimensions (spec_fidelity/edge_case_coverage/implementation_correctness/structural_integrity/verification_readiness). The Phase 3 adversary will review using the standard 5 dimensions, but the contract's pass criteria are defined against non-standard dimensions. This means there is no way to evaluate 'edge_case_coverage' or 'structural_integrity' using the contract's own grading rubric, and no contract-level pass threshold applies to those dimensions.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/contracts/sprint-1.md",
+    "lineRange": "88-98",
+    "snippet": "| spec_fidelity | 25% | No critical/major findings | ... |\n| test_coverage | 25% | All required PROPs tested | ... |\n| code_correctness | 25% | No logic errors vs spec | ... |\n| security_compliance | 15% | All security REQs enforced | ... |\n| purity_boundary | 10% | Boundary respected | ... |"
+  },
+  "routeToPhase": "2c"
+}

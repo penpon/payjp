@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-006",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "description": "PROP-AUTH-020 claims to test 'process exits non-zero when any required env var is missing' (REQ-AUTH-011) but the two test cases only call validateFrontendBaseUrl('') and assert it returns { ok: false }. The test descriptions say 'missing DISCORD_CLIENT_ID causes non-zero exit' and 'missing DISCORD_CLIENT_SECRET causes non-zero exit' but neither test verifies actual process startup, env var checking for DISCORD_CLIENT_ID/SECRET/REDIRECT_URI/DATABASE_URL, or non-zero exit behavior. The validateFrontendBaseUrl function only validates FRONTEND_BASE_URL format — it has no knowledge of other env vars.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "298-311",
+    "snippet": "it('missing DISCORD_CLIENT_ID causes non-zero exit', async () => {\n  const result = validateFrontendBaseUrl('');\n  expect(result.ok).toBe(false);\n});"
+  },
+  "routeToPhase": "2b"
+}

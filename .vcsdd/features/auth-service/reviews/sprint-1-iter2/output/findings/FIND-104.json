@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-104",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-AUTH-020 (verification-architecture.md:77) specifies 'Integration test: spawn process with missing vars' for REQ-AUTH-011. The iteration 2 tests at auth-flow.test.ts:370-416 call validateStartupConfig() directly, which now differs from PROP-AUTH-034 by also validating FRONTEND_BASE_URL format. However, the test still does not spawn a process and verify exit code. While validateStartupConfig is a pure function composition, the actual startup behavior (process.exit) is unverified at the integration level. This is accepted as a Known Limitation given no HTTP server layer exists, but the PROP description in the verification architecture remains misleading.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "370-416",
+    "snippet": "describe('PROP-AUTH-020: validateStartupConfig rejects missing env vars AND invalid FRONTEND_BASE_URL format', () => {\n  it('accepts fully valid startup config', () => {\n    const result = validateStartupConfig(VALID_ENV);\n    expect(result.ok).toBe(true);\n  });"
+  },
+  "routeToPhase": "2b"
+}

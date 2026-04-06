@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-012",
+  "dimension": "verification_readiness",
+  "category": "verification_tool_mismatch",
+  "severity": "minor",
+  "description": "The contract claims 94 tests total (57 Tier 1 + 37 Tier 2), and the evidence log confirms 94 tests passed. However, the verification architecture specifies 30 PROP obligations (15 Tier 1 + 18 Tier 2 required, minus 3 Tier 3 deferred). The contract PROP Coverage table lists 15 Tier 1 PROPs and 18 Tier 2 PROPs = 33 required tested PROPs. With PROP-AUTH-025 deferred and PROP-AUTH-026, PROP-AUTH-030 also deferred, the required total is 30 PROPs. The discrepancy between '30 PROP obligations' in the verification architecture header and the actual count of PROPs (PROP-AUTH-001 through PROP-AUTH-036 with gaps: 001-009, 010-024, 025-036) creates traceability confusion. The PROP numbering has gaps (no PROP-AUTH-010 through PROP-AUTH-024 gap, but there are gaps like no PROP-AUTH-010-PROP-AUTH-026 block). The numbering scheme is non-contiguous (jumps from 009 to 010, then 024 to 025, then 028 to 029, then 030 to 031), making auditing harder.",
+  "evidence": {
+    "filePath": "/Users/nana/workspace/hayane_payjp/.vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "52-89",
+    "description": "PROP IDs: 001-009, 010-024, 025-036 (36 IDs but gaps mean actual count is 33 required + 3 deferred)"
+  },
+  "routeToPhase": "2b"
+}

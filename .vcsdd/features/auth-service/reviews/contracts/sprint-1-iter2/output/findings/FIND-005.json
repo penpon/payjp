@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-005",
+  "dimension": "implementation_correctness",
+  "category": "security_surface",
+  "severity": "minor",
+  "description": "checkHealth at shell/index.ts:107-118 uses a dynamic import of './store.js' inside the function body, despite the module already being imported at the top of the file (line 3 imports getOAuthStore/getLinkSessionStore from './store.js'). The dynamic import will always succeed because Node.js caches modules. This means checkHealth can never return { status: 'error' } in the current implementation - the error path is unreachable. When PostgreSQL is integrated, this function must be completely rewritten, and the dead error path gives false confidence that failure detection works.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "107-118",
+    "snippet": "export async function checkHealth(\n  _db: unknown,\n): Promise<{ status: 'ok' | 'error' }> {\n  try {\n    const { getOAuthStore } = await import('./store.js');\n    getOAuthStore();\n    return { status: 'ok' };\n  } catch {\n    return { status: 'error' };\n  }\n}"
+  },
+  "routeToPhase": "2b"
+}

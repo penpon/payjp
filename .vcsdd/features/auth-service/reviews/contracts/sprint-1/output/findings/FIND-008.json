@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-008",
+  "dimension": "spec_fidelity",
+  "category": "test_coverage",
+  "severity": "major",
+  "description": "REQ-AUTH-015 (Health Check Endpoint) has no PROP obligation in verification-architecture.md and no test in either test file. The traceability matrix entry for REQ-AUTH-015 shows only a parenthetical note '(integration test: health check endpoint)' with no PROP-AUTH-XXX ID. The contract claims 'Sprint 1 implements ALL auth-service requirements (REQ-AUTH-001 through REQ-AUTH-015)' but REQ-AUTH-015 has zero verification coverage.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "164-164",
+    "snippet": "| REQ-AUTH-015 | (integration test: health check endpoint) | health check |"
+  },
+  "routeToPhase": "1c"
+}

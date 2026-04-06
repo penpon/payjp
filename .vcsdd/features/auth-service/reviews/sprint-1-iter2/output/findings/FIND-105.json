@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-105",
+  "dimension": "implementation_correctness",
+  "category": "security_surface",
+  "severity": "minor",
+  "description": "handleStructuredAuthRequest for /v1/auth/discord/callback (shell/index.ts:292-296) passes an empty string for clientSecret when calling exchangeDiscordCode: `clientSecret: ''`. The config interface at line 267 defines discordClientId and discordRedirectUri but does NOT include discordClientSecret. When the mock is replaced with a real Discord API call, this will silently send an empty client_secret to Discord's token endpoint, causing a 401 from Discord. The config type should include discordClientSecret to prevent this at the type level. The behavioral spec REQ-AUTH-011 requires DISCORD_CLIENT_SECRET as a mandatory env var, but the handleAuthRequest config interface does not propagate it.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "292-296",
+    "snippet": "const accessToken = await exchangeDiscordCode(code, {\n  clientId: discordClientId,\n  clientSecret: '',\n  redirectUri: discordRedirectUri,\n});"
+  },
+  "routeToPhase": "2b"
+}

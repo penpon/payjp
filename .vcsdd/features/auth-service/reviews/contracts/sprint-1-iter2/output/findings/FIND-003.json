@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-003",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "major",
+  "description": "Tier 2 integration tests for PROP-AUTH-013, PROP-AUTH-014, PROP-AUTH-015, PROP-AUTH-016, PROP-AUTH-017, PROP-AUTH-018, and PROP-AUTH-019 call pure core functions (getSecurityHeaders, isSameOrigin, getCorsHeaders, buildCookieAttributes, buildDiscordAuthorizationUrl) rather than testing through any integration boundary. These tests are exact duplicates of Tier 1 coverage (PROP-AUTH-032, PROP-AUTH-008, PROP-AUTH-033, PROP-AUTH-006/007, PROP-AUTH-001). They provide zero additional confidence that an HTTP response handler or middleware will actually attach these headers/cookies/URLs. Without an HTTP server layer (acknowledged as a known limitation), these tests are indistinguishable from Tier 1 unit tests masquerading as integration tests.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "162-292",
+    "snippet": "PROP-AUTH-013: const headers = getSecurityHeaders(); // pure core function\nPROP-AUTH-014: const headers = getSecurityHeaders(); // same pure core function\nPROP-AUTH-016: const headers = getCorsHeaders(frontendBaseUrl); // pure core function\nPROP-AUTH-017: const attrs = buildCookieAttributes('__Host-oauth_session', 600); // pure core function"
+  },
+  "routeToPhase": "2b"
+}

@@ -1,0 +1,156 @@
+{
+  "reviewType": "contract",
+  "feature": "auth-service",
+  "sprintNumber": 1,
+  "timestamp": "2026-04-06T18:00:00Z",
+  "iteration": 3,
+  "reviewContext": {
+    "reviewType": "contract",
+    "contractPath": "contracts/sprint-1.md",
+    "contractDigest": "498d866508314c956780ffb96fcac2bd027496651eab3a7e1a0a97b2ad9a587c"
+  },
+  "priorFindingsResolution": {
+    "iteration2": {
+      "FIND-001": {
+        "status": "resolved",
+        "evidence": "buildCallbackRedirectUrl at core/index.ts:174-176 now returns frontendBaseUrl unchanged, no '/auth/complete' path appended. Tests updated accordingly."
+      },
+      "FIND-002": {
+        "status": "resolved",
+        "evidence": "verification-architecture.md now contains PROP-AUTH-031 through PROP-AUTH-036 (lines 79-88) with complete traceability matrix entries (lines 159-179)."
+      },
+      "FIND-003": {
+        "status": "resolved",
+        "evidence": "Tier 2 integration tests PROP-AUTH-013/014/015/016/017/019 now call handleAuthRequest (shell handler composing core functions) instead of calling pure core functions directly. Contract known limitation #5 documents this design choice."
+      },
+      "FIND-004": {
+        "status": "resolved",
+        "evidence": "checkHealth now accepts isHealthy parameter. auth-flow.test.ts:588-593 tests both false return and throw paths, exercising all branches."
+      },
+      "FIND-005": {
+        "status": "resolved",
+        "evidence": "checkHealth at shell/index.ts:118-127 refactored to accept isHealthy: () => boolean parameter, eliminating the unreachable dynamic import error path. All paths are now testable and tested."
+      }
+    }
+  },
+  "dimensions": [
+    {
+      "name": "spec_fidelity",
+      "verdict": "PASS",
+      "findings": ["FIND-001"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/contracts/sprint-1.md",
+          "description": "All REQ-AUTH-001 through REQ-AUTH-015 and NFR-AUTH-001 through NFR-AUTH-004 have corresponding PROPs in the contract PROP coverage table."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+          "description": "Traceability matrix (lines 159-179) maps every REQ to PROP obligations. PROP-AUTH-031-036 now present."
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/index.ts",
+          "description": "buildCallbackRedirectUrl (line 174-176) returns frontendBaseUrl unchanged, matching REQ-AUTH-002."
+        }
+      ]
+    },
+    {
+      "name": "edge_case_coverage",
+      "verdict": "PASS",
+      "findings": ["FIND-002"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/__tests__/pure-core.test.ts",
+          "description": "Tier 1 tests cover: TTL boundary (PROP-AUTH-004 lines 185-202), Origin: null rejection (PROP-AUTH-008 line 309), trailing slash rejection (PROP-AUTH-009 lines 356-368), empty string rejection (line 337), RFC 6454 default port normalization (lines 641-657)."
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+          "description": "Tier 2 tests cover: concurrent consumption (PROP-AUTH-010 lines 38-63), all 4 callback failure modes (PROP-AUTH-011 lines 69-124), expired state (PROP-AUTH-021 lines 371-383), expired link session (PROP-AUTH-022 lines 389-429), checkHealth error paths (PROP-AUTH-036 lines 588-593)."
+        }
+      ]
+    },
+    {
+      "name": "implementation_correctness",
+      "verdict": "PASS",
+      "findings": [],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/index.ts",
+          "description": "isSameOrigin (lines 131-170) implements RFC 6454 correctly: case-insensitive hostname, default port normalization (https:443, http:80), Origin: null rejection, trailing slash rejection. Reviewed all pure core functions lines 1-248."
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts",
+          "description": "checkHealth (lines 118-127) accepts injectable isHealthy parameter, eliminating prior unreachable code path. consumeOAuthState (lines 45-64) correctly validates then sets used_at before returning. Reviewed lines 1-166."
+        },
+        {
+          "type": "file",
+          "location": "packages/shared/src/types.ts",
+          "description": "CookieAttributes type correctly enforces domain?: never (line 29), preventing accidental Domain attribute emission."
+        }
+      ]
+    },
+    {
+      "name": "structural_integrity",
+      "verdict": "PASS",
+      "findings": [],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/index.ts",
+          "description": "Pure core contains 16 deterministic functions with no I/O imports except node:crypto createHash (deterministic). No randomBytes, no Map mutation, no console.log. Lines 1-248 verified."
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts",
+          "description": "Effectful shell contains all side effects: crypto.randomBytes (line 19), Map mutations via store (lines 40, 62-63, 84), console.log (line 112), handleAuthRequest composing core functions (lines 131-165). Clean separation maintained."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/contracts/sprint-1.md",
+          "description": "Contract grading dimensions match VCSDD standard 5 dimensions (lines 96-106). Tier counts are: 15 Tier 1, 18 Tier 2, 3 Tier 3 (2 required deferred, 1 optional deferred). Binary evaluable."
+        }
+      ]
+    },
+    {
+      "name": "verification_readiness",
+      "verdict": "PASS",
+      "findings": [],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/contracts/sprint-1.md",
+          "description": "PROP numbering: Tier 1 has 15 PROPs (PROP-AUTH-001-009, 027-028, 031-034), Tier 2 has 18 PROPs (PROP-AUTH-010-024, 029, 035-036), Tier 3 has 3 PROPs (025, 026, 030). Total 36. Counts in contract header (lines 34-36) claim 57+37=94 tests, consistent with evidence log."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+          "description": "All 36 PROPs present in proof obligations table (lines 52-89). Traceability matrix (lines 159-179) covers all 15 REQ and 4 NFR. PROP-AUTH-031-036 added since iteration 2, resolving prior gap."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/contracts/sprint-1.md",
+          "description": "Known limitations (lines 109-118) explicitly document 8 scope boundaries including in-memory store, mock Discord, no HTTP server, single-threaded atomicity, handleAuthRequest design, top-level masking, injectable checkHealth, and buildCallbackRedirectUrl behavior."
+        }
+      ]
+    }
+  ],
+  "overallVerdict": "PASS",
+  "convergenceSignals": {
+    "findingCount": 2,
+    "criticalFindings": 0,
+    "majorFindings": 0,
+    "minorFindings": 2,
+    "allCriteriaEvaluated": true,
+    "evaluatedCriteria": [],
+    "duplicateFindings": [],
+    "priorFindingsResolved": 5,
+    "priorFindingsUnresolved": 0
+  },
+  "summary": "All 5 prior findings from iteration 2 are resolved. 2 new minor findings identified. FIND-001 (minor): Contract claims PROP-AUTH-018 is tested via handleAuthRequest with Set-Cookie verification, but the actual test calls saveDiscordLinkSession directly and only checks store count — does not verify __Host-link_session Set-Cookie attributes. The handleAuthRequest callback handler itself does not emit a Set-Cookie for link sessions. FIND-002 (minor): PROP-AUTH-020 Tier 2 test calls validateRequiredEnvVars (pure core function) identically to PROP-AUTH-034 Tier 1, providing zero additional integration boundary coverage — the verification architecture specifies 'spawn process with missing vars' which is not implemented. Both findings are minor: PROP-AUTH-018 is acknowledged by known limitation #3 (no HTTP server layer for actual cookie handling), and PROP-AUTH-020 duplication is a test efficiency concern, not a correctness defect. Overall verdict PASS: 0 critical, 0 major findings, within the contract's threshold."
+}

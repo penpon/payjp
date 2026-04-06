@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "description": "buildCallbackRedirectUrl at core/index.ts:175 appends '/auth/complete' to FRONTEND_BASE_URL. REQ-AUTH-002 explicitly states 'Location: FRONTEND_BASE_URL (no path appended beyond what FRONTEND_BASE_URL defines)' and REQ-AUTH-006 says 'Location URL query string is empty or contains only non-sensitive routing parameters defined in FRONTEND_BASE_URL'. The implementation invents a path '/auth/complete' that is not defined in FRONTEND_BASE_URL nor in the spec. The PROP-AUTH-012 and PROP-AUTH-031 tests assert this path exists, compounding the deviation.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/core/index.ts",
+    "lineRange": "174-176",
+    "snippet": "export function buildCallbackRedirectUrl(frontendBaseUrl: string): string {\n  return `${frontendBaseUrl}/auth/complete`;\n}"
+  },
+  "routeToPhase": "2b"
+}

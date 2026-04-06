@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-006",
+  "dimension": "structural_integrity",
+  "category": "test_quality",
+  "severity": "major",
+  "description": "handleAuthRequest at shell/index.ts:131-165 is a test-only harness, not a real implementation. It hardcodes parameters for the /v1/auth/discord/start endpoint: clientId='client-id', redirectUri='https://api.example.com/callback', state='state-123', cookie value='session-value' (lines 154-159). These are literals, not derived from actual request processing. The function does not accept request parameters (query strings, cookies) needed for real endpoint behavior. Integration tests (PROP-AUTH-013, 014, 015, 016, 017, 019) exercise this function, but they are testing a hardcoded scaffold, not the actual auth flow composition. The contract (sprint-1.md:115) acknowledges this as a 'minimal shell handler' but presents it as satisfying Tier 2 integration requirements.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "152-161",
+    "snippet": "if (endpoint === '/v1/auth/discord/start') {\n    const attrs = buildCookieAttributes('__Host-oauth_session', 600);\n    const url = buildDiscordAuthorizationUrl('client-id', 'https://api.example.com/callback', 'state-123');\n    return {\n      statusCode: 302,\n      headers: {\n        Location: url,\n        'Set-Cookie': serializeCookieAttributes(attrs, 'session-value'),\n      },\n    };\n  }"
+  },
+  "routeToPhase": "2b"
+}

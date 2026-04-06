@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-007",
+  "dimension": "implementation_correctness",
+  "category": "security_surface",
+  "severity": "major",
+  "description": "isSameOrigin does not perform proper RFC 6454 origin normalization. REQ-AUTH-008 specifies 'Compare scheme (case-insensitive), host (case-insensitive), and port (explicit or default per scheme)'. The implementation uses simple string equality (requestOrigin === allowedOrigin) after only validating that both are parseable URLs. This means: (1) 'https://EXAMPLE.COM' vs 'https://example.com' returns false, but per RFC origins these are the same origin. (2) 'https://example.com:443' vs 'https://example.com' returns false, but port 443 is the default for https. The test at line 309 acknowledges this as expected behavior, but the spec explicitly requires case-insensitive and default-port-aware comparison.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/core/index.ts",
+    "lineRange": "127-145",
+    "snippet": "try {\n  new URL(requestOrigin);\n  new URL(allowedOrigin);\n  return requestOrigin === allowedOrigin;\n} catch {\n  return false;\n}"
+  },
+  "routeToPhase": "2b"
+}

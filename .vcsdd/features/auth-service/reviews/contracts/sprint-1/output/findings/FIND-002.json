@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "critical",
+  "description": "PROP-AUTH-013 and PROP-AUTH-014 (Cache-Control/Referrer-Policy headers for callback and session responses) are tautological. They construct literal objects with the expected header values and assert those literal values match. There is no HTTP server, no middleware, and no real response object — these tests prove nothing about whether actual responses include the required headers. They would pass even if the implementation never set these headers.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "146-181",
+    "snippet": "const requiredHeaders = {\n  'cache-control': 'no-store',\n  'referrer-policy': 'no-referrer',\n};\nexpect(requiredHeaders['cache-control']).toBe('no-store');"
+  },
+  "routeToPhase": "2b"
+}

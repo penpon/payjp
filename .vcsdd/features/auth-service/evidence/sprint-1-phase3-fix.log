@@ -1,0 +1,25 @@
+target-feature-tests: PASS
+regression-baseline: PASS
+
+---
+
+
+> test
+> npm -w packages/auth-service run test
+
+
+> @hayane/auth-service@0.0.1 test
+> vitest run
+
+
+ RUN  v3.2.4 /Users/nana/workspace/hayane_payjp/packages/auth-service
+
+ ✓ src/__tests__/integration/auth-flow.test.ts (38 tests) 20ms
+ ✓ src/core/__tests__/pure-core.test.ts (64 tests) 705ms
+   ✓ PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > property: arbitrary clientId/redirectUri/state always yields URL with scope=identify and no extra scopes  667ms
+
+ Test Files  2 passed (2)
+      Tests  102 passed (102)
+   Start at  10:37:09
+   Duration  1.44s (transform 272ms, setup 0ms, collect 336ms, tests 725ms, environment 2ms, prepare 277ms)
+

@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-003",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "critical",
+  "description": "PROP-AUTH-016 (CORS headers Access-Control-Allow-Credentials and Access-Control-Allow-Origin) is tautological. The test constructs a literal object with the expected header values and asserts those literal values match. No actual HTTP response or middleware is exercised. This test would pass regardless of whether the implementation sets CORS headers.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "206-223",
+    "snippet": "const corsHeaders = {\n  'access-control-allow-credentials': 'true',\n  'access-control-allow-origin': 'https://frontend.example.com',\n};\nexpect(corsHeaders['access-control-allow-credentials']).toBe('true');"
+  },
+  "routeToPhase": "2b"
+}

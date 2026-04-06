@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-011",
+  "dimension": "implementation_correctness",
+  "category": "security_surface",
+  "severity": "minor",
+  "description": "maskSensitiveLogFields performs only shallow key matching on the top-level object. If a log entry contains nested objects (e.g., { headers: { cookie: 'raw-value' } }), the nested sensitive keys will not be masked. REQ-AUTH-010 states 'Masking applied at log serialization layer — raw values never reach log sink', which implies all instances of sensitive keys should be masked regardless of nesting depth.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/core/index.ts",
+    "lineRange": "115-123",
+    "snippet": "export function maskSensitiveLogFields(\n  logEntry: Record<string, unknown>,\n): Record<string, unknown> {\n  const masked: Record<string, unknown> = {};\n  for (const [key, value] of Object.entries(logEntry)) {\n    masked[key] = SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : value;\n  }\n  return masked;\n}"
+  },
+  "routeToPhase": "2b"
+}

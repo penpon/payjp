@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-101",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "description": "REQ-AUTH-004 edge cases explicitly require: '__Host-link_session cookie absent: 401', 'Token hash not found in DB: 401', 'Token expired: 401', 'Token already consumed (used_at IS NOT NULL): 401'. However, handleStructuredAuthRequest for /v1/auth/discord/session (shell/index.ts:329-346) returns 200 {linked: false} when cookie is absent (line 332), and returns 200 {linked: false} when the token is expired, consumed, or not found (line 344-346). The spec text at REQ-AUTH-004 says 'linked: false (or 401) when not found or invalid' leaving some ambiguity, but the explicit edge case list and acceptance criteria state 'Any invalid condition -> 401'. The implementation chooses the lenient interpretation (200 {linked: false}) for all failure modes, meaning no 401 is ever returned from the session endpoint except for Origin mismatch (403). No integration test verifies that session returns 401 for absent, expired, or consumed link session tokens.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "329-346",
+    "snippet": "const linkSessionToken = cookies['__Host-link_session'];\nif (!linkSessionToken) {\n  const corsHeaders = origin ? getCorsHeaders(frontendBaseUrl) : {};\n  return { statusCode: 200, headers: { ...secHeaders, ...corsHeaders }, body: { linked: false } };\n}\n...\nreturn {\n  statusCode: 200,\n  headers: { ...secHeaders, ...corsHeaders },\n  body: { linked: valid === true },\n};"
+  },
+  "routeToPhase": "2b"
+}

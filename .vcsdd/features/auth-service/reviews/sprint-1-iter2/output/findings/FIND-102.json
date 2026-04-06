@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-102",
+  "dimension": "structural_integrity",
+  "category": "test_quality",
+  "severity": "minor",
+  "description": "The legacy handleLegacyAuthRequest for /v1/auth/discord/start (shell/index.ts:230-258) still hardcodes 'test-client-id' and 'https://api.example.com/v1/auth/discord/callback' at lines 246-249 instead of accepting them from config. Some Tier 2 tests still exercise this legacy path (e.g., PROP-AUTH-017 at auth-flow.test.ts:291, PROP-AUTH-019 at auth-flow.test.ts:355). While the structured form (handleStructuredAuthRequest) correctly uses config, the coexistence of a hardcoded legacy path in production code that is exercised by Tier 2 integration tests means those tests verify behavior of a hardcoded scaffold rather than the configurable implementation. This is a structural debt carried from iteration 1 FIND-006 that is partially but not fully resolved.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "246-249",
+    "snippet": "const url = buildDiscordAuthorizationUrl(\n  'test-client-id',\n  'https://api.example.com/v1/auth/discord/callback',\n  stateToken,\n);"
+  },
+  "routeToPhase": "2b"
+}

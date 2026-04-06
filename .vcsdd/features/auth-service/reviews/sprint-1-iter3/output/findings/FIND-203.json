@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-203",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "minor",
+  "description": "PROP-AUTH-012 first test case at auth-flow.test.ts:137-159 uses legacy 3-argument handleAuthRequest('/v1/auth/discord/callback', {}, frontendBaseUrl) which routes to handleLegacyAuthRequest. The legacy callback handler (shell/index.ts:222-225) unconditionally returns 302 with no state verification, making the test tautological: the 'if (response.statusCode === 302)' branch always triggers regardless of input validity. This is a persistence of iter2 FIND-103. The second test at lines 161-189 properly uses the structured form and is meaningful.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "137-159",
+    "snippet": "const response = await handleAuthRequest('/v1/auth/discord/callback', {}, frontendBaseUrl);\nif (response.statusCode === 302) {\n  ...\n} else {\n  expect(response.headers['Location']).toBeUndefined();\n  expect(response.statusCode).toBe(401);\n}"
+  },
+  "routeToPhase": "2b"
+}

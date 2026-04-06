@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-201",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-AUTH-022 (REQ-AUTH-013: session 401 when link session TTL expired) at auth-flow.test.ts:441-457 calls validateLinkSessionRecord directly with a manually constructed LinkSessionRecord, rather than exercising the full integration path through handleStructuredAuthRequest with a session endpoint request and an expired backing record. This makes it a Tier 1 pure-core test masquerading as a Tier 2 integration test. The actual session endpoint path in handleStructuredAuthRequest (shell/index.ts:319-351) that does hash lookup, record retrieval, and validateLinkSessionRecord composition is never tested with an expired record. Carried over from iter2 FIND-104's concern pattern: Tier 2 tests calling pure functions directly.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "441-457",
+    "snippet": "it('expired link session record rejected by validateLinkSessionRecord (mocked clock)', async () => {\n    const expiredRecord: LinkSessionRecord = {\n      id: 'id-022',\n      link_session_token_hash: 'token-hash-022',\n      ...\n    };\n    const result = validateLinkSessionRecord(expiredRecord, 'token-hash-022', now);\n    expect(result.ok).toBe(false);"
+  },
+  "routeToPhase": "2b"
+}

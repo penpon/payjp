@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-005",
+  "dimension": "spec_fidelity",
+  "category": "test_quality",
+  "severity": "major",
+  "description": "PROP-AUTH-020 claims 'process exits non-zero when any required env var is missing' (REQ-AUTH-011). However, the tests at auth-flow.test.ts:316-365 do NOT test process exit behavior. They call validateRequiredEnvVars() directly and assert result.ok === false. This is identical to what PROP-AUTH-034 already tests in pure-core.test.ts:569-635. REQ-AUTH-011 states: 'SHALL exit with a non-zero code if any validation fails'. The verification architecture (verification-architecture.md:73) specifies: 'Integration test: spawn process with missing vars'. No test spawns a process and checks the exit code. PROP-AUTH-020 is therefore a duplicate of PROP-AUTH-034, not an integration-level process exit test.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "316-365",
+    "snippet": "it('missing DISCORD_CLIENT_ID is detected by validateRequiredEnvVars', () => {\n    const result = validateRequiredEnvVars({ ...BASE_ENV, DISCORD_CLIENT_ID: undefined });\n    expect(result.ok).toBe(false);\n    if (!result.ok) {\n      expect(result.missingVars).toContain('DISCORD_CLIENT_ID');\n    }\n  });"
+  },
+  "routeToPhase": "2b"
+}

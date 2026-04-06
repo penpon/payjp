@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "major",
+  "description": "Contract references PROP-AUTH-031 through PROP-AUTH-036 (6 PROPs) which do not exist in verification-architecture.md. The verification architecture defines PROP-AUTH-001 through PROP-AUTH-030 only. These 6 PROPs were added to the contract and implementation without updating the authoritative verification spec. This means the contract's PROP coverage table is not traceable to the specification, and the traceability matrix in verification-architecture.md is incomplete for REQ-AUTH-006 (PROP-AUTH-031), REQ-AUTH-014 (PROP-AUTH-032), REQ-AUTH-004 (PROP-AUTH-033), REQ-AUTH-011 (PROP-AUTH-034), NFR-AUTH-004 (PROP-AUTH-035), and REQ-AUTH-015 (PROP-AUTH-036).",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "47-79",
+    "snippet": "Proof Obligations table ends at PROP-AUTH-030. No entries for PROP-AUTH-031 through PROP-AUTH-036."
+  },
+  "routeToPhase": "1c"
+}

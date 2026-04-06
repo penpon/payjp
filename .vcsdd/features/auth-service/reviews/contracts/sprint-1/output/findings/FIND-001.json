@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "critical",
+  "description": "PROP-AUTH-012 (callback Location contains no token) is a tautological test. It constructs a hardcoded mock URL string 'https://frontend.example.com/auth/complete' and asserts that hardcoded string has no token parameters. This tests nothing about actual implementation behavior — it would pass even if the real callback implementation appended tokens to the Location URL.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "122-140",
+    "snippet": "const mockLocationUrl = 'https://frontend.example.com/auth/complete';\nconst parsed = new URL(mockLocationUrl);\nexpect(parsed.searchParams.get('token')).toBeNull();"
+  },
+  "routeToPhase": "2b"
+}

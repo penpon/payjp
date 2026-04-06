@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-004",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "critical",
+  "description": "PROP-AUTH-022 claims to test 'session 401 when link session TTL expired' (REQ-AUTH-013) but actually calls consumeOAuthState (OAuth state consumption), not validateLinkSessionRecord or any link session operation. The test verifies OAuth state TTL expiry, duplicating PROP-AUTH-021, and leaves REQ-AUTH-013 integration behavior entirely untested at Tier 2.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "335-349",
+    "snippet": "await saveOAuthState(db, {\n  id: 'id-022',\n  stateHash: 'expired-link-hash',\n  oauthSessionHash: 'session-022',\n  expiresAt: new Date('2000-01-01T00:00:00Z'),\n});\nconst result = await consumeOAuthState(db, 'expired-link-hash', 'session-022');\nexpect(result).toBeNull();"
+  },
+  "routeToPhase": "2b"
+}

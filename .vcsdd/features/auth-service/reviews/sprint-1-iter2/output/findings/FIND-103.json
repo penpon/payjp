@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-103",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-AUTH-012 at auth-flow.test.ts:135-159 first test case uses the legacy 3-argument handleAuthRequest('/v1/auth/discord/callback', {}, frontendBaseUrl) which hits the legacy handler that always returns 302 without any validation. The test defensively checks 'if (response.statusCode === 302)' vs '401' but the legacy handler can never return 401 for callback. This test path is tautological for the legacy form: it always gets 302 regardless of input validity. The second test at lines 161-189 properly uses the structured form and is meaningful. The first test should be removed or rewritten to use the structured form exclusively.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "135-159",
+    "snippet": "it('handleAuthRequest for callback returns 302 with Location containing no sensitive keys', async () => {\n    const frontendBaseUrl = 'https://frontend.example.com';\n    const response = await handleAuthRequest('/v1/auth/discord/callback', {}, frontendBaseUrl);\n    if (response.statusCode === 302) {\n      ...\n    } else {\n      expect(response.headers['Location']).toBeUndefined();\n      expect(response.statusCode).toBe(401);\n    }\n  });"
+  },
+  "routeToPhase": "2b"
+}

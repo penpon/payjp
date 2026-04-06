@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-004",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-AUTH-036 (checkHealth) tests only the success path where the in-memory store is accessible (status 'ok'). There is no test for the failure path (status 'error'). REQ-AUTH-015 requires '503 when DB connection fails'. The checkHealth implementation at shell/index.ts:107-118 has a catch block returning { status: 'error' } but this path is never exercised by any test. The store re-import via dynamic import inside checkHealth makes it nearly impossible for the catch to trigger with the current in-memory implementation, meaning the error path is dead code that cannot be tested without mocking.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "564-574",
+    "snippet": "it('checkHealth returns { status: \"ok\" } when store is accessible', async () => {\n    const result = await checkHealth(null);\n    expect(result.status).toBe('ok');\n  });\n\n  it('checkHealth result has a status field with value \"ok\" or \"error\"', async () => {\n    const result = await checkHealth(null);\n    expect(['ok', 'error']).toContain(result.status);\n  });"
+  },
+  "routeToPhase": "2b"
+}

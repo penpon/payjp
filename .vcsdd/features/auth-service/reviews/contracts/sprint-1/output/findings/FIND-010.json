@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-010",
+  "dimension": "verification_readiness",
+  "category": "spec_gap",
+  "severity": "major",
+  "description": "The contract Tier 2 section header claims '17 PROPs, all required: true' but the table only lists 16 rows (PROP-AUTH-010 through PROP-AUTH-024 = 15 entries, plus PROP-AUTH-029 = 16 total). This is an off-by-one in the contract's own documentation that could mislead the Phase 3 adversary about completeness criteria.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/contracts/sprint-1.md",
+    "lineRange": "61-79",
+    "snippet": "### Tier 2 — Integration (17 PROPs, all required: true)"
+  },
+  "routeToPhase": "2c"
+}

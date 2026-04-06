@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-005",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "critical",
+  "description": "PROP-AUTH-024 (auth-service does not write to billing tables) tests contain 'expect(true).toBe(true)' assertions. Two of the three test cases (payjp_events and member_impact_logs) assert literally nothing. The third case only checks that the oauth store has a key. None of these tests verify the service boundary constraint — they would pass even if saveOAuthState wrote to a members table.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "411-451",
+    "snippet": "expect(true).toBe(true);"
+  },
+  "routeToPhase": "2b"
+}

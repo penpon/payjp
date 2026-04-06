@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "implementation_correctness",
+  "category": "purity_boundary",
+  "severity": "critical",
+  "description": "The pure core module at packages/auth-service/src/core/index.ts:1 imports 'createHash' from 'node:crypto'. While SHA-256 hashing is deterministic given the same input, importing a Node.js built-in I/O module into what is declared as the 'Pure Core (deterministic, side-effect-free, formally verifiable)' module violates the stated purity boundary. The verification architecture (verification-architecture.md:13) explicitly states: 'No I/O. Fully unit-testable without mocks.' The node:crypto module is an I/O module that interacts with the operating system's cryptographic subsystem. The stateHash, oauthSessionHash, and linkSessionTokenHash functions depend on this import. While the output is deterministic for given input, the dependency on a platform-specific module compromises portability and formal verifiability claims. The purity boundary map in the behavioral spec lists these hash functions as pure, but their implementation relies on an OS-level crypto provider.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/core/index.ts",
+    "lineRange": "1",
+    "snippet": "import { createHash } from 'node:crypto';"
+  },
+  "routeToPhase": "2b"
+}

@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-009",
+  "dimension": "spec_fidelity",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "serializeCookieAttributes (core/index.ts:224-236) is a pure core function listed in the purity boundary map (verification-architecture.md:26) with the description 'Set-Cookie header string; no Domain attribute emitted'. There is no dedicated unit test for this function in pure-core.test.ts. While it is indirectly exercised by PROP-AUTH-017 integration test (which calls handleAuthRequest('/v1/auth/discord/start') and checks the serialized Set-Cookie header), there is no Tier 1 test that directly verifies: (1) the serialization order of attributes, (2) that Domain is never emitted, (3) edge cases like empty value strings, or (4) special characters in cookie values. The verification architecture lists it as a pure core function that should have Tier 1 coverage.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/core/index.ts",
+    "lineRange": "224-236",
+    "snippet": "export function serializeCookieAttributes(\n  attrs: CookieAttributes,\n  value: string,\n): string {\n  const parts: string[] = [`${attrs.name}=${value}`];\n  if (attrs.maxAge !== undefined) parts.push(`Max-Age=${attrs.maxAge}`);\n  if (attrs.path) parts.push(`Path=${attrs.path}`);\n  if (attrs.secure) parts.push('Secure');\n  if (attrs.httpOnly) parts.push('HttpOnly');\n  if (attrs.sameSite) parts.push(`SameSite=${attrs.sameSite}`);\n  return parts.join('; ');\n}"
+  },
+  "routeToPhase": "2b"
+}

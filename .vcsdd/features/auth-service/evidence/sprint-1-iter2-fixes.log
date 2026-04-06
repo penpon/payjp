@@ -1,0 +1,23 @@
+target-feature-tests: PASS
+regression-baseline: PASS
+
+> @hayane/auth-service@0.0.1 test
+> vitest run
+
+ RUN  v3.2.4 /Users/nana/workspace/hayane_payjp/packages/auth-service
+
+ ✓ src/__tests__/integration/auth-flow.test.ts (37 tests) 15ms
+ ✓ src/core/__tests__/pure-core.test.ts (57 tests) 660ms
+   ✓ PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify > property: arbitrary clientId/redirectUri/state always yields URL with scope=identify and no extra scopes  631ms
+
+ Test Files  2 passed (2)
+      Tests  94 passed (94)
+   Start at  10:12:20
+   Duration  1.29s (transform 158ms, setup 0ms, collect 209ms, tests 675ms, environment 0ms, prepare 299ms)
+
+Fixes applied (iter2 contract review):
+- FIND-001: buildCallbackRedirectUrl returns frontendBaseUrl directly (no /auth/complete path)
+- FIND-002: PROP-AUTH-031~036 added to verification-architecture.md (Proof Obligations + Traceability Matrix + Pure Core table)
+- FIND-003: handleAuthRequest added to shell; Tier 2 PROP-AUTH-013~019 tests call through handleAuthRequest
+- FIND-004: checkHealth error path tested (isHealthy returns false, isHealthy throws)
+- FIND-005: checkHealth uses isHealthy function parameter (no dynamic import)

@@ -1,0 +1,151 @@
+{
+  "reviewType": "implementation",
+  "feature": "auth-service",
+  "sprintNumber": 1,
+  "iteration": 2,
+  "timestamp": "2026-04-06T16:00:00Z",
+  "reviewContext": {
+    "reviewType": "implementation",
+    "contractPath": "contracts/sprint-1.md"
+  },
+  "priorFindingsResolution": {
+    "FIND-001": "resolved",
+    "FIND-002": "resolved",
+    "FIND-003": "resolved",
+    "FIND-004": "resolved",
+    "FIND-005": "resolved",
+    "FIND-006": "partially-resolved",
+    "FIND-007": "partially-resolved",
+    "FIND-008": "resolved",
+    "FIND-009": "resolved",
+    "FIND-010": "resolved",
+    "FIND-011": "resolved",
+    "FIND-012": "resolved",
+    "FIND-013": "resolved",
+    "FIND-014": "resolved"
+  },
+  "dimensions": [
+    {
+      "name": "spec_fidelity",
+      "verdict": "FAIL",
+      "findings": ["FIND-101"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:329-346",
+          "description": "handleStructuredAuthRequest session endpoint returns 200 {linked: false} for all invalid conditions instead of 401 as required by REQ-AUTH-004 edge cases"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts:308-346",
+          "description": "PROP-AUTH-018 now properly verifies Set-Cookie attributes for __Host-link_session (FIND-001 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:265-319",
+          "description": "handleStructuredAuthRequest callback flow now implements full REQ-AUTH-002 (FIND-003 resolved)"
+        }
+      ]
+    },
+    {
+      "name": "edge_case_coverage",
+      "verdict": "PASS",
+      "findings": ["FIND-103", "FIND-104"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:207-211",
+          "description": "Absent Origin now handled correctly: origin !== undefined && origin !== '' check before isSameOrigin (FIND-008 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/__tests__/pure-core.test.ts:714-749",
+          "description": "Mixed-case sensitive key masking now tested (FIND-013 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts:42-67",
+          "description": "PROP-AUTH-010 atomicity test documented as Known Limitation #4 in contract (FIND-004 resolved)"
+        }
+      ]
+    },
+    {
+      "name": "implementation_correctness",
+      "verdict": "PASS",
+      "findings": ["FIND-105"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/index.ts:1-7",
+          "description": "Pure core no longer imports node:crypto — hash functions moved to shell (FIND-002 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:265-319",
+          "description": "Callback handler implements full validation flow: param checks, consumeOAuthState, Discord exchange, link session issuance (FIND-003 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:274-288",
+          "description": "Callback returns 401 for missing params (line 280) and for failed state consumption (line 288) (FIND-010 resolved)"
+        }
+      ]
+    },
+    {
+      "name": "structural_integrity",
+      "verdict": "PASS",
+      "findings": ["FIND-102"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:160-195",
+          "description": "handleAuthRequest overload routing splits structured (config-based) and legacy (3-arg) forms cleanly"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/shell/index.ts:265-375",
+          "description": "handleStructuredAuthRequest properly uses config parameters for all endpoints (FIND-006 partially resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/auth-service/src/core/__tests__/pure-core.test.ts:665-707",
+          "description": "serializeCookieAttributes has dedicated Tier 1 tests with property tests (FIND-009 resolved)"
+        }
+      ]
+    },
+    {
+      "name": "verification_readiness",
+      "verdict": "PASS",
+      "findings": [],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "/Users/nana/workspace/hayane_payjp/.vcsdd/features/auth-service/specs/verification-architecture.md:47-50",
+          "description": "Hash functions and handleAuthRequest now listed in effectful shell table (FIND-014 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "/Users/nana/workspace/hayane_payjp/.vcsdd/features/auth-service/contracts/sprint-1.md:47-93",
+          "description": "PROP coverage table: 15 Tier 1 + 18 Tier 2 + 3 Tier 3 (deferred) = 36 PROPs. Numbering is non-contiguous but traceable (FIND-012 resolved)"
+        }
+      ]
+    }
+  ],
+  "overallVerdict": "FAIL",
+  "convergenceSignals": {
+    "findingCount": 5,
+    "criticalFindings": 0,
+    "majorFindings": 1,
+    "minorFindings": 4,
+    "allCriteriaEvaluated": true,
+    "evaluatedCriteria": [
+      "CRIT-spec_fidelity",
+      "CRIT-edge_case_coverage",
+      "CRIT-implementation_correctness",
+      "CRIT-structural_integrity",
+      "CRIT-verification_readiness"
+    ],
+    "duplicateFindings": []
+  },
+  "summary": "FAIL: 1 major finding in spec_fidelity dimension. FIND-101 (major): REQ-AUTH-004 edge cases explicitly require 401 for absent/expired/consumed link session tokens, but the implementation returns 200 {linked: false} for all invalid conditions. The session endpoint never returns 401 except via the 403 Origin check. This is a spec fidelity violation: the acceptance criteria say 'Any invalid condition -> 401' and the edge case list enumerates 4 conditions each mapped to 401. All 3 prior critical findings (FIND-001, FIND-002, FIND-003) are resolved. 12 of 14 prior findings are fully resolved, 2 are partially resolved (FIND-006 legacy handler still has hardcoded values; FIND-007 session endpoint returns 200 not 401). 4 additional minor findings: FIND-102 (legacy handler hardcoded values persisting in test paths), FIND-103 (tautological legacy-path test in PROP-AUTH-012), FIND-104 (PROP-AUTH-020 does not spawn process), FIND-105 (discordClientSecret missing from config type). The pass threshold requires 0 critical and at most 2 major findings. With 1 major finding (FIND-101), this is close but spec_fidelity dimension FAILs because the 401 vs 200 divergence affects REQ-AUTH-004 acceptance criteria directly."
+}

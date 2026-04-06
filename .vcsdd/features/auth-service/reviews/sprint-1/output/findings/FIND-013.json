@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-013",
+  "dimension": "edge_case_coverage",
+  "category": "security_surface",
+  "severity": "minor",
+  "description": "PROP-AUTH-005 tests maskSensitiveLogFields for case-insensitive matching of sensitive keys. The regex at core/index.ts:113 uses /^(cookie|authorization|set-cookie|code|token)$/i. However, the tests at pure-core.test.ts:209 only test lowercase keys: ['cookie', 'authorization', 'set-cookie', 'code', 'token']. No test verifies that case-variant keys like 'Cookie', 'AUTHORIZATION', 'Set-Cookie', 'CODE', 'Token' are also masked. While the regex's /i flag should handle this, the property test only generates lowercase key names. The spec at REQ-AUTH-010 states 'Keys matching cookie, authorization, set-cookie, code, token MUST be replaced' but does not explicitly require case-insensitive matching. If HTTP headers arrive in mixed case (which is valid per HTTP/1.1), the masking must still apply. A property test generating mixed-case variants of these keys would strengthen coverage.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/core/__tests__/pure-core.test.ts",
+    "lineRange": "209-252",
+    "snippet": "const SENSITIVE_KEYS = ['cookie', 'authorization', 'set-cookie', 'code', 'token'];\n...\nfor (const key of SENSITIVE_KEYS) {\n  const entry = { [key]: sensitiveValue, other: 'safe-value' };\n  const masked = maskSensitiveLogFields(entry);\n  expect(masked[key]).toBe('[REDACTED]');\n}"
+  },
+  "routeToPhase": "2b"
+}

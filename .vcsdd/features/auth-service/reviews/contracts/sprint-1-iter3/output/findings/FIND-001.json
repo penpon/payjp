@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "minor",
+  "description": "Contract claims PROP-AUTH-018 is 'tested (via handleAuthRequest; Set-Cookie header contains required attributes)' but the actual test at auth-flow.test.ts:277-288 does NOT call handleAuthRequest. It calls saveDiscordLinkSession directly and asserts getStoreCounts().linkSessions > 0. This test verifies store insertion, not Set-Cookie header attributes for __Host-link_session. Furthermore, handleAuthRequest for /v1/auth/discord/callback (shell/index.ts:147-149) does not emit a Set-Cookie header for __Host-link_session at all, so even calling handleAuthRequest would not verify this PROP. The contract's status description is inaccurate relative to the actual test coverage.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "277-288",
+    "snippet": "it('saveDiscordLinkSession correctly stores link session with expected attributes', async () => {\n    await saveDiscordLinkSession(null, { ... });\n    const counts = getStoreCounts();\n    expect(counts.linkSessions).toBeGreaterThan(0);\n  });"
+  },
+  "routeToPhase": "2b"
+}

@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-010",
+  "dimension": "implementation_correctness",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "description": "REQ-AUTH-014 states: 'WHEN GET /v1/auth/discord/callback or GET /v1/auth/discord/session sends a response THE SYSTEM SHALL include Cache-Control: no-store and Referrer-Policy: no-referrer in every response regardless of success or failure status code.' The implementation at shell/index.ts:152-161 for the '/v1/auth/discord/start' endpoint does NOT include Cache-Control or Referrer-Policy headers. While REQ-AUTH-014 explicitly exempts /start ('GET /v1/auth/discord/start does NOT require these headers'), the handleAuthRequest for /callback at shell/index.ts:147-149 only returns security headers for the happy path 302. Since the callback handler never returns 401 or 500 (it always returns 302), there is no evidence that failure responses from callback include these headers. The spec requires 'regardless of success or failure status code' but the implementation cannot produce failure codes from callback.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/shell/index.ts",
+    "lineRange": "147-149",
+    "snippet": "if (endpoint === '/v1/auth/discord/callback') {\n    const locationUrl = buildCallbackRedirectUrl(frontendBaseUrl);\n    return { statusCode: 302, headers: { ...secHeaders, Location: locationUrl } };\n  }"
+  },
+  "routeToPhase": "2b"
+}

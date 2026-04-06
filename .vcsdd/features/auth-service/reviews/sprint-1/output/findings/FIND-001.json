@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "critical",
+  "description": "PROP-AUTH-018 claims to verify 'callback Set-Cookie for __Host-link_session has exact attributes' (REQ-AUTH-005). However, the test at auth-flow.test.ts:276-288 does NOT test Set-Cookie header attributes at all. It merely calls saveDiscordLinkSession and asserts that the store count increased. The test description says 'Set-Cookie for __Host-link_session has exact attributes' but the assertions only check getStoreCounts().linkSessions > 0. This is a mislabeled test: it tests storage insertion, not cookie serialization or Set-Cookie header attributes. The handleAuthRequest function for '/v1/auth/discord/callback' at shell/index.ts:147-149 does not even issue a Set-Cookie header for __Host-link_session. REQ-AUTH-005 requires Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=900 with no Domain attribute, but no integration test verifies these attributes for the link session cookie.",
+  "evidence": {
+    "filePath": "packages/auth-service/src/__tests__/integration/auth-flow.test.ts",
+    "lineRange": "276-288",
+    "snippet": "describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact attributes', () => {\n  it('saveDiscordLinkSession correctly stores link session with expected attributes', async () => {\n    await saveDiscordLinkSession(null, { ... });\n    const counts = getStoreCounts();\n    expect(counts.linkSessions).toBeGreaterThan(0);\n  });\n});"
+  },
+  "routeToPhase": "2b"
+}

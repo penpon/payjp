@@ -1,0 +1,27 @@
+{
+  "reviewType": "contract",
+  "featureName": "auth-service",
+  "sprintNumber": 1,
+  "contractPath": "contracts/sprint-1.md",
+  "contractDigest": "5615a8f9984da95363bc9d633f513a5aa229561e638a10be14eedd88f23fa912",
+  "artifactsToReview": {
+    "spec": ["specs/behavioral-spec.md", "specs/verification-architecture.md"],
+    "tests": [
+      "packages/auth-service/src/core/__tests__/pure-core.test.ts",
+      "packages/auth-service/src/__tests__/integration/auth-flow.test.ts"
+    ],
+    "source": [
+      "packages/auth-service/src/core/index.ts",
+      "packages/auth-service/src/shell/index.ts",
+      "packages/auth-service/src/shell/store.ts",
+      "packages/shared/src/types.ts"
+    ]
+  },
+  "reviewDimensions": [
+    "spec_fidelity",
+    "edge_case_coverage",
+    "implementation_correctness",
+    "structural_integrity",
+    "verification_readiness"
+  ]
+}

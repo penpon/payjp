@@ -1,0 +1,20 @@
+# Semgrep scan output — auth-service
+# Date: 2026-04-06
+# Command: semgrep scan --config=auto packages/auth-service/src
+
+Scan Status:
+  Scanning 5 files tracked by git with 1063 Code rules
+
+  Language      Rules   Files          Origin      Rules
+ ─────────────────────────────        ───────────────────
+  ts              166       5          Community    1063
+  <multilang>      47       5
+
+Scan Summary:
+  Scan completed successfully.
+  Findings: 0 (0 blocking)
+  Rules run: 213
+  Targets scanned: 5
+  Parsed lines: ~100.0%
+
+Result: Ran 213 rules on 5 files: 0 findings.
