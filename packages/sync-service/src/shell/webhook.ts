@@ -124,7 +124,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
   const discordUserIdFromMetadata = event.data?.metadata?.discord_user_id;
   if (discordUserIdFromMetadata) {
     try {
-      await deps.db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [discordUserIdFromMetadata]);
+      await deps.db.query('SELECT pg_advisory_xact_lock($1::bigint)', [discordUserIdFromMetadata]);
     } catch (err) {
       return handleDbError(err, deps);
     }
