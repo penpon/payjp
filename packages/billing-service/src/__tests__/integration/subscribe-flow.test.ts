@@ -675,16 +675,23 @@ describe('POST /v1/subscriptions — Integration', () => {
   // -------------------------------------------------------------------------
   describe('PROP-BILL-039: Role sync retry', () => {
     it('retries up to 3 times on Discord 429/5xx', async () => {
-      const deps = makeSuccessfulDeps();
-      let attempts = 0;
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        attempts++;
-        if (attempts < 3) throw new Error('Discord 429');
-        return Promise.resolve();
-      });
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(attempts).toBe(3);
-      expect(result.ok).toBe(true);
+      vi.useFakeTimers();
+      try {
+        const deps = makeSuccessfulDeps();
+        let attempts = 0;
+        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+          attempts++;
+          if (attempts < 3) throw new Error('Discord 429');
+          return Promise.resolve();
+        });
+        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
+        expect(attempts).toBe(3);
+        expect(result.ok).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -693,13 +700,20 @@ describe('POST /v1/subscriptions — Integration', () => {
   // -------------------------------------------------------------------------
   describe('PROP-BILL-040: Role sync final failure', () => {
     it('503 + operationId, inflight_operation_* retained', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Discord unavailable'));
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(503);
-        expect(result.operationId).toBe(OPERATION_ID);
+      vi.useFakeTimers();
+      try {
+        const deps = makeSuccessfulDeps();
+        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Discord unavailable'));
+        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.statusCode).toBe(503);
+          expect(result.operationId).toBe(OPERATION_ID);
+        }
+      } finally {
+        vi.useRealTimers();
       }
     });
   });

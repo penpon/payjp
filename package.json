@@ -5,15 +5,16 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm -w packages/shared run test && npm -w packages/auth-service run test && npm -w packages/billing-service run test && npm -w packages/sync-service run test && npm -w packages/server run test",
-    "test:auth": "npm -w packages/auth-service run test",
-    "test:billing": "npm -w packages/billing-service run test",
-    "test:sync": "npm -w packages/sync-service run test",
+    "test": "vitest run",
+    "test:auth": "vitest run --project @hayane/auth-service",
+    "test:billing": "vitest run --project @hayane/billing-service",
+    "test:sync": "vitest run --project @hayane/sync-service",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
-    "lefthook": "^2.1.5"
+    "lefthook": "^2.1.5",
+    "vitest": "^3.2.4"
   }
 }
