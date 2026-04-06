@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import pg from 'pg';
-import { createPool, closePool } from '../pool.js';
+import type pg from 'pg';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { runMigrations } from '../migrate.js';
 import { PgDbClient } from '../pg-db-client.js';
+import { closePool, createPool } from '../pool.js';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/hayane_test';
 
@@ -10,9 +10,7 @@ let pool: pg.Pool;
 let db: PgDbClient;
 
 async function cleanDatabase() {
-  await pool.query(
-    'TRUNCATE members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs CASCADE',
-  );
+  await pool.query('TRUNCATE members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs CASCADE');
 }
 
 beforeAll(async () => {

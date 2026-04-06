@@ -4,33 +4,32 @@
  * PROP-BILL-001 〜 PROP-BILL-019
  * すべてのテストはスタブが "Not implemented yet" をスローするため FAIL する。
  */
-import { describe, it, expect } from 'vitest';
-import * as fc from 'fast-check';
-
-import {
-  validatePlanId,
-  isFirstTimeUser,
-  hasActiveSubscription,
-  hasInflightOperation,
-  isThreeDSecureVerified,
-  calculateCancelAcceptanceStart,
-  isCancelAcceptable,
-  calculateTrialEnd,
-  buildSubscriptionMetadata,
-  buildSubscriptionResponse,
-  buildCancelResponse,
-  formatRfc3339Utc,
-  isSameOrigin,
-  maskSensitiveLogFields,
-  validateFrontendBaseUrl,
-  validateRequiredEnvVars,
-  validateFixedEnvVars,
-  getCorsHeaders,
-  shouldGrantRole,
-  determineSubscriptionStatus,
-} from '../index.js';
 
 import type { Member } from '@hayane/shared';
+import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+import {
+  buildCancelResponse,
+  buildSubscriptionMetadata,
+  buildSubscriptionResponse,
+  calculateCancelAcceptanceStart,
+  calculateTrialEnd,
+  determineSubscriptionStatus,
+  formatRfc3339Utc,
+  getCorsHeaders,
+  hasActiveSubscription,
+  hasInflightOperation,
+  isCancelAcceptable,
+  isFirstTimeUser,
+  isSameOrigin,
+  isThreeDSecureVerified,
+  maskSensitiveLogFields,
+  shouldGrantRole,
+  validateFixedEnvVars,
+  validateFrontendBaseUrl,
+  validatePlanId,
+  validateRequiredEnvVars,
+} from '../index.js';
 
 // ---------------------------------------------------------------------------
 // ヘルパー
@@ -323,14 +322,11 @@ describe('PROP-BILL-012: formatRfc3339Utc', () => {
 
   it('(property) always ends with Z', () => {
     fc.assert(
-      fc.property(
-        fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
-        (date) => {
-          const result = formatRfc3339Utc(date);
-          expect(result).toMatch(/Z$/);
-          expect(typeof result).toBe('string');
-        },
-      ),
+      fc.property(fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }), (date) => {
+        const result = formatRfc3339Utc(date);
+        expect(result).toMatch(/Z$/);
+        expect(typeof result).toBe('string');
+      }),
     );
   });
 });
@@ -343,8 +339,8 @@ describe('PROP-BILL-013: isSameOrigin', () => {
 
   it.each([
     { origin: 'https://app.example.com', expected: true },
-    { origin: 'http://app.example.com', expected: false },       // scheme diff
-    { origin: 'https://evil.example.com', expected: false },     // host diff
+    { origin: 'http://app.example.com', expected: false }, // scheme diff
+    { origin: 'https://evil.example.com', expected: false }, // host diff
     { origin: 'https://app.example.com:8443', expected: false }, // port diff
     { origin: 'null', expected: false },
     { origin: '', expected: false },

@@ -1,19 +1,16 @@
-/**
- * sync-service Integration Tests — Webhook Flow
- * Phase 2b (Green): Tests against real handleWebhook with mock DB/Discord
- */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { DbPool, WebhookHandlerDeps, WebhookRequest } from '../../shell/types.js';
 import { handleWebhook } from '../../shell/webhook.js';
-import type { WebhookHandlerDeps, WebhookRequest, DbPool } from '../../shell/types.js';
-import type { LogEntry } from '@hayane/shared';
 
 // --- Mock DB ---
-function createMockDb(options: {
-  existingEvent?: Record<string, unknown> | null;
-  member?: Record<string, unknown> | null;
-  memberBySub?: Record<string, unknown> | null;
-  throwOnQuery?: boolean;
-} = {}): DbPool {
+function createMockDb(
+  options: {
+    existingEvent?: Record<string, unknown> | null;
+    member?: Record<string, unknown> | null;
+    memberBySub?: Record<string, unknown> | null;
+    throwOnQuery?: boolean;
+  } = {},
+): DbPool {
   const insertedEvents: Array<Record<string, unknown>> = [];
 
   return {
@@ -179,9 +176,11 @@ describe('INT-SYNC-005: Webhook token mismatch', () => {
     expect(logEntry).toHaveProperty('remote_ip');
     expect(logEntry).toHaveProperty('reason');
     expect(logEntry).toHaveProperty('event');
-    expect((db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => (c[0] as string).includes('INSERT INTO payjp_events')
-    )).toHaveLength(0);
+    expect(
+      (db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+        (c[0] as string).includes('INSERT INTO payjp_events'),
+      ),
+    ).toHaveLength(0);
   });
 });
 
@@ -279,8 +278,8 @@ describe('INT-SYNC-009: Webhook subscription.updated status-unchanged', () => {
     // Status didn't change (active → active), so no role sync
     expect(deps.syncRole).not.toHaveBeenCalled();
     // But member update should have happened (plan/dates)
-    const updateCalls = (db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => (c[0] as string).includes('UPDATE members SET')
+    const updateCalls = (db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+      (c[0] as string).includes('UPDATE members SET'),
     );
     expect(updateCalls.length).toBeGreaterThan(0);
   });
@@ -409,10 +408,7 @@ describe('INT-SYNC-036: Concurrent webhooks serialization', () => {
       remoteIp: '1.2.3.4',
     };
 
-    const [res1, res2] = await Promise.all([
-      handleWebhook(req, deps),
-      handleWebhook(req, deps),
-    ]);
+    const [res1, res2] = await Promise.all([handleWebhook(req, deps), handleWebhook(req, deps)]);
     // Both should complete without errors (mock DB doesn't lock)
     expect(res1.status).toBe(200);
     expect(res2.status).toBe(200);

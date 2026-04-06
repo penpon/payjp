@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { buildApp } from '../app.js';
 import { clearStores } from '@hayane/auth-service';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { buildApp } from '../app.js';
 
 const TEST_CONFIG = {
   frontendBaseUrl: 'https://example.com',
@@ -44,7 +44,7 @@ describe('GET /v1/auth/discord/start', () => {
     expect(res.statusCode).toBe(302);
 
     // Location should point to Discord OAuth
-    const location = res.headers['location'] as string;
+    const location = res.headers.location as string;
     expect(location).toContain('https://discord.com/oauth2/authorize');
     expect(location).toContain('client_id=test-client-id');
     expect(location).toContain('scope=identify');
@@ -111,7 +111,7 @@ describe('GET /v1/auth/discord/callback', () => {
     const oauthSessionToken = sessionMatch![1];
 
     // Extract state from Location URL
-    const location = startRes.headers['location'] as string;
+    const location = startRes.headers.location as string;
     const locationUrl = new URL(location);
     const stateToken = locationUrl.searchParams.get('state');
     expect(stateToken).not.toBeNull();
@@ -125,7 +125,7 @@ describe('GET /v1/auth/discord/callback', () => {
     expect(callbackRes.statusCode).toBe(302);
 
     // Should redirect to frontend
-    expect(callbackRes.headers['location']).toBe('https://example.com');
+    expect(callbackRes.headers.location).toBe('https://example.com');
 
     // Should set __Host-link_session cookie
     const linkCookieHeader = callbackRes.headers['set-cookie'] as string;

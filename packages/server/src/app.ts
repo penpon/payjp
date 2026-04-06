@@ -1,6 +1,6 @@
-import Fastify from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
+import Fastify from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
 
 export interface AppConfig {
@@ -32,14 +32,16 @@ export function buildApp(config: AppConfig) {
   app.setErrorHandler((error, request, reply) => {
     const statusCode = error.statusCode ?? 500;
     if (statusCode >= 500) {
-      console.error(JSON.stringify({
-        level: 'error',
-        statusCode,
-        method: request.method,
-        url: request.url,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      }));
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          statusCode,
+          method: request.method,
+          url: request.url,
+          error: error.message,
+          timestamp: new Date().toISOString(),
+        }),
+      );
       reply.status(statusCode).send({ error: 'Internal Server Error' });
     } else {
       const safeMessage = error.message.replace(UUID_PATTERN, '[REDACTED]');

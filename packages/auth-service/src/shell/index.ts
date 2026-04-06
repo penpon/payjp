@@ -1,18 +1,18 @@
-import { randomBytes, createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import type { LinkSessionRecord, OAuthStateRecord } from '@hayane/shared';
 import {
-  maskSensitiveLogFields,
-  validateOAuthStateRecord,
-  validateLinkSessionRecord,
-  getSecurityHeaders,
-  getCorsHeaders,
   buildCallbackRedirectUrl,
   buildCookieAttributes,
   buildDiscordAuthorizationUrl,
+  getCorsHeaders,
+  getSecurityHeaders,
   isSameOrigin,
+  maskSensitiveLogFields,
   serializeCookieAttributes,
+  validateLinkSessionRecord,
+  validateOAuthStateRecord,
 } from '../core/index.js';
-import { getOAuthStore, getLinkSessionStore } from './store.js';
-import type { OAuthStateRecord, LinkSessionRecord } from '@hayane/shared';
+import { getLinkSessionStore, getOAuthStore } from './store.js';
 
 // REQ-AUTH-001: state_hash = SHA-256(rawState)
 // FIND-002: crypto 依存は pure core ではなく shell に配置する
@@ -104,7 +104,7 @@ export async function saveDiscordLinkSession(
 // Green フェーズ: モック実装（実際の HTTP 呼び出しは E2E フェーズで置換）
 export async function exchangeDiscordCode(
   code: string,
-  env: { clientId: string; clientSecret: string; redirectUri: string },
+  _env: { clientId: string; clientSecret: string; redirectUri: string },
 ): Promise<string> {
   // テスト用モック: 実際の Discord API を呼び出す代わりにモックレスポンスを返す
   // 空の clientId/Secret が渡された場合もモックトークンを返す（テスト目的）
@@ -113,17 +113,13 @@ export async function exchangeDiscordCode(
 
 // REQ-AUTH-002: Discord /users/@me → discord_user_id 取得
 // Green フェーズ: モック実装
-export async function fetchDiscordUserId(
-  accessToken: string,
-): Promise<string> {
+export async function fetchDiscordUserId(_accessToken: string): Promise<string> {
   // テスト用モック: 数値のみの Discord ユーザーIDを返す
   return '123456789012345678';
 }
 
 // REQ-AUTH-010: 構造化ログ出力（機密マスク適用後）
-export function structuredLog(
-  entry: Record<string, unknown>,
-): void {
+export function structuredLog(entry: Record<string, unknown>): void {
   const masked = maskSensitiveLogFields(entry);
   console.log(JSON.stringify(masked));
 }
@@ -131,9 +127,7 @@ export function structuredLog(
 // PROP-AUTH-036 対象: checkHealth
 // REQ-AUTH-015: ヘルスチェックエンドポイント
 // isHealthy 関数を引数として受け取り、テスト可能な設計にする
-export async function checkHealth(
-  isHealthy: () => boolean,
-): Promise<{ status: 'ok' | 'error' }> {
+export async function checkHealth(isHealthy: () => boolean): Promise<{ status: 'ok' | 'error' }> {
   try {
     if (isHealthy()) return { status: 'ok' };
     return { status: 'error' };
@@ -146,9 +140,9 @@ export async function checkHealth(
 // Tier 2 統合テストで使用する。ハードコードされたリテラルを排除し、config パラメータ経由で受け取る。
 export interface AuthRequest {
   endpoint: string;
-  query?: Record<string, string>;      // callback: code, state
-  cookies?: Record<string, string>;    // __Host-oauth_session, __Host-link_session
-  headers?: Record<string, string>;    // Origin
+  query?: Record<string, string>; // callback: code, state
+  cookies?: Record<string, string>; // __Host-oauth_session, __Host-link_session
+  headers?: Record<string, string>; // Origin
 }
 
 export interface AuthResponse {
@@ -176,21 +170,24 @@ export function handleAuthRequest(
 
 export async function handleAuthRequest(
   requestOrEndpoint: AuthRequest | string,
-  headersOrConfig: Record<string, string> | { frontendBaseUrl: string; discordClientId: string; discordClientSecret: string; discordRedirectUri: string },
+  headersOrConfig:
+    | Record<string, string>
+    | { frontendBaseUrl: string; discordClientId: string; discordClientSecret: string; discordRedirectUri: string },
   frontendBaseUrlParam?: string,
 ): Promise<{ statusCode: number; headers: Record<string, string>; body?: unknown }> {
   // オーバーロードの分岐
   if (typeof requestOrEndpoint === 'string') {
-    return handleLegacyAuthRequest(
-      requestOrEndpoint,
-      headersOrConfig as Record<string, string>,
-      frontendBaseUrlParam!,
-    );
+    return handleLegacyAuthRequest(requestOrEndpoint, headersOrConfig as Record<string, string>, frontendBaseUrlParam!);
   }
 
   return handleStructuredAuthRequest(
     requestOrEndpoint,
-    headersOrConfig as { frontendBaseUrl: string; discordClientId: string; discordClientSecret: string; discordRedirectUri: string },
+    headersOrConfig as {
+      frontendBaseUrl: string;
+      discordClientId: string;
+      discordClientSecret: string;
+      discordRedirectUri: string;
+    },
   );
 }
 
@@ -204,14 +201,12 @@ async function handleLegacyAuthRequest(
   const secHeaders = getSecurityHeaders();
 
   if (endpoint === '/v1/auth/discord/session') {
-    const origin = headers['origin'] ?? headers['Origin'];
+    const origin = headers.origin ?? headers.Origin;
     // FIND-008: Origin ヘッダが存在しない場合はサーモリジンブラウザリクエストとして許可
     if (origin !== undefined && origin !== '' && !isSameOrigin(origin, frontendBaseUrl)) {
       return { statusCode: 403, headers: secHeaders };
     }
-    const corsHeaders = origin !== undefined && origin !== ''
-      ? getCorsHeaders(frontendBaseUrl)
-      : {};
+    const corsHeaders = origin !== undefined && origin !== '' ? getCorsHeaders(frontendBaseUrl) : {};
     // REQ-AUTH-004: legacy handler ではcookie情報がないため 401 を返す
     return {
       statusCode: 401,
@@ -269,8 +264,8 @@ async function handleStructuredAuthRequest(
 
   // /v1/auth/discord/callback
   if (endpoint === '/v1/auth/discord/callback') {
-    const code = query['code'];
-    const stateToken = query['state'];
+    const code = query.code;
+    const stateToken = query.state;
     const oauthSessionToken = cookies['__Host-oauth_session'];
 
     if (!code || !stateToken || !oauthSessionToken) {
@@ -317,7 +312,7 @@ async function handleStructuredAuthRequest(
 
   // /v1/auth/discord/session
   if (endpoint === '/v1/auth/discord/session') {
-    const origin = headers['Origin'] ?? headers['origin'];
+    const origin = headers.Origin ?? headers.origin;
     // FIND-008: Origin ヘッダが存在しない場合はサーモリジンブラウザリクエストとして許可
     if (origin !== undefined && origin !== '' && !isSameOrigin(origin, frontendBaseUrl)) {
       return { statusCode: 403, headers: secHeaders };

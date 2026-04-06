@@ -4,21 +4,18 @@
  * REQ-BILL-019〜025 の 12 ステップ順序に従い実装する。
  */
 import {
-  isSameOrigin,
+  buildCancelResponse,
+  calculateCancelAcceptanceStart,
   hasActiveSubscription,
   hasInflightOperation,
-  calculateCancelAcceptanceStart,
   isCancelAcceptable,
-  buildCancelResponse,
+  isSameOrigin,
   linkSessionTokenHash,
 } from '../core/index.js';
-import type { BillingDeps, CancelRequest, CancelResult } from './types.js';
 import { isUncertainError } from './errors.js';
+import type { BillingDeps, CancelRequest, CancelResult } from './types.js';
 
-export async function handleCancel(
-  req: CancelRequest,
-  deps: BillingDeps,
-): Promise<CancelResult> {
+export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promise<CancelResult> {
   const { db, payjp, config, clock, generateOperationId } = deps;
   const now = clock();
   const JST_OFFSET_MINUTES = 540;
@@ -43,7 +40,12 @@ export async function handleCancel(
 
   // Step 1c: Verify discordUserId matches link session (IDOR prevention)
   if (linkSession.discord_user_id !== req.discordUserId) {
-    return { ok: false, statusCode: 403, errorCode: 'DISCORD_USER_ID_MISMATCH', message: 'discordUserId does not match link session' };
+    return {
+      ok: false,
+      statusCode: 403,
+      errorCode: 'DISCORD_USER_ID_MISMATCH',
+      message: 'discordUserId does not match link session',
+    };
   }
 
   // Step 2: Advisory lock
@@ -78,7 +80,12 @@ export async function handleCancel(
 
     // Step 6: payjp_subscription_id check
     if (member.payjp_subscription_id === null) {
-      return { ok: false, statusCode: 409, errorCode: 'NO_PAYJP_SUBSCRIPTION', message: 'payjp_subscription_id is null' };
+      return {
+        ok: false,
+        statusCode: 409,
+        errorCode: 'NO_PAYJP_SUBSCRIPTION',
+        message: 'payjp_subscription_id is null',
+      };
     }
 
     // Step 7: Acceptance boundary check
@@ -111,18 +118,36 @@ export async function handleCancel(
     } catch (err) {
       // Uncertain failure — retain inflight
       if (isUncertainError(err)) {
-        return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Uncertain failure during cancel', operationId };
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'PAYJP_UNCERTAIN',
+          message: 'Uncertain failure during cancel',
+          operationId,
+        };
       }
       // Definite failure after write attempt — try reconcile by checking actual state
       try {
         const refetched = await payjp.fetchSubscription(member.payjp_subscription_id);
         if (refetched.status !== 'canceled') {
           // Cancel was not actually applied — retain inflight for CLI resolution
-          return { ok: false, statusCode: 503, errorCode: 'PAYJP_CANCEL_NOT_CONFIRMED', message: 'Cancel not confirmed after reconciliation', operationId };
+          return {
+            ok: false,
+            statusCode: 503,
+            errorCode: 'PAYJP_CANCEL_NOT_CONFIRMED',
+            message: 'Cancel not confirmed after reconciliation',
+            operationId,
+          };
         }
         canceledSubscription = refetched;
-      } catch (reconcileErr) {
-        return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Reconciliation failed after cancel failure', operationId };
+      } catch (_reconcileErr) {
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'PAYJP_UNCERTAIN',
+          message: 'Reconciliation failed after cancel failure',
+          operationId,
+        };
       }
     }
 
@@ -145,7 +170,13 @@ export async function handleCancel(
       });
     } catch {
       // DB failure after PAY.JP cancel success — retain inflight for CLI reconciliation
-      return { ok: false, statusCode: 503, errorCode: 'DB_UPDATE_FAILED', message: 'DB update failed after PAY.JP cancel', operationId };
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'DB update failed after PAY.JP cancel',
+        operationId,
+      };
     }
 
     return { ok: true, data: buildCancelResponse(updatedMember) };

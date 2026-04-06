@@ -5,7 +5,7 @@
  * pure core 関数は src/core/ に実装済み。
  * shell 層はこれらの依存型を受け取りオーケストレーションを実施する。
  */
-import type { Member, LinkSessionRecord, DbClient } from '@hayane/shared';
+import type { DbClient } from '@hayane/shared';
 
 // PAY.JP レスポンス型
 
@@ -46,11 +46,7 @@ export interface PayjpSubscription {
 
 export interface PayjpClient {
   fetchToken(tokenId: string): Promise<PayjpToken>;
-  createCustomer(params: {
-    email: string;
-    card: string;
-    metadata: Record<string, string>;
-  }): Promise<PayjpCustomer>;
+  createCustomer(params: { email: string; card: string; metadata: Record<string, string> }): Promise<PayjpCustomer>;
   createCharge(params: {
     customer: string;
     amount: number;
@@ -126,10 +122,6 @@ export interface OperationError {
   operationId?: string;
 }
 
-export type SubscribeResult =
-  | { ok: true; data: import('@hayane/shared').SubscriptionResponse }
-  | OperationError;
+export type SubscribeResult = { ok: true; data: import('@hayane/shared').SubscriptionResponse } | OperationError;
 
-export type CancelResult =
-  | { ok: true; data: import('@hayane/shared').CancelResponse }
-  | OperationError;
+export type CancelResult = { ok: true; data: import('@hayane/shared').CancelResponse } | OperationError;

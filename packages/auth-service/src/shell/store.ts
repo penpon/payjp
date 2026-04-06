@@ -1,4 +1,4 @@
-import type { OAuthStateRecord, LinkSessionRecord } from '@hayane/shared';
+import type { LinkSessionRecord, OAuthStateRecord } from '@hayane/shared';
 
 // Green フェーズ用インメモリストア — 実 DB 接続前の代替実装
 // REQ-AUTH-003: consumeOAuthState の原子性はロックで担保

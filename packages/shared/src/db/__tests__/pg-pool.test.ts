@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import pg from 'pg';
-import { createPool, closePool } from '../pool.js';
+import type pg from 'pg';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runMigrations } from '../migrate.js';
-import { createPgPool } from '../pg-pool.js';
 import type { DbPool } from '../pg-pool.js';
+import { createPgPool } from '../pg-pool.js';
+import { closePool, createPool } from '../pool.js';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/hayane_test';
 
@@ -34,9 +34,7 @@ describe('PgPool (DbPool adapter)', () => {
   });
 
   it('rowCount is 0 for empty result', async () => {
-    const result = await dbPool.query(
-      "SELECT * FROM members WHERE discord_user_id = 'nonexistent-pool-test'",
-    );
+    const result = await dbPool.query("SELECT * FROM members WHERE discord_user_id = 'nonexistent-pool-test'");
     expect(result.rows).toHaveLength(0);
     expect(result.rowCount).toBe(0);
   });

@@ -3,16 +3,11 @@
  *
  * PROP-BILL-042 〜 PROP-BILL-050, PROP-BILL-059〜061, PROP-BILL-063
  */
-import { describe, it, expect, vi } from 'vitest';
+
+import type { LinkSessionRecord, Member } from '@hayane/shared';
+import { describe, expect, it, vi } from 'vitest';
 import { handleCancel } from '../../shell/cancel.js';
-import type {
-  BillingDeps,
-  DbClient,
-  PayjpClient,
-  DiscordClient,
-  BillingConfig,
-} from '../../shell/types.js';
-import type { Member, LinkSessionRecord } from '@hayane/shared';
+import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
 // -------------------------------------------------------------------------
 // フィクスチャ
@@ -311,9 +306,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       expect(consumed).toBe(true);
 
       // 2回目: consumed セッションを返す
-      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
-        makeLinkSession({ used_at: NOW }),
-      );
+      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(makeLinkSession({ used_at: NOW }));
       const result2 = await handleCancel(makeCancelRequest(), deps);
       expect(result2.ok).toBe(false);
       if (!result2.ok) {
@@ -418,10 +411,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const deps2 = makeSuccessfulDeps();
       (deps2.db.acquireAdvisoryLock as ReturnType<typeof vi.fn>).mockResolvedValue(false);
 
-      await Promise.all([
-        handleCancel(makeCancelRequest(), deps1),
-        handleCancel(makeCancelRequest(), deps2),
-      ]);
+      await Promise.all([handleCancel(makeCancelRequest(), deps1), handleCancel(makeCancelRequest(), deps2)]);
 
       // deps1 のみ cancelSubscription が呼ばれる
       const calls1 = (deps1.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mock.calls.length;

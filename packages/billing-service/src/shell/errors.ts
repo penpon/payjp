@@ -28,8 +28,9 @@ export function isUncertainError(err: unknown): boolean {
   }
 
   // HTTP status code detection (PAY.JP SDK may attach status to error)
-  const status = (err as { status?: number; statusCode?: number }).status
-    ?? (err as { status?: number; statusCode?: number }).statusCode;
+  const status =
+    (err as { status?: number; statusCode?: number }).status ??
+    (err as { status?: number; statusCode?: number }).statusCode;
   if (typeof status === 'number') {
     // 5xx → uncertain (server may have processed the request)
     if (status >= 500) return true;

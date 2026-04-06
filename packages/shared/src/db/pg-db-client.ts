@@ -1,38 +1,49 @@
 import type pg from 'pg';
-import type { Member, LinkSessionRecord, OAuthStateRecord } from '../types.js';
+import type { LinkSessionRecord, Member, OAuthStateRecord } from '../types.js';
 
 export interface DbClient {
   findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date): Promise<void>;
+  setInflightOperation(
+    memberId: string,
+    operationId: string,
+    operationType: 'subscribe' | 'cancel',
+    now: Date,
+  ): Promise<void>;
   clearInflightOperation(memberId: string): Promise<void>;
   updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
   updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date): Promise<void>;
-  updateMemberAfterSubscribe(memberId: string, params: {
-    payjp_initial_charge_id: string | null;
-    initial_charge_paid_at: Date | null;
-    payjp_subscription_id: string;
-    payjp_plan_id: string;
-    subscription_status: 'active' | 'trial';
-    first_trial_granted_at: Date | null;
-    access_end_at: Date;
-    next_billing_at: Date;
-    role_state: 'granted';
-    last_synced_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member>;
-  updateMemberAfterCancel(memberId: string, params: {
-    cancel_requested_at: Date;
-    subscription_status: 'canceled';
-    access_end_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member>;
+  updateMemberAfterSubscribe(
+    memberId: string,
+    params: {
+      payjp_initial_charge_id: string | null;
+      initial_charge_paid_at: Date | null;
+      payjp_subscription_id: string;
+      payjp_plan_id: string;
+      subscription_status: 'active' | 'trial';
+      first_trial_granted_at: Date | null;
+      access_end_at: Date;
+      next_billing_at: Date;
+      role_state: 'granted';
+      last_synced_at: Date;
+      inflight_operation_id: null;
+      inflight_operation_type: null;
+      inflight_operation_started_at: null;
+    },
+  ): Promise<Member>;
+  updateMemberAfterCancel(
+    memberId: string,
+    params: {
+      cancel_requested_at: Date;
+      subscription_status: 'canceled';
+      access_end_at: Date;
+      inflight_operation_id: null;
+      inflight_operation_type: null;
+      inflight_operation_started_at: null;
+    },
+  ): Promise<Member>;
   acquireAdvisoryLock(key: string): Promise<boolean>;
   releaseAdvisoryLock(key: string): Promise<void>;
   withTransactionLock<T>(key: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
@@ -44,12 +55,23 @@ export interface TransactionDbClient {
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date): Promise<void>;
+  setInflightOperation(
+    memberId: string,
+    operationId: string,
+    operationType: 'subscribe' | 'cancel',
+    now: Date,
+  ): Promise<void>;
   clearInflightOperation(memberId: string): Promise<void>;
   updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
   updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date): Promise<void>;
-  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]): Promise<Member>;
-  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]): Promise<Member>;
+  updateMemberAfterSubscribe(
+    memberId: string,
+    params: Parameters<DbClient['updateMemberAfterSubscribe']>[1],
+  ): Promise<Member>;
+  updateMemberAfterCancel(
+    memberId: string,
+    params: Parameters<DbClient['updateMemberAfterCancel']>[1],
+  ): Promise<Member>;
 }
 
 // --- Row mapping helpers ---
@@ -74,9 +96,8 @@ function toMember(row: Record<string, unknown>): Member {
     next_billing_at: (row.next_billing_at as Date) ?? null,
     role_state: row.role_state as Member['role_state'],
     last_synced_at: row.last_synced_at as Date,
-    last_payjp_event_created_at: row.last_payjp_event_created_at != null
-      ? Number(row.last_payjp_event_created_at)
-      : null,
+    last_payjp_event_created_at:
+      row.last_payjp_event_created_at != null ? Number(row.last_payjp_event_created_at) : null,
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -127,10 +148,7 @@ async function queryUpsertProvisionalMember(q: Queryable, discordUserId: string,
 }
 
 async function queryFindLinkSession(q: Queryable, tokenHash: string): Promise<LinkSessionRecord | null> {
-  const result = await q.query(
-    'SELECT * FROM discord_link_sessions WHERE link_session_token_hash = $1',
-    [tokenHash],
-  );
+  const result = await q.query('SELECT * FROM discord_link_sessions WHERE link_session_token_hash = $1', [tokenHash]);
   return result.rows[0] ? toLinkSession(result.rows[0] as Record<string, unknown>) : null;
 }
 
@@ -148,7 +166,11 @@ async function queryConsumeLinkSession(q: Queryable, tokenHash: string, now: Dat
 }
 
 async function querySetInflightOperation(
-  q: Queryable, memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date,
+  q: Queryable,
+  memberId: string,
+  operationId: string,
+  operationType: 'subscribe' | 'cancel',
+  now: Date,
 ): Promise<void> {
   const result = await q.query(
     `UPDATE members
@@ -180,16 +202,21 @@ async function queryClearInflightOperation(q: Queryable, memberId: string): Prom
 }
 
 async function queryUpdateMemberCustomerId(q: Queryable, memberId: string, payjpCustomerId: string): Promise<void> {
-  const result = await q.query(
-    'UPDATE members SET payjp_customer_id = $2, updated_at = now() WHERE id = $1',
-    [memberId, payjpCustomerId],
-  );
+  const result = await q.query('UPDATE members SET payjp_customer_id = $2, updated_at = now() WHERE id = $1', [
+    memberId,
+    payjpCustomerId,
+  ]);
   if ((result.rowCount ?? 0) === 0) {
     throw new Error(`Member not found: ${memberId}`);
   }
 }
 
-async function queryUpdateMemberChargeId(q: Queryable, memberId: string, chargeId: string, paidAt: Date): Promise<void> {
+async function queryUpdateMemberChargeId(
+  q: Queryable,
+  memberId: string,
+  chargeId: string,
+  paidAt: Date,
+): Promise<void> {
   const result = await q.query(
     'UPDATE members SET payjp_initial_charge_id = $2, initial_charge_paid_at = $3, updated_at = now() WHERE id = $1',
     [memberId, chargeId, paidAt],
@@ -200,7 +227,9 @@ async function queryUpdateMemberChargeId(q: Queryable, memberId: string, chargeI
 }
 
 async function queryUpdateMemberAfterSubscribe(
-  q: Queryable, memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1],
+  q: Queryable,
+  memberId: string,
+  params: Parameters<DbClient['updateMemberAfterSubscribe']>[1],
 ): Promise<Member> {
   const result = await q.query(
     `UPDATE members SET
@@ -239,7 +268,9 @@ async function queryUpdateMemberAfterSubscribe(
 }
 
 async function queryUpdateMemberAfterCancel(
-  q: Queryable, memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1],
+  q: Queryable,
+  memberId: string,
+  params: Parameters<DbClient['updateMemberAfterCancel']>[1],
 ): Promise<Member> {
   const result = await q.query(
     `UPDATE members SET
@@ -266,16 +297,36 @@ export class PgDbClient implements DbClient {
 
   constructor(private pool: pg.Pool) {}
 
-  findMemberByDiscordUserId(discordUserId: string) { return queryFindMemberByDiscordUserId(this.pool, discordUserId); }
-  upsertProvisionalMember(discordUserId: string, email: string) { return queryUpsertProvisionalMember(this.pool, discordUserId, email); }
-  findLinkSession(tokenHash: string) { return queryFindLinkSession(this.pool, tokenHash); }
-  consumeLinkSession(tokenHash: string, now: Date) { return queryConsumeLinkSession(this.pool, tokenHash, now); }
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) { return querySetInflightOperation(this.pool, memberId, operationId, operationType, now); }
-  clearInflightOperation(memberId: string) { return queryClearInflightOperation(this.pool, memberId); }
-  updateMemberCustomerId(memberId: string, payjpCustomerId: string) { return queryUpdateMemberCustomerId(this.pool, memberId, payjpCustomerId); }
-  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date) { return queryUpdateMemberChargeId(this.pool, memberId, chargeId, paidAt); }
-  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]) { return queryUpdateMemberAfterSubscribe(this.pool, memberId, params); }
-  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) { return queryUpdateMemberAfterCancel(this.pool, memberId, params); }
+  findMemberByDiscordUserId(discordUserId: string) {
+    return queryFindMemberByDiscordUserId(this.pool, discordUserId);
+  }
+  upsertProvisionalMember(discordUserId: string, email: string) {
+    return queryUpsertProvisionalMember(this.pool, discordUserId, email);
+  }
+  findLinkSession(tokenHash: string) {
+    return queryFindLinkSession(this.pool, tokenHash);
+  }
+  consumeLinkSession(tokenHash: string, now: Date) {
+    return queryConsumeLinkSession(this.pool, tokenHash, now);
+  }
+  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
+    return querySetInflightOperation(this.pool, memberId, operationId, operationType, now);
+  }
+  clearInflightOperation(memberId: string) {
+    return queryClearInflightOperation(this.pool, memberId);
+  }
+  updateMemberCustomerId(memberId: string, payjpCustomerId: string) {
+    return queryUpdateMemberCustomerId(this.pool, memberId, payjpCustomerId);
+  }
+  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date) {
+    return queryUpdateMemberChargeId(this.pool, memberId, chargeId, paidAt);
+  }
+  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]) {
+    return queryUpdateMemberAfterSubscribe(this.pool, memberId, params);
+  }
+  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) {
+    return queryUpdateMemberAfterCancel(this.pool, memberId, params);
+  }
 
   async acquireAdvisoryLock(key: string): Promise<boolean> {
     if (this.lockClient !== null) {
@@ -328,13 +379,15 @@ export class PgDbClient implements DbClient {
       try {
         await client.query('ROLLBACK');
       } catch (rollbackErr) {
-        console.error(JSON.stringify({
-          level: 'error',
-          message: 'ROLLBACK failed after transaction error',
-          rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
-          originalError: err instanceof Error ? (err as Error).message : String(err),
-          lockKey: key,
-        }));
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            message: 'ROLLBACK failed after transaction error',
+            rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
+            originalError: err instanceof Error ? (err as Error).message : String(err),
+            lockKey: key,
+          }),
+        );
       }
       throw err;
     } finally {
@@ -359,11 +412,7 @@ export class PgDbClient implements DbClient {
   }
 
   // Atomic consume: WHERE conditions prevent TOCTOU races
-  async consumeOAuthState(
-    stateHash: string,
-    sessionHash: string,
-    now: Date,
-  ): Promise<OAuthStateRecord | null> {
+  async consumeOAuthState(stateHash: string, sessionHash: string, now: Date): Promise<OAuthStateRecord | null> {
     const result = await this.pool.query(
       `UPDATE oauth_states SET used_at = $3
        WHERE state_hash = $1
@@ -448,14 +497,16 @@ export class PgDbClient implements DbClient {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async findUnresolvedImpactLogs(memberId: string): Promise<Array<{
-    id: string;
-    member_id: string;
-    issue_code: string;
-    detail: unknown;
-    operation_id: string | null;
-    created_at: Date;
-  }>> {
+  async findUnresolvedImpactLogs(memberId: string): Promise<
+    Array<{
+      id: string;
+      member_id: string;
+      issue_code: string;
+      detail: unknown;
+      operation_id: string | null;
+      created_at: Date;
+    }>
+  > {
     const result = await this.pool.query(
       `SELECT id, member_id, issue_code, detail, operation_id, created_at
        FROM member_impact_logs
@@ -481,14 +532,34 @@ export class PgDbClient implements DbClient {
 class PgTransactionClient implements TransactionDbClient {
   constructor(private client: pg.PoolClient) {}
 
-  findMemberByDiscordUserId(discordUserId: string) { return queryFindMemberByDiscordUserId(this.client, discordUserId); }
-  upsertProvisionalMember(discordUserId: string, email: string) { return queryUpsertProvisionalMember(this.client, discordUserId, email); }
-  findLinkSession(tokenHash: string) { return queryFindLinkSession(this.client, tokenHash); }
-  consumeLinkSession(tokenHash: string, now: Date) { return queryConsumeLinkSession(this.client, tokenHash, now); }
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) { return querySetInflightOperation(this.client, memberId, operationId, operationType, now); }
-  clearInflightOperation(memberId: string) { return queryClearInflightOperation(this.client, memberId); }
-  updateMemberCustomerId(memberId: string, payjpCustomerId: string) { return queryUpdateMemberCustomerId(this.client, memberId, payjpCustomerId); }
-  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date) { return queryUpdateMemberChargeId(this.client, memberId, chargeId, paidAt); }
-  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]) { return queryUpdateMemberAfterSubscribe(this.client, memberId, params); }
-  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) { return queryUpdateMemberAfterCancel(this.client, memberId, params); }
+  findMemberByDiscordUserId(discordUserId: string) {
+    return queryFindMemberByDiscordUserId(this.client, discordUserId);
+  }
+  upsertProvisionalMember(discordUserId: string, email: string) {
+    return queryUpsertProvisionalMember(this.client, discordUserId, email);
+  }
+  findLinkSession(tokenHash: string) {
+    return queryFindLinkSession(this.client, tokenHash);
+  }
+  consumeLinkSession(tokenHash: string, now: Date) {
+    return queryConsumeLinkSession(this.client, tokenHash, now);
+  }
+  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
+    return querySetInflightOperation(this.client, memberId, operationId, operationType, now);
+  }
+  clearInflightOperation(memberId: string) {
+    return queryClearInflightOperation(this.client, memberId);
+  }
+  updateMemberCustomerId(memberId: string, payjpCustomerId: string) {
+    return queryUpdateMemberCustomerId(this.client, memberId, payjpCustomerId);
+  }
+  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date) {
+    return queryUpdateMemberChargeId(this.client, memberId, chargeId, paidAt);
+  }
+  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]) {
+    return queryUpdateMemberAfterSubscribe(this.client, memberId, params);
+  }
+  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) {
+    return queryUpdateMemberAfterCancel(this.client, memberId, params);
+  }
 }

@@ -4,27 +4,26 @@
  * PROP-AUTH-001 〜 PROP-AUTH-009, PROP-AUTH-027, PROP-AUTH-028
  * すべてのテストはスタブが "Not implemented" をスローするため FAIL する。
  */
-import { describe, it, expect } from 'vitest';
-import * as fc from 'fast-check';
 
+import type { LinkSessionRecord, OAuthStateRecord } from '@hayane/shared';
+import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 import {
+  buildCallbackRedirectUrl,
+  buildCookieAttributes,
   buildDiscordAuthorizationUrl,
-  validateOAuthStateRecord,
-  validateLinkSessionRecord,
+  getCorsHeaders,
+  getSecurityHeaders,
   isExpired,
+  isSameOrigin,
   isUsed,
   maskSensitiveLogFields,
-  buildCookieAttributes,
   serializeCookieAttributes,
-  isSameOrigin,
   validateFrontendBaseUrl,
-  buildCallbackRedirectUrl,
-  getSecurityHeaders,
-  getCorsHeaders,
+  validateLinkSessionRecord,
+  validateOAuthStateRecord,
   validateRequiredEnvVars,
 } from '../index.js';
-
-import type { OAuthStateRecord, LinkSessionRecord } from '@hayane/shared';
 
 // ---------------------------------------------------------------------------
 // ヘルパー
@@ -103,7 +102,7 @@ describe('PROP-AUTH-002: validateOAuthStateRecord fails for each condition indiv
     const result = validateOAuthStateRecord(
       BASE_OAUTH_RECORD,
       'correct-session-hash',
-      'WRONG-state-hash',    // 不一致
+      'WRONG-state-hash', // 不一致
       NOW_BEFORE_EXPIRY,
     );
     expect(result.ok).toBe(false);
@@ -112,7 +111,7 @@ describe('PROP-AUTH-002: validateOAuthStateRecord fails for each condition indiv
   it('case 2: oauth_session_hash mismatch → { ok: false }', () => {
     const result = validateOAuthStateRecord(
       BASE_OAUTH_RECORD,
-      'WRONG-session-hash',  // 不一致
+      'WRONG-session-hash', // 不一致
       'correct-state-hash',
       NOW_BEFORE_EXPIRY,
     );
@@ -211,18 +210,15 @@ describe('PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive valu
 
   it('property: arbitrary strings for sensitive keys are always masked to [REDACTED]', () => {
     fc.assert(
-      fc.property(
-        fc.string({ minLength: 1 }),
-        (sensitiveValue) => {
-          for (const key of SENSITIVE_KEYS) {
-            const entry = { [key]: sensitiveValue, other: 'safe-value' };
-            const masked = maskSensitiveLogFields(entry);
-            expect(masked[key]).toBe('[REDACTED]');
-            // 非機密フィールドはそのまま
-            expect(masked['other']).toBe('safe-value');
-          }
-        },
-      ),
+      fc.property(fc.string({ minLength: 1 }), (sensitiveValue) => {
+        for (const key of SENSITIVE_KEYS) {
+          const entry = { [key]: sensitiveValue, other: 'safe-value' };
+          const masked = maskSensitiveLogFields(entry);
+          expect(masked[key]).toBe('[REDACTED]');
+          // 非機密フィールドはそのまま
+          expect(masked.other).toBe('safe-value');
+        }
+      }),
       { numRuns: 50 },
     );
   });
@@ -241,15 +237,15 @@ describe('PROP-AUTH-005: maskSensitiveLogFields never outputs raw sensitive valu
     for (const key of SENSITIVE_KEYS) {
       expect(masked[key]).toBe('[REDACTED]');
     }
-    expect(masked['endpoint']).toBe('/v1/auth/discord/callback');
-    expect(masked['result']).toBe('success');
+    expect(masked.endpoint).toBe('/v1/auth/discord/callback');
+    expect(masked.result).toBe('success');
   });
 
   it('non-sensitive fields pass through unchanged', () => {
     const entry = { timestamp: '2099-01-01T00:00:00Z', service: 'auth-service' };
     const masked = maskSensitiveLogFields(entry);
-    expect(masked['timestamp']).toBe('2099-01-01T00:00:00Z');
-    expect(masked['service']).toBe('auth-service');
+    expect(masked.timestamp).toBe('2099-01-01T00:00:00Z');
+    expect(masked.service).toBe('auth-service');
   });
 });
 
@@ -359,7 +355,7 @@ describe('PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats', () =>
       fc.property(
         fc.webUrl().filter((u) => !u.endsWith('/')),
         (url) => {
-          const withSlash = url + '/';
+          const withSlash = `${url}/`;
           const result = validateFrontendBaseUrl(withSlash);
           expect(result.ok).toBe(false);
         },
@@ -385,11 +381,7 @@ describe('PROP-AUTH-009: validateFrontendBaseUrl rejects invalid formats', () =>
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-027: validateLinkSessionRecord fails for each condition individually', () => {
   it('case 1: token hash mismatch → { ok: false }', () => {
-    const result = validateLinkSessionRecord(
-      BASE_LINK_RECORD,
-      'WRONG-token-hash',
-      NOW_BEFORE_EXPIRY,
-    );
+    const result = validateLinkSessionRecord(BASE_LINK_RECORD, 'WRONG-token-hash', NOW_BEFORE_EXPIRY);
     expect(result.ok).toBe(false);
   });
 
@@ -398,11 +390,7 @@ describe('PROP-AUTH-027: validateLinkSessionRecord fails for each condition indi
       ...BASE_LINK_RECORD,
       expires_at: new Date('2000-01-01T00:00:00Z'),
     };
-    const result = validateLinkSessionRecord(
-      expiredRecord,
-      'correct-token-hash',
-      new Date('2000-01-01T00:01:00Z'),
-    );
+    const result = validateLinkSessionRecord(expiredRecord, 'correct-token-hash', new Date('2000-01-01T00:01:00Z'));
     expect(result.ok).toBe(false);
   });
 
@@ -411,11 +399,7 @@ describe('PROP-AUTH-027: validateLinkSessionRecord fails for each condition indi
       ...BASE_LINK_RECORD,
       used_at: new Date('2099-01-01T00:01:00Z'),
     };
-    const result = validateLinkSessionRecord(
-      usedRecord,
-      'correct-token-hash',
-      NOW_BEFORE_EXPIRY,
-    );
+    const result = validateLinkSessionRecord(usedRecord, 'correct-token-hash', NOW_BEFORE_EXPIRY);
     expect(result.ok).toBe(false);
   });
 });
@@ -486,11 +470,7 @@ describe('PROP-AUTH-031: buildCallbackRedirectUrl returns FRONTEND_BASE_URL with
   it('property: arbitrary frontendBaseUrl returns the URL unchanged (no path appended)', () => {
     fc.assert(
       fc.property(
-        fc.constantFrom(
-          'https://app.example.com',
-          'https://frontend.example.org',
-          'http://localhost:3000',
-        ),
+        fc.constantFrom('https://app.example.com', 'https://frontend.example.org', 'http://localhost:3000'),
         (baseUrl) => {
           const url = buildCallbackRedirectUrl(baseUrl);
           expect(url).toBe(baseUrl);
@@ -547,11 +527,7 @@ describe('PROP-AUTH-033: getCorsHeaders returns required CORS headers', () => {
   it('property: getCorsHeaders always echoes frontendBaseUrl as Allow-Origin', () => {
     fc.assert(
       fc.property(
-        fc.constantFrom(
-          'https://app.example.com',
-          'https://frontend.example.org',
-          'http://localhost:3000',
-        ),
+        fc.constantFrom('https://app.example.com', 'https://frontend.example.org', 'http://localhost:3000'),
         (baseUrl) => {
           const headers = getCorsHeaders(baseUrl);
           expect(headers['Access-Control-Allow-Origin']).toBe(baseUrl);
@@ -715,22 +691,22 @@ describe('PROP-AUTH-005 (mixed-case): maskSensitiveLogFields masks keys regardle
   it('masks "Cookie" (PascalCase) as sensitive field', () => {
     const entry = { Cookie: 'raw-cookie-value', path: '/api' };
     const masked = maskSensitiveLogFields(entry);
-    expect(masked['Cookie']).toBe('[REDACTED]');
-    expect(masked['path']).toBe('/api');
+    expect(masked.Cookie).toBe('[REDACTED]');
+    expect(masked.path).toBe('/api');
   });
 
   it('masks "AUTHORIZATION" (uppercase) as sensitive field', () => {
     const entry = { AUTHORIZATION: 'Bearer secret', service: 'auth' };
     const masked = maskSensitiveLogFields(entry);
-    expect(masked['AUTHORIZATION']).toBe('[REDACTED]');
-    expect(masked['service']).toBe('auth');
+    expect(masked.AUTHORIZATION).toBe('[REDACTED]');
+    expect(masked.service).toBe('auth');
   });
 
   it('masks "Set-Cookie" (title-case) as sensitive field', () => {
     const entry = { 'Set-Cookie': '__Host-link_session=abc; Secure', endpoint: '/callback' };
     const masked = maskSensitiveLogFields(entry);
     expect(masked['Set-Cookie']).toBe('[REDACTED]');
-    expect(masked['endpoint']).toBe('/callback');
+    expect(masked.endpoint).toBe('/callback');
   });
 
   it('masks all mixed-case variants simultaneously', () => {
@@ -741,9 +717,9 @@ describe('PROP-AUTH-005 (mixed-case): maskSensitiveLogFields masks keys regardle
       timestamp: '2099-01-01T00:00:00Z',
     };
     const masked = maskSensitiveLogFields(entry);
-    expect(masked['Cookie']).toBe('[REDACTED]');
-    expect(masked['AUTHORIZATION']).toBe('[REDACTED]');
+    expect(masked.Cookie).toBe('[REDACTED]');
+    expect(masked.AUTHORIZATION).toBe('[REDACTED]');
     expect(masked['Set-Cookie']).toBe('[REDACTED]');
-    expect(masked['timestamp']).toBe('2099-01-01T00:00:00Z');
+    expect(masked.timestamp).toBe('2099-01-01T00:00:00Z');
   });
 });

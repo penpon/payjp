@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{ts,json,jsonc}"
+      run: node_modules/.bin/biome check --write {staged_files} && git add {staged_files}
+    typecheck:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc -b --noEmit
+    test:
+      run: npm test

@@ -1,6 +1,6 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
-import { handleAuthRequest } from '@hayane/auth-service';
 import type { AuthRequest } from '@hayane/auth-service';
+import { handleAuthRequest } from '@hayane/auth-service';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppConfig } from '../app.js';
 
 const MANAGED_HEADERS = new Set([
@@ -10,10 +10,7 @@ const MANAGED_HEADERS = new Set([
   'access-control-allow-credentials',
 ]);
 
-export async function authRoutes(
-  app: FastifyInstance,
-  opts: { config: AppConfig },
-) {
+export async function authRoutes(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
 
   app.get('/v1/auth/discord/start', async (_request, reply) => {
@@ -29,8 +26,8 @@ export async function authRoutes(
     const authReq: AuthRequest = {
       endpoint: '/v1/auth/discord/callback',
       query: {
-        code: query['code'] ?? '',
-        state: query['state'] ?? '',
+        code: query.code ?? '',
+        state: query.state ?? '',
       },
       cookies: {
         '__Host-oauth_session': request.cookies['__Host-oauth_session'] ?? '',
@@ -41,7 +38,7 @@ export async function authRoutes(
   });
 
   app.get('/v1/auth/discord/session', async (request, reply) => {
-    const origin = request.headers['origin'];
+    const origin = request.headers.origin;
     const authReq: AuthRequest = {
       endpoint: '/v1/auth/discord/session',
       cookies: {

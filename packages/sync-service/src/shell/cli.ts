@@ -3,29 +3,35 @@
  * Manual resync CLI: --operation-id / --discord-user-id / --all
  */
 import type { LogEntry } from '@hayane/shared';
-import type { DbPool } from './types.js';
 import {
-  validateCliArgs,
-  buildCliResult,
-  determineCliExitCode,
-  formatRfc3339Utc,
-  isAccessEndExpired,
-  shouldGrantRole,
-  calculateLastEventTimestamp,
-  isInflightOperationStale,
-  canResolveInflightOperation,
   buildChargeSearchParams,
+  buildCliResult,
+  type CliResult,
+  calculateLastEventTimestamp,
+  canResolveInflightOperation,
+  determineCliExitCode,
   evaluateChargeSearchResult,
   evaluateSubscriptionSearchResult,
-  type CliResult,
+  formatRfc3339Utc,
+  isAccessEndExpired,
+  isInflightOperationStale,
   type SubscriptionCandidate,
+  shouldGrantRole,
+  validateCliArgs,
 } from '../core/index.js';
+import type { DbPool } from './types.js';
 
 export interface CliDeps {
   db: DbPool;
   getPayjpSubscription: (subscriptionId: string) => Promise<Record<string, unknown> | null>;
-  listPayjpCharges: (params: { customer: string; since: number; until: number; limit: number }, offset: number) => Promise<{ data: Array<{ id: string; metadata?: Record<string, string> }>; has_more: boolean }>;
-  listPayjpSubscriptions: (customerId: string, offset: number) => Promise<{ data: SubscriptionCandidate[]; has_more: boolean }>;
+  listPayjpCharges: (
+    params: { customer: string; since: number; until: number; limit: number },
+    offset: number,
+  ) => Promise<{ data: Array<{ id: string; metadata?: Record<string, string> }>; has_more: boolean }>;
+  listPayjpSubscriptions: (
+    customerId: string,
+    offset: number,
+  ) => Promise<{ data: SubscriptionCandidate[]; has_more: boolean }>;
   createPayjpCharge: (params: Record<string, unknown>) => Promise<{ id: string }>;
   createPayjpSubscription: (params: Record<string, unknown>) => Promise<{ id: string; status: string }>;
   cancelPayjpSubscription: (subscriptionId: string) => Promise<Record<string, unknown>>;
@@ -125,10 +131,7 @@ async function handleOperationRecovery(
   resyncStartedAt: Date,
 ): Promise<RecoveryResult> {
   // Find member by inflight_operation_id
-  const memberRes = await deps.db.query(
-    'SELECT * FROM members WHERE inflight_operation_id = $1',
-    [operationId],
-  );
+  const memberRes = await deps.db.query('SELECT * FROM members WHERE inflight_operation_id = $1', [operationId]);
   const member = memberRes.rows[0] as Record<string, unknown> | undefined;
   if (!member) return { success: false };
 
@@ -198,7 +201,7 @@ async function handleSubscribeRecovery(
     const inflightUnix = Math.floor(inflightStartedAt.getTime() / 1000);
     const searchParams = buildChargeSearchParams(customerId, inflightUnix);
 
-    let matches: Array<{ id: string }> = [];
+    const matches: Array<{ id: string }> = [];
     let offset = 0;
     let hasMoreAtLimit = false;
 
@@ -223,10 +226,10 @@ async function handleSubscribeRecovery(
       return { success: false };
     } else if (evaluation === 'existing') {
       chargeId = matches[0].id;
-      await deps.db.query(
-        'UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2',
-        [chargeId, memberId],
-      );
+      await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
+        chargeId,
+        memberId,
+      ]);
     } else {
       // proceed: create charge
       const charge = await deps.createPayjpCharge({
@@ -234,10 +237,10 @@ async function handleSubscribeRecovery(
         metadata: { discord_user_id: discordUserId, operation_id: operationId },
       });
       chargeId = charge.id;
-      await deps.db.query(
-        'UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2',
-        [chargeId, memberId],
-      );
+      await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
+        chargeId,
+        memberId,
+      ]);
     }
   }
 
@@ -257,12 +260,10 @@ async function handleSubscribeRecovery(
 
   // Step 5: Update member, sync role, clear inflight
   const payjpSub = await deps.getPayjpSubscription(subscriptionId);
-  if (payjpSub && canResolveInflightOperation(
-    payjpSub.status as string,
-    payjpSub.id as string,
-    subscriptionId,
-    customerId,
-  )) {
+  if (
+    payjpSub &&
+    canResolveInflightOperation(payjpSub.status as string, payjpSub.id as string, subscriptionId, customerId)
+  ) {
     const status = payjpSub.status as string;
     await deps.db.query(
       `UPDATE members SET
@@ -279,16 +280,18 @@ async function handleSubscribeRecovery(
     const existing = member.last_payjp_event_created_at as number | null;
     const resyncUnix = Math.floor(resyncStartedAt.getTime() / 1000);
     const newTimestamp = calculateLastEventTimestamp(existing, resyncUnix);
-    await deps.db.query(
-      'UPDATE members SET last_payjp_event_created_at = $1, updated_at = now() WHERE id = $2',
-      [newTimestamp, memberId],
-    );
+    await deps.db.query('UPDATE members SET last_payjp_event_created_at = $1, updated_at = now() WHERE id = $2', [
+      newTimestamp,
+      memberId,
+    ]);
 
     // Sync role
     const action = shouldGrantRole(status) ? 'grant' : 'revoke';
     try {
       await deps.syncRole(discordUserId, action);
-    } catch { /* logged in syncRole */ }
+    } catch {
+      /* logged in syncRole */
+    }
 
     // Resolve impact logs
     await resolveImpactLog(deps.db, memberId, 'subscribe_recovery_no_customer');
@@ -350,10 +353,10 @@ async function handleCancelRecovery(
     }
 
     subscriptionId = candidates[0].id;
-    await deps.db.query(
-      'UPDATE members SET payjp_subscription_id = $1, updated_at = now() WHERE id = $2',
-      [subscriptionId, memberId],
-    );
+    await deps.db.query('UPDATE members SET payjp_subscription_id = $1, updated_at = now() WHERE id = $2', [
+      subscriptionId,
+      memberId,
+    ]);
   }
 
   // Step 4: Cancel only if not already canceled
@@ -368,12 +371,7 @@ async function handleCancelRecovery(
   }
 
   // Step 5: Clear inflight on confirmed integrity
-  if (canResolveInflightOperation(
-    'canceled',
-    subscriptionId,
-    subscriptionId,
-    customerId,
-  )) {
+  if (canResolveInflightOperation('canceled', subscriptionId, subscriptionId, customerId)) {
     await deps.db.query(
       `UPDATE members SET
         subscription_status = 'canceled',
@@ -389,10 +387,10 @@ async function handleCancelRecovery(
     const existing = member.last_payjp_event_created_at as number | null;
     const resyncUnix = Math.floor(resyncStartedAt.getTime() / 1000);
     const newTimestamp = calculateLastEventTimestamp(existing, resyncUnix);
-    await deps.db.query(
-      'UPDATE members SET last_payjp_event_created_at = $1, updated_at = now() WHERE id = $2',
-      [newTimestamp, memberId],
-    );
+    await deps.db.query('UPDATE members SET last_payjp_event_created_at = $1, updated_at = now() WHERE id = $2', [
+      newTimestamp,
+      memberId,
+    ]);
 
     await resolveImpactLog(deps.db, memberId, 'cancel_recovery_no_customer');
     await resolveImpactLog(deps.db, memberId, 'cancel_recovery_subscription_ambiguous');
@@ -407,10 +405,7 @@ async function handleUserReconciliation(
   discordUserId: string,
   deps: CliDeps,
 ): Promise<RecoveryResult & { notFound?: boolean }> {
-  const memberRes = await deps.db.query(
-    'SELECT * FROM members WHERE discord_user_id = $1',
-    [discordUserId],
-  );
+  const memberRes = await deps.db.query('SELECT * FROM members WHERE discord_user_id = $1', [discordUserId]);
   const member = memberRes.rows[0] as Record<string, unknown> | undefined;
   if (!member) return { success: false, notFound: true };
 
@@ -436,22 +431,14 @@ async function handleAllReconciliation(
     } catch {
       failed++;
       // REQ-SYNC-030: Continue processing
-      await insertImpactLog(
-        deps.db,
-        member.id as string,
-        'resync_individual_error',
-        undefined,
-      );
+      await insertImpactLog(deps.db, member.id as string, 'resync_individual_error', undefined);
     }
   }
 
   return { processed, succeeded, failed };
 }
 
-async function reconcileMember(
-  member: Record<string, unknown>,
-  deps: CliDeps,
-): Promise<RecoveryResult> {
+async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): Promise<RecoveryResult> {
   const memberId = member.id as string;
   const discordUserId = member.discord_user_id as string;
   const subscriptionId = member.payjp_subscription_id as string | null;
@@ -467,7 +454,9 @@ async function reconcileMember(
     // Revoke role
     try {
       await deps.syncRole(discordUserId, 'revoke');
-    } catch { /* logged */ }
+    } catch {
+      /* logged */
+    }
   }
 
   // Check PAY.JP subscription state
@@ -475,23 +464,26 @@ async function reconcileMember(
     const payjpSub = await deps.getPayjpSubscription(subscriptionId);
     if (!payjpSub) {
       // 404 → deleted
-      await deps.db.query(
-        `UPDATE members SET subscription_status = 'deleted', updated_at = now() WHERE id = $1`,
-        [memberId],
-      );
+      await deps.db.query(`UPDATE members SET subscription_status = 'deleted', updated_at = now() WHERE id = $1`, [
+        memberId,
+      ]);
       try {
         await deps.syncRole(discordUserId, 'revoke');
-      } catch { /* logged */ }
+      } catch {
+        /* logged */
+      }
     } else {
       const newStatus = payjpSub.status as string;
-      await deps.db.query(
-        'UPDATE members SET subscription_status = $1, updated_at = now() WHERE id = $2',
-        [newStatus, memberId],
-      );
+      await deps.db.query('UPDATE members SET subscription_status = $1, updated_at = now() WHERE id = $2', [
+        newStatus,
+        memberId,
+      ]);
       const action = shouldGrantRole(newStatus) ? 'grant' : 'revoke';
       try {
         await deps.syncRole(discordUserId, action);
-      } catch { /* logged */ }
+      } catch {
+        /* logged */
+      }
     }
   }
 
@@ -503,12 +495,7 @@ async function reconcileMember(
 
 // --- DB helpers ---
 
-async function insertImpactLog(
-  db: DbPool,
-  memberId: string,
-  issueCode: string,
-  operationId?: string,
-): Promise<void> {
+async function insertImpactLog(db: DbPool, memberId: string, issueCode: string, operationId?: string): Promise<void> {
   await db.query(
     `INSERT INTO member_impact_logs (member_id, issue_code, operation_id)
      VALUES ($1, $2, $3)
@@ -517,11 +504,7 @@ async function insertImpactLog(
   );
 }
 
-async function resolveImpactLog(
-  db: DbPool,
-  memberId: string,
-  issueCode: string,
-): Promise<void> {
+async function resolveImpactLog(db: DbPool, memberId: string, issueCode: string): Promise<void> {
   await db.query(
     `UPDATE member_impact_logs
      SET resolved_at = now()

@@ -1,7 +1,7 @@
 /**
  * sync-service Shell Types
  */
-import type { SubscriptionStatus, Member, LogEntry, DbPool } from '@hayane/shared';
+import type { DbPool, LogEntry, SubscriptionStatus } from '@hayane/shared';
 
 export interface PayjpEventInsert {
   id: string;

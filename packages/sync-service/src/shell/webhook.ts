@@ -3,28 +3,22 @@
  */
 import { timingSafeEqual } from 'node:crypto';
 import type { LogEntry } from '@hayane/shared';
-import type {
-  WebhookHandlerDeps,
-  WebhookRequest,
-  WebhookResponse,
-  PayjpEventInsert,
-  DbPool,
-} from './types.js';
 import {
-  validateWebhookToken,
+  buildTokenMismatchLog,
   determineIgnoreReason,
-  validateRequiredFields,
+  formatRfc3339Utc,
+  isEventStale,
+  isStatusUnknown,
   isSubscriptionCreatedEvent,
   mapSubscriptionStatus,
-  isStatusUnknown,
-  isEventStale,
+  maskSensitiveLogFields,
   shouldGrantRole,
   shouldSyncRole,
-  maskSensitiveLogFields,
-  buildTokenMismatchLog,
-  formatRfc3339Utc,
+  validateRequiredFields,
+  validateWebhookToken,
   type WebhookEvent,
 } from '../core/index.js';
+import type { DbPool, PayjpEventInsert, WebhookHandlerDeps, WebhookRequest, WebhookResponse } from './types.js';
 
 // Constant-time string comparison (length-independent via padding)
 function constantTimeCompare(a: string, b: string): boolean {
@@ -37,10 +31,7 @@ function constantTimeCompare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB) && a.length === b.length;
 }
 
-export async function handleWebhook(
-  req: WebhookRequest,
-  deps: WebhookHandlerDeps,
-): Promise<WebhookResponse> {
+export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDeps): Promise<WebhookResponse> {
   const receivedToken = req.headers['x-payjp-webhook-token'] ?? '';
 
   // REQ-SYNC-001: Token verification (constant-time via timingSafeEqual)
@@ -52,13 +43,15 @@ export async function handleWebhook(
       req.remoteIp,
       'token_mismatch',
     );
-    deps.log(maskSensitiveLogFields({
-      timestamp: now,
-      service: 'sync-service',
-      endpoint: '/v1/payjp/webhook',
-      result: 'failure',
-      ...mismatchLog,
-    }) as LogEntry);
+    deps.log(
+      maskSensitiveLogFields({
+        timestamp: now,
+        service: 'sync-service',
+        endpoint: '/v1/payjp/webhook',
+        result: 'failure',
+        ...mismatchLog,
+      }) as LogEntry,
+    );
     return { status: 401, body: { error: 'Unauthorized' } };
   }
 
@@ -131,10 +124,7 @@ export async function handleWebhook(
   const discordUserIdFromMetadata = event.data?.metadata?.discord_user_id;
   if (discordUserIdFromMetadata) {
     try {
-      await deps.db.query(
-        'SELECT pg_advisory_xact_lock(hashtext($1))',
-        [discordUserIdFromMetadata],
-      );
+      await deps.db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [discordUserIdFromMetadata]);
     } catch (err) {
       return handleDbError(err, deps);
     }
@@ -143,11 +133,7 @@ export async function handleWebhook(
   // REQ-SYNC-009: Member resolution
   let member: Record<string, unknown> | null = null;
   try {
-    member = await resolveMember(
-      deps.db,
-      discordUserIdFromMetadata,
-      event.data!.id!,
-    );
+    member = await resolveMember(deps.db, discordUserIdFromMetadata, event.data!.id!);
   } catch (err) {
     if (err instanceof MemberResolutionConflictError) {
       await insertPayjpEvent(deps.db, {
@@ -279,10 +265,7 @@ class MemberResolutionConflictError extends Error {
   }
 }
 
-async function findPayjpEvent(
-  db: DbPool,
-  eventId: string,
-): Promise<Record<string, unknown> | null> {
+async function findPayjpEvent(db: DbPool, eventId: string): Promise<Record<string, unknown> | null> {
   const result = await db.query(
     'SELECT id, event_type, processing_result, received_at FROM payjp_events WHERE id = $1',
     [eventId],
@@ -321,17 +304,11 @@ async function resolveMember(
   let memberBySub: Record<string, unknown> | null = null;
 
   if (discordUserId) {
-    const res = await db.query(
-      'SELECT * FROM members WHERE discord_user_id = $1',
-      [discordUserId],
-    );
+    const res = await db.query('SELECT * FROM members WHERE discord_user_id = $1', [discordUserId]);
     memberByDiscord = (res.rows[0] as Record<string, unknown>) ?? null;
   }
 
-  const res2 = await db.query(
-    'SELECT * FROM members WHERE payjp_subscription_id = $1',
-    [subscriptionId],
-  );
+  const res2 = await db.query('SELECT * FROM members WHERE payjp_subscription_id = $1', [subscriptionId]);
   memberBySub = (res2.rows[0] as Record<string, unknown>) ?? null;
 
   if (memberByDiscord && memberBySub) {
@@ -354,11 +331,7 @@ const ALLOWED_UPDATE_COLUMNS = new Set([
   'payjp_subscription_id',
 ]);
 
-async function updateMemberFromWebhook(
-  db: DbPool,
-  memberId: string,
-  updates: Record<string, unknown>,
-): Promise<void> {
+async function updateMemberFromWebhook(db: DbPool, memberId: string, updates: Record<string, unknown>): Promise<void> {
   const setClauses: string[] = [];
   const values: unknown[] = [];
   let i = 1;
@@ -375,10 +348,7 @@ async function updateMemberFromWebhook(
   setClauses.push(`updated_at = now()`);
   values.push(memberId);
 
-  await db.query(
-    `UPDATE members SET ${setClauses.join(', ')} WHERE id = $${i}`,
-    values,
-  );
+  await db.query(`UPDATE members SET ${setClauses.join(', ')} WHERE id = $${i}`, values);
 }
 
 function handleDbError(_err: unknown, deps: WebhookHandlerDeps): WebhookResponse {

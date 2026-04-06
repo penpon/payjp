@@ -1,3 +1,1 @@
-export type EnvVarValidationResult =
-  | { ok: true }
-  | { ok: false; missingVars: string[] };
+export type EnvVarValidationResult = { ok: true } | { ok: false; missingVars: string[] };

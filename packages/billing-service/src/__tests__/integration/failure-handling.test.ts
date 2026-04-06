@@ -3,17 +3,12 @@
  *
  * PROP-BILL-051 〜 PROP-BILL-053e
  */
-import { describe, it, expect, vi } from 'vitest';
-import { handleSubscribe } from '../../shell/subscribe.js';
+
+import type { LinkSessionRecord, Member } from '@hayane/shared';
+import { describe, expect, it, vi } from 'vitest';
 import { handleCancel } from '../../shell/cancel.js';
-import type {
-  BillingDeps,
-  DbClient,
-  PayjpClient,
-  DiscordClient,
-  BillingConfig,
-} from '../../shell/types.js';
-import type { Member, LinkSessionRecord } from '@hayane/shared';
+import { handleSubscribe } from '../../shell/subscribe.js';
+import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
 const NOW = new Date('2025-04-01T10:00:00Z');
 const DISCORD_USER_ID = 'discord-user-001';
@@ -115,7 +110,9 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   };
 
   const payjp: PayjpClient = {
-    fetchToken: vi.fn().mockResolvedValue({ id: 'tok_001', used: false, three_d_secure_status: 'verified', card: { id: 'card-001' } }),
+    fetchToken: vi
+      .fn()
+      .mockResolvedValue({ id: 'tok_001', used: false, three_d_secure_status: 'verified', card: { id: 'card-001' } }),
     createCustomer: vi.fn().mockResolvedValue({ id: PAYJP_CUSTOMER_ID, metadata: {} }),
     createCharge: vi.fn().mockResolvedValue({ id: PAYJP_CHARGE_ID, amount: 1000, paid: true, metadata: {} }),
     createSubscription: vi.fn().mockResolvedValue(makePayjpSubscription()),
@@ -370,9 +367,7 @@ describe('Failure Handling — Integration', () => {
 
       // HTTP 4xx → definite failure (not uncertain) → triggers reconcile path
       const definiteError = Object.assign(new Error('definite cancel error'), { status: 400 });
-      (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(
-        definiteError,
-      );
+      (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
       // fetchSubscription が reconcile で成功する
       (deps.payjp.fetchSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: PAYJP_SUBSCRIPTION_ID,
@@ -400,13 +395,9 @@ describe('Failure Handling — Integration', () => {
 
       // HTTP 4xx → definite failure → reconcile path
       const definiteError = Object.assign(new Error('definite cancel error'), { status: 400 });
-      (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(
-        definiteError,
-      );
+      (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
       // fetchSubscription (reconcile) も失敗
-      (deps.payjp.fetchSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error('PAY.JP unreachable'),
-      );
+      (deps.payjp.fetchSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('PAY.JP unreachable'));
 
       const result = await handleCancel(makeCancelRequest(), deps);
 
