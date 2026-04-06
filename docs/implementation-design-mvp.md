@@ -116,7 +116,7 @@
 - 3Dセキュア実施に伴う個人情報取り扱いへの同意をUIで取得し、同意なしは `createToken` を開始しない。
 
 1. `Origin` / `__Host-link_session` / `planId` を検証する（`Origin` は `scheme+host+port` 正規化比較）
-2. `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
+2. `pg_advisory_lock(discord_user_id::bigint)` を取得する
 3. `members` 行が無い場合は `discord_user_id + email` で仮行を作成し、購読作成中状態を永続化する
 4. `inflight_operation_*` 残留時は `503 + 既存operationId` で即終了する（PAY.JP書き込みは行わない）
 5. 既存 `active/trial`、または `canceled && access_end_at > now` は新規作成せず既存結果を返す
@@ -133,7 +133,7 @@
 ### 5.2 退会申請（`POST /v1/subscriptions/cancel`）
 
 1. `Origin` / `__Host-link_session` を検証する（`Origin` 欠落/不一致/`null` は `403`）
-2. `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
+2. `pg_advisory_lock(discord_user_id::bigint)` を取得する
 3. `active/trial/canceled` の既存購読が無い場合は `409` を返す
 4. `inflight_operation_*` 残留時は `503 + 既存operationId` で即終了する（PAY.JP書き込みは行わない）
 5. `access_end_at` 未設定は `409` を返し、再同期後の再実行を要求する

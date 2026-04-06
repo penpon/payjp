@@ -12,6 +12,7 @@
   "dependencies": {
     "@hayane/shared": "*",
     "@hayane/auth-service": "*",
+    "@hayane/billing-service": "*",
     "fastify": "^5.8.4",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0"

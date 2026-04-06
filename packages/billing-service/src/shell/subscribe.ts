@@ -1,7 +1,7 @@
 /**
  * Subscribe Orchestration — Phase 2b (Green)
  *
- * REQ-BILL-003〜016 の 14 ステップ順序に従い実装する。
+ * 仕様書 §5.1 の 14 ステップ（REQ-BILL-003〜016）に対応する。
  * 外部 I/O はすべて BillingDeps 経由でインジェクト済み。
  */
 import {
@@ -26,12 +26,11 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
   const { db, payjp, discord, config, clock, generateOperationId } = deps;
   const now = clock();
 
-  // Step 1: Origin validation
+  // Step 1: Origin / link_session / planId validation (spec §5.1 step 1)
   if (!isSameOrigin(req.origin, config.frontendBaseUrl)) {
     return { ok: false, statusCode: 403, errorCode: 'FORBIDDEN_ORIGIN', message: 'Origin not allowed' };
   }
 
-  // Step 2: Link session validation (pre-check — not consumed yet)
   const tokenHash = linkSessionTokenHash(req.linkSessionToken);
   const linkSession = await db.findLinkSession(tokenHash);
   if (!linkSession) {
@@ -44,27 +43,24 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     return { ok: false, statusCode: 401, errorCode: 'CONSUMED_LINK_SESSION', message: 'Link session already used' };
   }
 
-  // Validate discordUserId matches session
   const discordUserId = linkSession.discord_user_id;
 
-  // Step 3: planId validation
   if (!validatePlanId(req.planId, config.allowedPlanIds)) {
     return { ok: false, statusCode: 422, errorCode: 'INVALID_PLAN_ID', message: 'planId not in allowlist' };
   }
 
-  // Step 2 (advisory lock): Acquire lock keyed by discordUserId
-  const lockKey = `subscribe:${discordUserId}`;
-  const lockAcquired = await db.acquireAdvisoryLock(lockKey);
+  // Step 2: Advisory lock (spec §5.1 step 2)
+  const lockAcquired = await db.acquireAdvisoryLock(discordUserId);
   if (!lockAcquired) {
     // Should not normally happen in a single-instance test; treat as 503
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
 
   try {
-    // Step 3: Upsert provisional member row
+    // Step 3: Upsert provisional member row (spec §5.1 step 3)
     const member = await db.upsertProvisionalMember(discordUserId, req.email);
 
-    // Step 4: Inflight operation check
+    // Step 4: Inflight operation check (spec §5.1 step 4)
     if (hasInflightOperation(member.inflight_operation_id)) {
       return {
         ok: false,
@@ -75,13 +71,13 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 5: Existing subscription check
+    // Step 5: Existing subscription check (spec §5.1 step 5)
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
       return { ok: true, data: response };
     }
 
-    // Step 6: Discord pre-check
+    // Step 6: Discord pre-check (spec §5.1 step 6)
     const discordCheck = await discord.checkMembership(config.discordGuildId, discordUserId);
     if (!discordCheck.isMember) {
       return {
@@ -100,12 +96,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 7: Persist operationId BEFORE any PAY.JP write
+    // Step 7: Persist operationId BEFORE any PAY.JP write (spec §5.1 step 7)
     const operationId = generateOperationId();
     await db.setInflightOperation(member.id, operationId, 'subscribe', now);
 
-    // Step 9: PAY.JP token 3DS verification (READ-only — no PAY.JP state change)
-    // fetchToken failure retains inflight; operator resolves via CLI
+    // Step 9 (before spec step 8): PAY.JP token 3DS verification (READ-only)
+    // Executed before link session consumption so invalid tokens don't consume session
     let payjpTokenData: Awaited<ReturnType<typeof payjp.fetchToken>>;
     try {
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
@@ -141,10 +137,10 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 8: Link session consumption (after token validation, before PAY.JP writes)
+    // Step 8: Link session consumption (spec §5.1 step 8, executed after step 9)
     await db.consumeLinkSession(tokenHash, now);
 
-    // Step 10: Customer creation or reuse
+    // Step 10-11: Customer creation or reuse (spec §5.1 step 10-11)
     const metadata = buildSubscriptionMetadata(discordUserId, operationId);
     let customerId = member.payjp_customer_id;
     if (!customerId) {
@@ -182,7 +178,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
 
-    // Step 11 (first-time only): Initial charge
+    // Step 12 (first-time only): Initial charge (spec §5.1 step 12)
     const isFirstTime = isFirstTimeUser(member.first_trial_granted_at);
     let initialChargeId: string | null = null;
     if (isFirstTime) {
@@ -230,21 +226,14 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       await db.updateMemberChargeId(member.id, initialChargeId, now);
     }
 
-    // Step 12: Subscription creation
+    // Step 13: Subscription creation (spec §5.1 step 13)
     const trialEnd = isFirstTime ? calculateTrialEnd(now) : undefined;
-    const subscriptionParams: {
-      customer: string;
-      plan: string;
-      trial_end?: number;
-      metadata: Record<string, string>;
-    } = {
+    const subscriptionParams = {
       customer: customerId,
       plan: req.planId,
       metadata,
+      ...(trialEnd !== undefined && { trial_end: Math.floor(trialEnd.getTime() / 1000) }),
     };
-    if (trialEnd !== undefined) {
-      subscriptionParams.trial_end = Math.floor(trialEnd.getTime() / 1000);
-    }
 
     let subscription: Awaited<ReturnType<typeof payjp.createSubscription>>;
     try {
@@ -285,7 +274,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
 
-    // Step 13: Member state update
+    // Step 14: Member state update + role sync (spec §5.1 step 14)
     // PAY.JP writes are complete — DB update failure retains inflight for CLI resolution
     const subscriptionStatus = determineSubscriptionStatus(isFirstTime);
     const accessEndAt = new Date(subscription.current_period_end * 1000);
@@ -318,7 +307,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 14: Role sync (retry 3x: 0s/1s/2s wait, 1s timeout each, total ≤ 6s)
+    // Role sync (retry 3x: 0s/1s/2s wait, 1s timeout each, total ≤ 6s)
     const ROLE_SYNC_DELAYS_MS = [0, 1000, 2000];
     let roleAssigned = false;
     for (let attempt = 0; attempt < ROLE_SYNC_MAX_RETRIES; attempt++) {
@@ -348,6 +337,10 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
     return { ok: true, data: buildSubscriptionResponse(updatedMember) };
   } finally {
-    await db.releaseAdvisoryLock(lockKey);
+    try {
+      await db.releaseAdvisoryLock(discordUserId);
+    } catch {
+      // Lock release failure must not mask the billing response
+    }
   }
 }

@@ -138,7 +138,7 @@
   - 同一 `discord_user_id` 並列実行で `charge/subscription` が重複
   - `active/trial` または `canceled && access_end_at > now` で新規作成される
 - Green:
-  - `pg_advisory_xact_lock(hashtext(discord_user_id))` による排他
+  - `pg_advisory_lock(discord_user_id::bigint)` による排他
   - 既存有効契約ガードで新規作成を行わず、既存結果を返却する
 - Refactor:
   - ロック取得・既存判定をbilling共通ユーティリティ化
@@ -235,7 +235,7 @@
   - JST 1か月前同日00:00境界判定（存在しない日は月末繰上げ）
   - `Origin` 欠落/不一致/`Origin: null` は `403` を返す
   - `Origin` は `scheme+host+port` 正規化比較で厳密検証
-  - `pg_advisory_xact_lock(hashtext(discord_user_id))` により並列 `cancel` を排他する
+  - `pg_advisory_lock(discord_user_id::bigint)` により並列 `cancel` を排他する
   - `active/trial/canceled` 既存購読が無い場合は `409`
   - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
   - `payjp_subscription_id` 欠落時は `GET /v1/customers/:id/subscriptions` を `limit=100`・`offset=0,100,200,...` で `has_more=false` まで走査し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == discord_user_id` が1件のみの場合に補正保存する。`offset<=900` 上限到達時に `has_more=true` の場合は一致件数に関わらず fail-close で停止する（cancel API実行禁止、`inflight_operation_*` 解除禁止）

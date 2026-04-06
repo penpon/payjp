@@ -180,7 +180,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
   - `Origin == FRONTEND_BASE_URL` を必須検証する（比較は `scheme+host+port` 正規化で実施し、`FRONTEND_BASE_URL` はオリジン形式のみ許可。不一致/欠落/`Origin: null` は `403`）
   - `__Host-link_session` Cookie を検証し、失効/不正/消費済みは `401` で拒否して再OAuthを要求する
   - `planId` が `PAYJP_PLAN_IDS` の許可リスト内であることを検証
-  - ユーザー単位の排他制御として `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
+  - ユーザー単位の排他制御として `pg_advisory_lock(discord_user_id::bigint)` を取得する
   - `members` 行が存在しない場合は `discord_user_id` と `email` で仮行を作成する（購読作成中状態の永続化に利用）
   - `members.inflight_operation_id` が存在する場合は既存契約有無に関わらず新規課金処理を開始せず `503` を返す（既存 `operationId` を返却。解除はPAY.JP状態確認後の再同期CLIのみ）
   - ロック後に `members` を参照し、既存 `active/trial`、または `canceled` かつ `access_end_at > now()` の契約がある場合は新規作成せず既存結果を返す
@@ -218,7 +218,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 処理:
   - `Origin == FRONTEND_BASE_URL` を必須検証する（比較は `scheme+host+port` 正規化で実施し、`FRONTEND_BASE_URL` はオリジン形式のみ許可。不一致/欠落/`Origin: null` は `403`）
   - `__Host-link_session` Cookie を検証し、失効/不正/消費済みは `401` で拒否して再OAuthを要求する
-  - ユーザー単位の排他制御として `pg_advisory_xact_lock(hashtext(discord_user_id))` を取得する
+  - ユーザー単位の排他制御として `pg_advisory_lock(discord_user_id::bigint)` を取得する
   - `members` を取得し、`active/trial/canceled` の既存購読が無ければ409
   - `members.inflight_operation_id` が存在する場合は新規キャンセル処理を開始せず `503` を返す（既存 `operationId` を返却）
   - `members.access_end_at` が未設定の場合は `409` を返し、再同期CLIで状態補正後に再実行する
@@ -431,7 +431,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 10. 不確定失敗（タイムアウト等）は `503 + operationId` を返し、クライアント自動再試行は禁止する。
 11. 不確定失敗に備え、PAY.JP書き込み前に `members.inflight_operation_id/type/started_at` を保存し、成功時のみクリアする。
 12. `members.inflight_operation_id` が残っている間は課金/解約APIを再実行せず `503` とし、不確定失敗で残留した `inflight_operation_*` の解除は手動再同期CLIのみで行う（日次再同期ジョブでは解除しない）。
-13. 購読作成・退会申請APIでは `pg_advisory_xact_lock(hashtext(discord_user_id))` によるユーザー単位排他を取得する。
+13. 購読作成・退会申請APIでは `pg_advisory_lock(discord_user_id::bigint)` によるユーザー単位排他を取得する。
 14. Webhookはトークン検証を必須化し、不一致は `401` を返して `payjp_events` と分離した構造化アプリログ（必須キー: `event`, `received_at`, `remote_ip`, `reason`）へ記録する。
 15. Webhookは `livemode` / `event.type` 許可リスト / `data.object=subscription` を検証する。
 16. Webhookの最小必須項目は `event.id,event.type,event.created,data.id` とし、状態反映イベントは `data.status` も必須とする。欠落・不正入力は fail-close（`members` 非更新）で `failed` 記録とする。
@@ -656,3 +656,13 @@ MVP（〜2026-04-20）では、以下は実装しない。
 3. 本文の用語は「3Dセキュア」に統一する。
 4. 月の表記は「1か月/2か月目」の形式に統一する。
 5. `*_unix` はDBの `timestamptz` をUTCとして Unix 秒（整数）へ変換した値を指す（例: `inflight_operation_started_at_unix = floor(extract(epoch from members.inflight_operation_started_at))`、`access_end_at_unix = floor(extract(epoch from members.access_end_at))`）。PAY.JP APIの `since/until/current_period_end` との比較・送信はUTCのUnix秒（整数）で行い、JSTはログ/運用表示のみに用いる。
+
+## Change Request 履歴
+
+### CR-001: advisory lock の hashtext 廃止 → Discord Snowflake ID (bigint) 直接使用
+
+- 日付: 2026-04-07
+- 起票: Issue #3「#1 レビューからの引き継ぎ事項」
+- 変更内容: `pg_advisory_lock(discord_user_id::bigint)` → `pg_try_advisory_lock(discord_user_id::bigint)` / `pg_advisory_xact_lock(discord_user_id::bigint)`
+- 理由: `hashtext` は 32bit ハッシュであり衝突リスクがある。Discord Snowflake ID は 64bit 整数（PostgreSQL signed bigint 範囲内）であるため直接使用することで衝突を排除する
+- 影響範囲: §5.1 step2、§5.2 step2、§8 item13、billing-service shell 層、shared DB アダプタ

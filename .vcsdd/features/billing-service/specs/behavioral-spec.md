@@ -34,7 +34,7 @@
 
 ### Effectful Shell (I/O, DB, network, crypto randomness)
 - `generateOperationId(): string` — UUID v4 generation
-- `acquireAdvisoryLock(db: Pool, discordUserId: string): Promise<void>` — `pg_advisory_xact_lock(hashtext(discord_user_id))`
+- `acquireAdvisoryLock(db: Pool, discordUserId: string): Promise<void>` — `pg_advisory_lock(discord_user_id::bigint)` (CR-001: hashtext廃止)
 - `findMember(db: Pool, discordUserId: string): Promise<Member | null>` — member lookup
 - `createProvisionalMember(db: Pool, discordUserId: string, email: string): Promise<Member>` — provisional row creation
 - `saveInflightOperation(db: Pool, memberId: string, operationId: string, type: 'subscribe' | 'cancel'): Promise<void>` — set `inflight_operation_*` fields
@@ -112,7 +112,7 @@
 
 ### REQ-BILL-004: User-Level Advisory Lock
 
-**EARS**: WHEN `POST /v1/subscriptions` or `POST /v1/subscriptions/cancel` begins processing a validated request THE SYSTEM SHALL acquire `pg_advisory_xact_lock(hashtext(discord_user_id))` to prevent concurrent operations on the same user.
+**EARS**: WHEN `POST /v1/subscriptions` or `POST /v1/subscriptions/cancel` begins processing a validated request THE SYSTEM SHALL acquire `pg_advisory_lock(discord_user_id::bigint)` to prevent concurrent operations on the same user. (CR-001: hashtext廃止、Snowflake ID直接使用)
 
 **Acceptance Criteria**:
 - Concurrent requests for same `discord_user_id` are serialized

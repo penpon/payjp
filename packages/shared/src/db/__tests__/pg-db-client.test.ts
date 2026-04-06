@@ -188,39 +188,43 @@ describe('PgDbClient - updateMemberAfterCancel', () => {
 });
 
 describe('PgDbClient - advisory lock', () => {
+  // Discord Snowflake IDs (bigint) used directly — no hashtext
+  const LOCK_ID_1 = '123456789012345678';
+  const LOCK_ID_2 = '987654321098765432';
+
   it('acquireAdvisoryLock returns true on first acquire', async () => {
-    const acquired = await db.acquireAdvisoryLock('test-lock-key');
+    const acquired = await db.acquireAdvisoryLock(LOCK_ID_1);
     expect(acquired).toBe(true);
-    await db.releaseAdvisoryLock('test-lock-key');
+    await db.releaseAdvisoryLock(LOCK_ID_1);
   });
 
   it('second acquire with same key on different connection returns false', async () => {
     const db1 = new PgDbClient(pool);
     const db2 = new PgDbClient(pool);
 
-    const first = await db1.acquireAdvisoryLock('contended-key');
+    const first = await db1.acquireAdvisoryLock(LOCK_ID_1);
     expect(first).toBe(true);
 
-    const second = await db2.acquireAdvisoryLock('contended-key');
+    const second = await db2.acquireAdvisoryLock(LOCK_ID_1);
     expect(second).toBe(false);
 
-    await db1.releaseAdvisoryLock('contended-key');
+    await db1.releaseAdvisoryLock(LOCK_ID_1);
   });
 
   it('lock can be reacquired after release', async () => {
-    const acquired1 = await db.acquireAdvisoryLock('reacquire-key');
+    const acquired1 = await db.acquireAdvisoryLock(LOCK_ID_1);
     expect(acquired1).toBe(true);
-    await db.releaseAdvisoryLock('reacquire-key');
+    await db.releaseAdvisoryLock(LOCK_ID_1);
 
-    const acquired2 = await db.acquireAdvisoryLock('reacquire-key');
+    const acquired2 = await db.acquireAdvisoryLock(LOCK_ID_1);
     expect(acquired2).toBe(true);
-    await db.releaseAdvisoryLock('reacquire-key');
+    await db.releaseAdvisoryLock(LOCK_ID_1);
   });
 
   it('releaseAdvisoryLock throws on key mismatch', async () => {
-    await db.acquireAdvisoryLock('key-a');
-    await expect(db.releaseAdvisoryLock('key-b')).rejects.toThrow('Lock key mismatch');
-    await db.releaseAdvisoryLock('key-a');
+    await db.acquireAdvisoryLock(LOCK_ID_1);
+    await expect(db.releaseAdvisoryLock(LOCK_ID_2)).rejects.toThrow('Lock key mismatch');
+    await db.releaseAdvisoryLock(LOCK_ID_1);
   });
 });
 
