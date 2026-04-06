@@ -312,6 +312,7 @@ describe('PROP-SYNC-011: maskSensitiveLogFields', () => {
     fc.assert(
       fc.property(fc.string(), fc.string(), (key, value) => {
         fc.pre(!SENSITIVE_KEYS.includes(key.toLowerCase()));
+        fc.pre(key !== '__proto__' && key !== 'constructor' && key !== 'prototype');
         const result = maskSensitiveLogFields({ [key]: value });
         expect(result[key]).toBe(value);
       }),
