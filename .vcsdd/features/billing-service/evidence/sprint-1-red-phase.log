@@ -1,0 +1,2400 @@
+new-feature-tests: FAIL
+regression-baseline: PASS
+regression-tests: 102 (auth-service)
+new-billing-tests: 141 (all failing)
+  tier1-pure-core: 58 tests (failing)
+  tier2-subscribe-flow: 34 tests (failing)
+  tier2-cancel-flow: 19 tests (failing)
+  tier2-failure-handling: 7 tests (failing)
+  tier2-cross-cutting: 11 tests (failing)
+  tier1-fixed-env: 3 tests (failing)
+  tier1-other-integration: 9 tests (failing)
+---
+
+
+> test:billing
+> npm -w packages/billing-service run test
+
+
+> @hayane/billing-service@0.0.1 test
+> vitest run
+
+
+ RUN  v3.2.4 /Users/nana/workspace/hayane_payjp/packages/billing-service
+
+ ❯ src/__tests__/integration/failure-handling.test.ts (7 tests | 7 failed) 17ms
+   × Failure Handling — Integration > PROP-BILL-051: Subscribe uncertain failure > 503 + operationId, inflight_operation_* retained 9ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Failure Handling — Integration > PROP-BILL-052: Definite failure before PAY.JP write > inflight_operation_* cleared on pre-write failure 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Failure Handling — Integration > PROP-BILL-053a: Failure after customer creation > re-fetch customer; reconcile success → clear inflight 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Failure Handling — Integration > PROP-BILL-053b: Failure after charge > re-fetch charge; reconcile payjp_initial_charge_id; no duplicate charge 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Failure Handling — Integration > PROP-BILL-053c: Failure after subscription creation > re-fetch subscription; reconcile → clear inflight 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Failure Handling — Integration > PROP-BILL-053d: Failure after cancel API > re-fetch subscription status; reconcile → clear inflight 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Failure Handling — Integration > PROP-BILL-053e: Reconciliation failure > PAY.JP unreachable during re-fetch → 503 + operationId, inflight retained 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+ ❯ src/__tests__/integration/cross-cutting.test.ts (11 tests | 11 failed) 24ms
+   × Cross-Cutting Concerns — Integration > PROP-BILL-054: CORS headers > present in success responses 10ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-054: CORS headers > present in error responses 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-055: Structured logging > no raw card info, cookie, authorization, token in logs 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: log capture' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-055: Structured logging > operationId present in PAY.JP write/failure logs 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: log capture' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-056: Startup env var validation > process exits non-zero when required env var is missing 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: process spawn' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-067: Fixed env var rejection > process exits non-zero when BILLING_INTERVAL_MONTHS != 1 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: process spawn' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-067: Fixed env var rejection > process exits non-zero when INITIAL_FREE_CYCLES != 2 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: process spawn' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-057: Health check > returns 200 when DB healthy 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-057: Health check > returns 503 when DB unavailable 2ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-058: Service boundary > payjp_events row count unchanged after any billing operation 2ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × Cross-Cutting Concerns — Integration > PROP-BILL-058: Service boundary > member_impact_logs row count unchanged after any billing operation 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+ ❯ src/__tests__/integration/cancel-flow.test.ts (19 tests | 19 failed) 29ms
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-059: Cancel Origin validation > rejects with 403 when Origin is absent 11ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-059: Cancel Origin validation > rejects with 403 when Origin is null 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-059: Cancel Origin validation > rejects with 403 when Origin is mismatched 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-042: No existing subscription > returns 409 for no existing subscription 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-042: No existing subscription > returns 409 for paused status 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-042: No existing subscription > returns 409 for deleted status 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-043: access_end_at required > returns 409 when access_end_at IS NULL 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-044: payjp_subscription_id required > returns 409 when payjp_subscription_id IS NULL 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-045: Cancel acceptance boundary > returns 409 when now_jst < acceptance_start 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-045: Cancel acceptance boundary > proceeds when now_jst == acceptance_start (inclusive) 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-045: Cancel acceptance boundary > proceeds when now_jst > acceptance_start 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-046: Cancel link session consumption > consumed after pre-cancel validations; re-send → 401 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-047: Cancel idempotency > cancel_requested_at already set → 200, PAY.JP cancel calls = 0 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-048: Cancel operationId persistence > operationId persisted before PAY.JP cancel call 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-049: Cancel success > PAY.JP cancel API called, cancel_requested_at set, access_end_at updated, inflight cleared, no Discord calls 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-050: Cancel response schema > matches exact schema with RFC 3339 UTC dates 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-060: Concurrent cancel > PAY.JP cancel API called at most once 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: concurrent te…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-061: Cancel inflight guard > 503 + existing operationId, link session NOT consumed 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions/cancel — Integration > PROP-BILL-063: Cancel orchestration ordering > verifies complete cancel step sequence via mock call-order recording 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: orchestration…' was thrown
+ ❯ src/__tests__/integration/subscribe-flow.test.ts (36 tests | 36 failed) 39ms
+   × POST /v1/subscriptions — Integration > PROP-BILL-020: Origin validation > rejects with 403 when Origin is absent 13ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-020: Origin validation > rejects with 403 when Origin is null 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-020: Origin validation > rejects with 403 when Origin is mismatched 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-021: Link session validation > rejects with 401 for invalid link session 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-021: Link session validation > rejects with 401 for expired link session 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-021: Link session validation > rejects with 401 for consumed link session 2ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-022: planId validation > rejects with 422 for planId not in allowlist 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-023: Concurrent subscribe > exactly one succeeds, no duplicate charge/subscription 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: concurrent te…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-024: Provisional member > creates provisional member row when none exists 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-025: Inflight operation guard > returns 503 + existing operationId; link session NOT consumed; PAY.JP calls = 0 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-026: Existing subscription guard > returns existing result for active subscription 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-026: Existing subscription guard > returns existing result for trial subscription 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-026: Existing subscription guard > returns existing result for canceled with future access_end_at 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-027: Discord non-member > rejects with 409; PAY.JP calls = 0 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-028: Discord role capability failure > rejects with 503; PAY.JP calls = 0 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=attempted 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=failed 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=error 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=unverified 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=null 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-030: operationId persistence order > operationId is persisted to DB before first PAY.JP write 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-031: Link session consumption timing > consumed after pre-validations; re-send → 401 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-032: payjp_customer_id persistence > persisted immediately after customer creation, survives subsequent failure 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-033: First-time user flow > charge executed → payjp_initial_charge_id saved → subscription with trial_end 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-034: Non-first-time user flow > no charge executed, subscription without trial_end 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-035: Re-subscriber > treated as non-first-time (first_trial_granted_at preserved) 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-036: charge/subscription metadata > contains discord_user_id and operation_id 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-037: Subscription state persistence > payjp_subscription_id, status, access_end_at, next_billing_at, payjp_plan_id updated 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-038: Subscription interval > subscription interval is month 2ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-039: Role sync retry > retries up to 3 times on Discord 429/5xx 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-040: Role sync final failure > 503 + operationId, inflight_operation_* retained 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-041: Subscribe response schema > matches exact schema with RFC 3339 UTC dates 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-062: Subscribe orchestration ordering > verifies complete 14-step sequence via mock call-order recording 1ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: orchestration…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-064: Customer reuse path > existing payjp_customer_id → no new customer creation 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-065: PAY.JP API encoding > all PAY.JP calls use form-urlencoded; no JSON POST 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+   × POST /v1/subscriptions — Integration > PROP-BILL-066: PAY.JP write no-retry > injected failure → exactly 1 call attempt, no retry 0ms
+     → expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+ ❯ src/core/__tests__/pure-core.test.ts (68 tests | 68 failed) 755ms
+   × PROP-BILL-001: validatePlanId > returns true for exact allowlist member 10ms
+     → Not implemented yet
+   × PROP-BILL-001: validatePlanId > returns false for non-allowlist planId 1ms
+     → Not implemented yet
+   × PROP-BILL-001: validatePlanId > returns false for empty string 0ms
+     → Not implemented yet
+   × PROP-BILL-001: validatePlanId > (property) only exact matches pass 10ms
+     → Property failed after 1 tests
+{ seed: 1391928355, path: "0:0", endOnFailure: true }
+Counterexample: [""]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-BILL-002: isFirstTimeUser > returns true when firstTrialGrantedAt is null 0ms
+     → Not implemented yet
+   × PROP-BILL-002: isFirstTimeUser > returns false when firstTrialGrantedAt is set 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status='active', accessEndAt=2026-05-01T00:00:00.000Z → true 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status='trial', accessEndAt=2026-05-01T00:00:00.000Z → true 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status='canceled', accessEndAt=2026-05-01T00:00:00.000Z → true 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status='canceled', accessEndAt=2026-03-01T00:00:00.000Z → false 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status='paused', accessEndAt=2026-05-01T00:00:00.000Z → false 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status='deleted', accessEndAt=null → false 0ms
+     → Not implemented yet
+   × PROP-BILL-003: hasActiveSubscription > status=null, accessEndAt=null → false 0ms
+     → Not implemented yet
+   × PROP-BILL-004: hasInflightOperation > returns true when inflightOperationId is non-null 0ms
+     → Not implemented yet
+   × PROP-BILL-004: hasInflightOperation > returns false when inflightOperationId is null 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status='verified' → true 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status='attempted' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status='failed' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status='error' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status='unverified' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status=null → false 0ms
+     → Not implemented yet
+   × PROP-BILL-005: isThreeDSecureVerified > status='' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-006: calculateCancelAcceptanceStart > standard month: 2026-05-15 → 2026-04-15 00:00:00 JST 0ms
+     → Not implemented yet
+   × PROP-BILL-006: calculateCancelAcceptanceStart > month-end rollup: 2026-03-31 → 2026-02-28 00:00:00 JST (non-leap) 0ms
+     → Not implemented yet
+   × PROP-BILL-006: calculateCancelAcceptanceStart > month-end rollup: 2026-05-31 → 2026-04-30 00:00:00 JST 0ms
+     → Not implemented yet
+   × PROP-BILL-006: calculateCancelAcceptanceStart > leap year: 2028-03-31 → 2028-02-29 00:00:00 JST 0ms
+     → Not implemented yet
+   × PROP-BILL-006: calculateCancelAcceptanceStart > Jan 31 → Dec 31 (previous year) 00:00:00 JST 0ms
+     → Not implemented yet
+   × PROP-BILL-006: calculateCancelAcceptanceStart > no rollup needed: 2026-08-30 → 2026-07-30 00:00:00 JST 0ms
+     → Not implemented yet
+   × PROP-BILL-007: isCancelAcceptable > before acceptance start → false 0ms
+     → Not implemented yet
+   × PROP-BILL-007: isCancelAcceptable > exactly at acceptance start → true (inclusive) 0ms
+     → Not implemented yet
+   × PROP-BILL-007: isCancelAcceptable > after acceptance start → true 0ms
+     → Not implemented yet
+   × PROP-BILL-008: calculateTrialEnd > returns now + 3 months 0ms
+     → Not implemented yet
+   × PROP-BILL-008: calculateTrialEnd > handles month-end edge: Jan 31 + 3 months → Apr 30 0ms
+     → Not implemented yet
+   × PROP-BILL-009: buildSubscriptionMetadata > (property) always includes both keys with exact values 2ms
+     → Property failed after 1 tests
+{ seed: 1036883147, path: "0:0:0:0:0", endOnFailure: true }
+Counterexample: ["","00000000-0000-1000-8000-000000000000"]
+Shrunk 4 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-BILL-010: buildSubscriptionResponse > produces valid response with all required keys 1ms
+     → Not implemented yet
+   × PROP-BILL-010: buildSubscriptionResponse > (property) accessEndAt is always RFC 3339 UTC 1ms
+     → Property failed after 1 tests
+{ seed: 562279795, path: "0:0", endOnFailure: true }
+Counterexample: [new Date("1970-01-01T00:00:00.000Z")]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-BILL-011: buildCancelResponse > produces valid response with all required keys 1ms
+     → Not implemented yet
+   × PROP-BILL-012: formatRfc3339Utc > produces Z-suffixed ISO string 0ms
+     → Not implemented yet
+   × PROP-BILL-012: formatRfc3339Utc > (property) always ends with Z 1ms
+     → Property failed after 1 tests
+{ seed: 832785320, path: "0:0", endOnFailure: true }
+Counterexample: [new Date("2020-01-01T00:00:00.000Z")]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-BILL-013: isSameOrigin > origin='https://app.example.com' → true 0ms
+     → Not implemented yet
+   × PROP-BILL-013: isSameOrigin > origin='http://app.example.com' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-013: isSameOrigin > origin='https://evil.example.com' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-013: isSameOrigin > origin='https://app.example.com:8443' → false 3ms
+     → Not implemented yet
+   × PROP-BILL-013: isSameOrigin > origin='null' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-013: isSameOrigin > origin='' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-014: maskSensitiveLogFields > masks all sensitive keys 0ms
+     → Not implemented yet
+   × PROP-BILL-014: maskSensitiveLogFields > (property) sensitive keys never leak raw values 1ms
+     → Property failed after 1 tests
+{ seed: 1723072283, path: "0:0", endOnFailure: true }
+Counterexample: [""]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-BILL-015: validateFrontendBaseUrl > accepts valid origin-only URL 0ms
+     → Not implemented yet
+   × PROP-BILL-015: validateFrontendBaseUrl > rejects trailing slash 0ms
+     → Not implemented yet
+   × PROP-BILL-015: validateFrontendBaseUrl > rejects path segment 0ms
+     → Not implemented yet
+   × PROP-BILL-015: validateFrontendBaseUrl > rejects empty string 0ms
+     → Not implemented yet
+   × PROP-BILL-015: validateFrontendBaseUrl > (property) strings with / after host are rejected 703ms
+     → Property failed after 1 tests
+{ seed: -752728520, path: "0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["http://a.aa"]
+Shrunk 5 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   × PROP-BILL-016: validateRequiredEnvVars > passes with all vars present 0ms
+     → Not implemented yet
+   × PROP-BILL-016: validateRequiredEnvVars > fails when PAYJP_SECRET_KEY is missing 0ms
+     → Not implemented yet
+   × PROP-BILL-016: validateRequiredEnvVars > fails when BILLING_INTERVAL_MONTHS is missing 0ms
+     → Not implemented yet
+   × PROP-BILL-067: validateFixedEnvVars > passes with correct fixed values 0ms
+     → Not implemented yet
+   × PROP-BILL-067: validateFixedEnvVars > fails when BILLING_INTERVAL_MONTHS != 1 0ms
+     → Not implemented yet
+   × PROP-BILL-067: validateFixedEnvVars > fails when INITIAL_FREE_CYCLES != 2 0ms
+     → Not implemented yet
+   × PROP-BILL-017: getCorsHeaders > returns Access-Control-Allow-Credentials: true 0ms
+     → Not implemented yet
+   × PROP-BILL-017: getCorsHeaders > returns Access-Control-Allow-Origin matching frontendBaseUrl 0ms
+     → Not implemented yet
+   × PROP-BILL-018: shouldGrantRole > status='active' → true 0ms
+     → Not implemented yet
+   × PROP-BILL-018: shouldGrantRole > status='trial' → true 0ms
+     → Not implemented yet
+   × PROP-BILL-018: shouldGrantRole > status='canceled' → true 0ms
+     → Not implemented yet
+   × PROP-BILL-018: shouldGrantRole > status='paused' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-018: shouldGrantRole > status='deleted' → false 0ms
+     → Not implemented yet
+   × PROP-BILL-018: shouldGrantRole > status=null → false 0ms
+     → Not implemented yet
+   × PROP-BILL-019: determineSubscriptionStatus > returns "trial" for first-time user 0ms
+     → Not implemented yet
+   × PROP-BILL-019: determineSubscriptionStatus > returns "active" for non-first-time user 0ms
+     → Not implemented yet
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 141 ⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-059: Cancel Origin validation > rejects with 403 when Origin is absent
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:14:83
+     12|   describe('PROP-BILL-059: Cancel Origin validation', () => {
+     13|     it('rejects with 403 when Origin is absent', () => {
+     14|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     15|     });
+     16| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-059: Cancel Origin validation > rejects with 403 when Origin is null
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:18:83
+     16| 
+     17|     it('rejects with 403 when Origin is null', () => {
+     18|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     19|     });
+     20| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-059: Cancel Origin validation > rejects with 403 when Origin is mismatched
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:22:83
+     20| 
+     21|     it('rejects with 403 when Origin is mismatched', () => {
+     22|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     23|     });
+     24|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-042: No existing subscription > returns 409 for no existing subscription
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:31:83
+     29|   describe('PROP-BILL-042: No existing subscription', () => {
+     30|     it('returns 409 for no existing subscription', () => {
+     31|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     32|     });
+     33| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-042: No existing subscription > returns 409 for paused status
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:35:83
+     33| 
+     34|     it('returns 409 for paused status', () => {
+     35|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     36|     });
+     37| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-042: No existing subscription > returns 409 for deleted status
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:39:83
+     37| 
+     38|     it('returns 409 for deleted status', () => {
+     39|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     40|     });
+     41|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-043: access_end_at required > returns 409 when access_end_at IS NULL
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:48:83
+     46|   describe('PROP-BILL-043: access_end_at required', () => {
+     47|     it('returns 409 when access_end_at IS NULL', () => {
+     48|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     49|     });
+     50|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-044: payjp_subscription_id required > returns 409 when payjp_subscription_id IS NULL
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:57:83
+     55|   describe('PROP-BILL-044: payjp_subscription_id required', () => {
+     56|     it('returns 409 when payjp_subscription_id IS NULL', () => {
+     57|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     58|     });
+     59|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-045: Cancel acceptance boundary > returns 409 when now_jst < acceptance_start
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:66:83
+     64|   describe('PROP-BILL-045: Cancel acceptance boundary', () => {
+     65|     it('returns 409 when now_jst < acceptance_start', () => {
+     66|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     67|     });
+     68| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-045: Cancel acceptance boundary > proceeds when now_jst == acceptance_start (inclusive)
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:70:83
+     68| 
+     69|     it('proceeds when now_jst == acceptance_start (inclusive)', () => {
+     70|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     71|     });
+     72| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-045: Cancel acceptance boundary > proceeds when now_jst > acceptance_start
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:74:83
+     72| 
+     73|     it('proceeds when now_jst > acceptance_start', () => {
+     74|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     75|     });
+     76|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-046: Cancel link session consumption > consumed after pre-cancel validations; re-send → 401
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:83:83
+     81|   describe('PROP-BILL-046: Cancel link session consumption', () => {
+     82|     it('consumed after pre-cancel validations; re-send → 401', () => {
+     83|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     84|     });
+     85|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-047: Cancel idempotency > cancel_requested_at already set → 200, PAY.JP cancel calls = 0
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:92:83
+     90|   describe('PROP-BILL-047: Cancel idempotency', () => {
+     91|     it('cancel_requested_at already set → 200, PAY.JP cancel calls = 0…
+     92|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     93|     });
+     94|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-048: Cancel operationId persistence > operationId persisted before PAY.JP cancel call
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:101:83
+     99|   describe('PROP-BILL-048: Cancel operationId persistence', () => {
+    100|     it('operationId persisted before PAY.JP cancel call', () => {
+    101|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    102|     });
+    103|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-049: Cancel success > PAY.JP cancel API called, cancel_requested_at set, access_end_at updated, inflight cleared, no Discord calls
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:110:83
+    108|   describe('PROP-BILL-049: Cancel success', () => {
+    109|     it('PAY.JP cancel API called, cancel_requested_at set, access_end_…
+    110|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    111|     });
+    112|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-050: Cancel response schema > matches exact schema with RFC 3339 UTC dates
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:119:83
+    117|   describe('PROP-BILL-050: Cancel response schema', () => {
+    118|     it('matches exact schema with RFC 3339 UTC dates', () => {
+    119|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    120|     });
+    121|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-060: Concurrent cancel > PAY.JP cancel API called at most once
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: concurrent te…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: concurrent test"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:128:82
+    126|   describe('PROP-BILL-060: Concurrent cancel', () => {
+    127|     it('PAY.JP cancel API called at most once', () => {
+    128|       expect(() => { throw new Error('Not implemented: concurrent test…
+       |                                                                                  ^
+    129|     });
+    130|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-061: Cancel inflight guard > 503 + existing operationId, link session NOT consumed
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:137:83
+    135|   describe('PROP-BILL-061: Cancel inflight guard', () => {
+    136|     it('503 + existing operationId, link session NOT consumed', () => {
+    137|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    138|     });
+    139|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/141]⎯
+
+ FAIL  src/__tests__/integration/cancel-flow.test.ts > POST /v1/subscriptions/cancel — Integration > PROP-BILL-063: Cancel orchestration ordering > verifies complete cancel step sequence via mock call-order recording
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: orchestration…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: orchestration test"
+
+ ❯ src/__tests__/integration/cancel-flow.test.ts:146:85
+    144|   describe('PROP-BILL-063: Cancel orchestration ordering', () => {
+    145|     it('verifies complete cancel step sequence via mock call-order rec…
+    146|       expect(() => { throw new Error('Not implemented: orchestration t…
+       |                                                                                     ^
+    147|     });
+    148|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-054: CORS headers > present in success responses
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:14:83
+     12|   describe('PROP-BILL-054: CORS headers', () => {
+     13|     it('present in success responses', () => {
+     14|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     15|     });
+     16| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-054: CORS headers > present in error responses
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:18:83
+     16| 
+     17|     it('present in error responses', () => {
+     18|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     19|     });
+     20|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-055: Structured logging > no raw card info, cookie, authorization, token in logs
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: log capture' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: log capture"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:27:78
+     25|   describe('PROP-BILL-055: Structured logging', () => {
+     26|     it('no raw card info, cookie, authorization, token in logs', () =>…
+     27|       expect(() => { throw new Error('Not implemented: log capture'); …
+       |                                                                              ^
+     28|     });
+     29| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-055: Structured logging > operationId present in PAY.JP write/failure logs
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: log capture' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: log capture"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:31:78
+     29| 
+     30|     it('operationId present in PAY.JP write/failure logs', () => {
+     31|       expect(() => { throw new Error('Not implemented: log capture'); …
+       |                                                                              ^
+     32|     });
+     33|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-056: Startup env var validation > process exits non-zero when required env var is missing
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: process spawn' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: process spawn"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:40:80
+     38|   describe('PROP-BILL-056: Startup env var validation', () => {
+     39|     it('process exits non-zero when required env var is missing', () =…
+     40|       expect(() => { throw new Error('Not implemented: process spawn')…
+       |                                                                                ^
+     41|     });
+     42|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-067: Fixed env var rejection > process exits non-zero when BILLING_INTERVAL_MONTHS != 1
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: process spawn' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: process spawn"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:49:80
+     47|   describe('PROP-BILL-067: Fixed env var rejection', () => {
+     48|     it('process exits non-zero when BILLING_INTERVAL_MONTHS != 1', () …
+     49|       expect(() => { throw new Error('Not implemented: process spawn')…
+       |                                                                                ^
+     50|     });
+     51| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-067: Fixed env var rejection > process exits non-zero when INITIAL_FREE_CYCLES != 2
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: process spawn' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: process spawn"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:53:80
+     51| 
+     52|     it('process exits non-zero when INITIAL_FREE_CYCLES != 2', () => {
+     53|       expect(() => { throw new Error('Not implemented: process spawn')…
+       |                                                                                ^
+     54|     });
+     55|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-057: Health check > returns 200 when DB healthy
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:62:83
+     60|   describe('PROP-BILL-057: Health check', () => {
+     61|     it('returns 200 when DB healthy', () => {
+     62|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     63|     });
+     64| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-057: Health check > returns 503 when DB unavailable
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:66:83
+     64| 
+     65|     it('returns 503 when DB unavailable', () => {
+     66|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     67|     });
+     68|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-058: Service boundary > payjp_events row count unchanged after any billing operation
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:75:83
+     73|   describe('PROP-BILL-058: Service boundary', () => {
+     74|     it('payjp_events row count unchanged after any billing operation',…
+     75|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     76|     });
+     77| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/141]⎯
+
+ FAIL  src/__tests__/integration/cross-cutting.test.ts > Cross-Cutting Concerns — Integration > PROP-BILL-058: Service boundary > member_impact_logs row count unchanged after any billing operation
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/cross-cutting.test.ts:79:83
+     77| 
+     78|     it('member_impact_logs row count unchanged after any billing opera…
+     79|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     80|     });
+     81|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-051: Subscribe uncertain failure > 503 + operationId, inflight_operation_* retained
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:14:83
+     12|   describe('PROP-BILL-051: Subscribe uncertain failure', () => {
+     13|     it('503 + operationId, inflight_operation_* retained', () => {
+     14|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     15|     });
+     16|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-052: Definite failure before PAY.JP write > inflight_operation_* cleared on pre-write failure
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:23:83
+     21|   describe('PROP-BILL-052: Definite failure before PAY.JP write', () =…
+     22|     it('inflight_operation_* cleared on pre-write failure', () => {
+     23|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     24|     });
+     25|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-053a: Failure after customer creation > re-fetch customer; reconcile success → clear inflight
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:32:83
+     30|   describe('PROP-BILL-053a: Failure after customer creation', () => {
+     31|     it('re-fetch customer; reconcile success → clear inflight', () => {
+     32|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     33|     });
+     34|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-053b: Failure after charge > re-fetch charge; reconcile payjp_initial_charge_id; no duplicate charge
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:41:83
+     39|   describe('PROP-BILL-053b: Failure after charge', () => {
+     40|     it('re-fetch charge; reconcile payjp_initial_charge_id; no duplica…
+     41|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     42|     });
+     43|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-053c: Failure after subscription creation > re-fetch subscription; reconcile → clear inflight
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:50:83
+     48|   describe('PROP-BILL-053c: Failure after subscription creation', () =…
+     49|     it('re-fetch subscription; reconcile → clear inflight', () => {
+     50|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     51|     });
+     52|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-053d: Failure after cancel API > re-fetch subscription status; reconcile → clear inflight
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:59:83
+     57|   describe('PROP-BILL-053d: Failure after cancel API', () => {
+     58|     it('re-fetch subscription status; reconcile → clear inflight', () …
+     59|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     60|     });
+     61|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/141]⎯
+
+ FAIL  src/__tests__/integration/failure-handling.test.ts > Failure Handling — Integration > PROP-BILL-053e: Reconciliation failure > PAY.JP unreachable during re-fetch → 503 + operationId, inflight retained
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/failure-handling.test.ts:68:83
+     66|   describe('PROP-BILL-053e: Reconciliation failure', () => {
+     67|     it('PAY.JP unreachable during re-fetch → 503 + operationId, inflig…
+     68|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     69|     });
+     70|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-020: Origin validation > rejects with 403 when Origin is absent
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:22:83
+     20|     it('rejects with 403 when Origin is absent', () => {
+     21|       // await request(app).post('/v1/subscriptions').expect(403);
+     22|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     23|     });
+     24| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-020: Origin validation > rejects with 403 when Origin is null
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:26:83
+     24| 
+     25|     it('rejects with 403 when Origin is null', () => {
+     26|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     27|     });
+     28| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-020: Origin validation > rejects with 403 when Origin is mismatched
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:30:83
+     28| 
+     29|     it('rejects with 403 when Origin is mismatched', () => {
+     30|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     31|     });
+     32|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-021: Link session validation > rejects with 401 for invalid link session
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:39:83
+     37|   describe('PROP-BILL-021: Link session validation', () => {
+     38|     it('rejects with 401 for invalid link session', () => {
+     39|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     40|     });
+     41| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-021: Link session validation > rejects with 401 for expired link session
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:43:83
+     41| 
+     42|     it('rejects with 401 for expired link session', () => {
+     43|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     44|     });
+     45| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-021: Link session validation > rejects with 401 for consumed link session
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:47:83
+     45| 
+     46|     it('rejects with 401 for consumed link session', () => {
+     47|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     48|     });
+     49|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-022: planId validation > rejects with 422 for planId not in allowlist
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:56:83
+     54|   describe('PROP-BILL-022: planId validation', () => {
+     55|     it('rejects with 422 for planId not in allowlist', () => {
+     56|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     57|     });
+     58|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-023: Concurrent subscribe > exactly one succeeds, no duplicate charge/subscription
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: concurrent te…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: concurrent test"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:65:82
+     63|   describe('PROP-BILL-023: Concurrent subscribe', () => {
+     64|     it('exactly one succeeds, no duplicate charge/subscription', () =>…
+     65|       expect(() => { throw new Error('Not implemented: concurrent test…
+       |                                                                                  ^
+     66|     });
+     67|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-024: Provisional member > creates provisional member row when none exists
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:74:83
+     72|   describe('PROP-BILL-024: Provisional member', () => {
+     73|     it('creates provisional member row when none exists', () => {
+     74|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     75|     });
+     76|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-025: Inflight operation guard > returns 503 + existing operationId; link session NOT consumed; PAY.JP calls = 0
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:83:83
+     81|   describe('PROP-BILL-025: Inflight operation guard', () => {
+     82|     it('returns 503 + existing operationId; link session NOT consumed;…
+     83|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     84|     });
+     85|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-026: Existing subscription guard > returns existing result for active subscription
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:92:83
+     90|   describe('PROP-BILL-026: Existing subscription guard', () => {
+     91|     it('returns existing result for active subscription', () => {
+     92|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     93|     });
+     94| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-026: Existing subscription guard > returns existing result for trial subscription
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:96:83
+     94| 
+     95|     it('returns existing result for trial subscription', () => {
+     96|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+     97|     });
+     98| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-026: Existing subscription guard > returns existing result for canceled with future access_end_at
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:100:83
+     98| 
+     99|     it('returns existing result for canceled with future access_end_at…
+    100|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    101|     });
+    102|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-027: Discord non-member > rejects with 409; PAY.JP calls = 0
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:109:83
+    107|   describe('PROP-BILL-027: Discord non-member', () => {
+    108|     it('rejects with 409; PAY.JP calls = 0', () => {
+    109|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    110|     });
+    111|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-028: Discord role capability failure > rejects with 503; PAY.JP calls = 0
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:115:83
+    113|   describe('PROP-BILL-028: Discord role capability failure', () => {
+    114|     it('rejects with 503; PAY.JP calls = 0', () => {
+    115|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    116|     });
+    117|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=attempted
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=failed
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=error
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=unverified
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-029: 3DS status validation > rejects with 422 for three_d_secure_status=null
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:126:85
+    124|       'rejects with 422 for three_d_secure_status=%s',
+    125|       (status) => {
+    126|         expect(() => { throw new Error('Not implemented: endpoint hand…
+       |                                                                                     ^
+    127|       },
+    128|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-030: operationId persistence order > operationId is persisted to DB before first PAY.JP write
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:136:83
+    134|   describe('PROP-BILL-030: operationId persistence order', () => {
+    135|     it('operationId is persisted to DB before first PAY.JP write', () …
+    136|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    137|     });
+    138|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-031: Link session consumption timing > consumed after pre-validations; re-send → 401
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:145:83
+    143|   describe('PROP-BILL-031: Link session consumption timing', () => {
+    144|     it('consumed after pre-validations; re-send → 401', () => {
+    145|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    146|     });
+    147|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-032: payjp_customer_id persistence > persisted immediately after customer creation, survives subsequent failure
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:154:83
+    152|   describe('PROP-BILL-032: payjp_customer_id persistence', () => {
+    153|     it('persisted immediately after customer creation, survives subseq…
+    154|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    155|     });
+    156|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[56/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-033: First-time user flow > charge executed → payjp_initial_charge_id saved → subscription with trial_end
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:163:83
+    161|   describe('PROP-BILL-033: First-time user flow', () => {
+    162|     it('charge executed → payjp_initial_charge_id saved → subscription…
+    163|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    164|     });
+    165|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[57/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-034: Non-first-time user flow > no charge executed, subscription without trial_end
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:169:83
+    167|   describe('PROP-BILL-034: Non-first-time user flow', () => {
+    168|     it('no charge executed, subscription without trial_end', () => {
+    169|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    170|     });
+    171|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[58/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-035: Re-subscriber > treated as non-first-time (first_trial_granted_at preserved)
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:175:83
+    173|   describe('PROP-BILL-035: Re-subscriber', () => {
+    174|     it('treated as non-first-time (first_trial_granted_at preserved)',…
+    175|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    176|     });
+    177|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[59/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-036: charge/subscription metadata > contains discord_user_id and operation_id
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:184:83
+    182|   describe('PROP-BILL-036: charge/subscription metadata', () => {
+    183|     it('contains discord_user_id and operation_id', () => {
+    184|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    185|     });
+    186|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[60/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-037: Subscription state persistence > payjp_subscription_id, status, access_end_at, next_billing_at, payjp_plan_id updated
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:193:83
+    191|   describe('PROP-BILL-037: Subscription state persistence', () => {
+    192|     it('payjp_subscription_id, status, access_end_at, next_billing_at,…
+    193|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    194|     });
+    195|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[61/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-038: Subscription interval > subscription interval is month
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:199:83
+    197|   describe('PROP-BILL-038: Subscription interval', () => {
+    198|     it('subscription interval is month', () => {
+    199|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    200|     });
+    201|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[62/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-039: Role sync retry > retries up to 3 times on Discord 429/5xx
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:208:83
+    206|   describe('PROP-BILL-039: Role sync retry', () => {
+    207|     it('retries up to 3 times on Discord 429/5xx', () => {
+    208|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    209|     });
+    210|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[63/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-040: Role sync final failure > 503 + operationId, inflight_operation_* retained
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:214:83
+    212|   describe('PROP-BILL-040: Role sync final failure', () => {
+    213|     it('503 + operationId, inflight_operation_* retained', () => {
+    214|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    215|     });
+    216|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[64/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-041: Subscribe response schema > matches exact schema with RFC 3339 UTC dates
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:223:83
+    221|   describe('PROP-BILL-041: Subscribe response schema', () => {
+    222|     it('matches exact schema with RFC 3339 UTC dates', () => {
+    223|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    224|     });
+    225|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[65/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-062: Subscribe orchestration ordering > verifies complete 14-step sequence via mock call-order recording
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: orchestration…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: orchestration test"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:232:85
+    230|   describe('PROP-BILL-062: Subscribe orchestration ordering', () => {
+    231|     it('verifies complete 14-step sequence via mock call-order recordi…
+    232|       expect(() => { throw new Error('Not implemented: orchestration t…
+       |                                                                                     ^
+    233|     });
+    234|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[66/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-064: Customer reuse path > existing payjp_customer_id → no new customer creation
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:241:83
+    239|   describe('PROP-BILL-064: Customer reuse path', () => {
+    240|     it('existing payjp_customer_id → no new customer creation', () => {
+    241|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    242|     });
+    243|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[67/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-065: PAY.JP API encoding > all PAY.JP calls use form-urlencoded; no JSON POST
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:250:83
+    248|   describe('PROP-BILL-065: PAY.JP API encoding', () => {
+    249|     it('all PAY.JP calls use form-urlencoded; no JSON POST', () => {
+    250|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    251|     });
+    252|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[68/141]⎯
+
+ FAIL  src/__tests__/integration/subscribe-flow.test.ts > POST /v1/subscriptions — Integration > PROP-BILL-066: PAY.JP write no-retry > injected failure → exactly 1 call attempt, no retry
+AssertionError: expected [Function] to not throw an error but 'Error: Not implemented: endpoint hand…' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"Error: Not implemented: endpoint handler"
+
+ ❯ src/__tests__/integration/subscribe-flow.test.ts:259:83
+    257|   describe('PROP-BILL-066: PAY.JP write no-retry', () => {
+    258|     it('injected failure → exactly 1 call attempt, no retry', () => {
+    259|       expect(() => { throw new Error('Not implemented: endpoint handle…
+       |                                                                                   ^
+    260|     });
+    261|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[69/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-001: validatePlanId > returns true for exact allowlist member
+Error: Not implemented yet
+ ❯ validatePlanId src/core/index.ts:24:9
+     22|   allowedPlanIds: string[],
+     23| ): boolean {
+     24|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     25| }
+     26| 
+ ❯ src/core/__tests__/pure-core.test.ts:72:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[70/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-001: validatePlanId > returns false for non-allowlist planId
+Error: Not implemented yet
+ ❯ validatePlanId src/core/index.ts:24:9
+     22|   allowedPlanIds: string[],
+     23| ): boolean {
+     24|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     25| }
+     26| 
+ ❯ src/core/__tests__/pure-core.test.ts:78:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[71/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-001: validatePlanId > returns false for empty string
+Error: Not implemented yet
+ ❯ validatePlanId src/core/index.ts:24:9
+     22|   allowedPlanIds: string[],
+     23| ): boolean {
+     24|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     25| }
+     26| 
+ ❯ src/core/__tests__/pure-core.test.ts:82:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[72/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-001: validatePlanId > (property) only exact matches pass
+Error: Property failed after 1 tests
+{ seed: 1391928355, path: "0:0", endOnFailure: true }
+Counterexample: [""]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:86:8
+     84| 
+     85|   it('(property) only exact matches pass', () => {
+     86|     fc.assert(
+       |        ^
+     87|       fc.property(fc.string(), (planId) => {
+     88|         const result = validatePlanId(planId, ALLOWED);
+
+Caused by: Error: Not implemented yet
+ ❯ validatePlanId src/core/index.ts:24:9
+ ❯ src/core/__tests__/pure-core.test.ts:88:24
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:86:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[73/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-002: isFirstTimeUser > returns true when firstTrialGrantedAt is null
+Error: Not implemented yet
+ ❯ isFirstTimeUser src/core/index.ts:31:9
+     29|   firstTrialGrantedAt: Date | null,
+     30| ): boolean {
+     31|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     32| }
+     33| 
+ ❯ src/core/__tests__/pure-core.test.ts:104:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[74/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-002: isFirstTimeUser > returns false when firstTrialGrantedAt is set
+Error: Not implemented yet
+ ❯ isFirstTimeUser src/core/index.ts:31:9
+     29|   firstTrialGrantedAt: Date | null,
+     30| ): boolean {
+     31|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     32| }
+     33| 
+ ❯ src/core/__tests__/pure-core.test.ts:108:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[75/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status='active', accessEndAt=2026-05-01T00:00:00.000Z → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status='trial', accessEndAt=2026-05-01T00:00:00.000Z → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status='canceled', accessEndAt=2026-05-01T00:00:00.000Z → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status='canceled', accessEndAt=2026-03-01T00:00:00.000Z → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status='paused', accessEndAt=2026-05-01T00:00:00.000Z → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status='deleted', accessEndAt=null → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-003: hasActiveSubscription > status=null, accessEndAt=null → false
+Error: Not implemented yet
+ ❯ hasActiveSubscription src/core/index.ts:40:9
+     38|   now: Date,
+     39| ): boolean {
+     40|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     41| }
+     42| 
+ ❯ src/core/__tests__/pure-core.test.ts:129:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[76/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-004: hasInflightOperation > returns true when inflightOperationId is non-null
+Error: Not implemented yet
+ ❯ hasInflightOperation src/core/index.ts:47:9
+     45|   inflightOperationId: string | null,
+     46| ): boolean {
+     47|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     48| }
+     49| 
+ ❯ src/core/__tests__/pure-core.test.ts:138:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[77/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-004: hasInflightOperation > returns false when inflightOperationId is null
+Error: Not implemented yet
+ ❯ hasInflightOperation src/core/index.ts:47:9
+     45|   inflightOperationId: string | null,
+     46| ): boolean {
+     47|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     48| }
+     49| 
+ ❯ src/core/__tests__/pure-core.test.ts:142:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[78/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status='verified' → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status='attempted' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status='failed' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status='error' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status='unverified' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status=null → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-005: isThreeDSecureVerified > status='' → false
+Error: Not implemented yet
+ ❯ isThreeDSecureVerified src/core/index.ts:54:9
+     52|   threeDSecureStatus: string | null,
+     53| ): boolean {
+     54|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     55| }
+     56| 
+ ❯ src/core/__tests__/pure-core.test.ts:159:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[79/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-006: calculateCancelAcceptanceStart > standard month: 2026-05-15 → 2026-04-15 00:00:00 JST
+Error: Not implemented yet
+ ❯ calculateCancelAcceptanceStart src/core/index.ts:62:9
+     60|   jstOffsetMinutes: number = 540,
+     61| ): Date {
+     62|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     63| }
+     64| 
+ ❯ src/core/__tests__/pure-core.test.ts:171:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[80/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-006: calculateCancelAcceptanceStart > month-end rollup: 2026-03-31 → 2026-02-28 00:00:00 JST (non-leap)
+Error: Not implemented yet
+ ❯ calculateCancelAcceptanceStart src/core/index.ts:62:9
+     60|   jstOffsetMinutes: number = 540,
+     61| ): Date {
+     62|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     63| }
+     64| 
+ ❯ src/core/__tests__/pure-core.test.ts:178:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[81/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-006: calculateCancelAcceptanceStart > month-end rollup: 2026-05-31 → 2026-04-30 00:00:00 JST
+Error: Not implemented yet
+ ❯ calculateCancelAcceptanceStart src/core/index.ts:62:9
+     60|   jstOffsetMinutes: number = 540,
+     61| ): Date {
+     62|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     63| }
+     64| 
+ ❯ src/core/__tests__/pure-core.test.ts:185:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[82/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-006: calculateCancelAcceptanceStart > leap year: 2028-03-31 → 2028-02-29 00:00:00 JST
+Error: Not implemented yet
+ ❯ calculateCancelAcceptanceStart src/core/index.ts:62:9
+     60|   jstOffsetMinutes: number = 540,
+     61| ): Date {
+     62|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     63| }
+     64| 
+ ❯ src/core/__tests__/pure-core.test.ts:192:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[83/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-006: calculateCancelAcceptanceStart > Jan 31 → Dec 31 (previous year) 00:00:00 JST
+Error: Not implemented yet
+ ❯ calculateCancelAcceptanceStart src/core/index.ts:62:9
+     60|   jstOffsetMinutes: number = 540,
+     61| ): Date {
+     62|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     63| }
+     64| 
+ ❯ src/core/__tests__/pure-core.test.ts:199:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[84/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-006: calculateCancelAcceptanceStart > no rollup needed: 2026-08-30 → 2026-07-30 00:00:00 JST
+Error: Not implemented yet
+ ❯ calculateCancelAcceptanceStart src/core/index.ts:62:9
+     60|   jstOffsetMinutes: number = 540,
+     61| ): Date {
+     62|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     63| }
+     64| 
+ ❯ src/core/__tests__/pure-core.test.ts:206:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[85/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-007: isCancelAcceptable > before acceptance start → false
+Error: Not implemented yet
+ ❯ isCancelAcceptable src/core/index.ts:70:9
+     68|   acceptanceStartJst: Date,
+     69| ): boolean {
+     70|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     71| }
+     72| 
+ ❯ src/core/__tests__/pure-core.test.ts:220:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[86/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-007: isCancelAcceptable > exactly at acceptance start → true (inclusive)
+Error: Not implemented yet
+ ❯ isCancelAcceptable src/core/index.ts:70:9
+     68|   acceptanceStartJst: Date,
+     69| ): boolean {
+     70|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     71| }
+     72| 
+ ❯ src/core/__tests__/pure-core.test.ts:224:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[87/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-007: isCancelAcceptable > after acceptance start → true
+Error: Not implemented yet
+ ❯ isCancelAcceptable src/core/index.ts:70:9
+     68|   acceptanceStartJst: Date,
+     69| ): boolean {
+     70|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     71| }
+     72| 
+ ❯ src/core/__tests__/pure-core.test.ts:229:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[88/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-008: calculateTrialEnd > returns now + 3 months
+Error: Not implemented yet
+ ❯ calculateTrialEnd src/core/index.ts:75:9
+     73| // PROP-BILL-008: REQ-BILL-013 — trial end calculation
+     74| export function calculateTrialEnd(now: Date): Date {
+     75|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     76| }
+     77| 
+ ❯ src/core/__tests__/pure-core.test.ts:239:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[89/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-008: calculateTrialEnd > handles month-end edge: Jan 31 + 3 months → Apr 30
+Error: Not implemented yet
+ ❯ calculateTrialEnd src/core/index.ts:75:9
+     73| // PROP-BILL-008: REQ-BILL-013 — trial end calculation
+     74| export function calculateTrialEnd(now: Date): Date {
+     75|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     76| }
+     77| 
+ ❯ src/core/__tests__/pure-core.test.ts:245:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[90/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-009: buildSubscriptionMetadata > (property) always includes both keys with exact values
+Error: Property failed after 1 tests
+{ seed: 1036883147, path: "0:0:0:0:0", endOnFailure: true }
+Counterexample: ["","00000000-0000-1000-8000-000000000000"]
+Shrunk 4 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:257:8
+    255| describe('PROP-BILL-009: buildSubscriptionMetadata', () => {
+    256|   it('(property) always includes both keys with exact values', () => {
+    257|     fc.assert(
+       |        ^
+    258|       fc.property(fc.string(), fc.uuid(), (discordUserId, operationId)…
+    259|         const meta = buildSubscriptionMetadata(discordUserId, operatio…
+
+Caused by: Error: Not implemented yet
+ ❯ buildSubscriptionMetadata src/core/index.ts:83:9
+ ❯ src/core/__tests__/pure-core.test.ts:259:22
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:257:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[91/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-010: buildSubscriptionResponse > produces valid response with all required keys
+Error: Not implemented yet
+ ❯ buildSubscriptionResponse src/core/index.ts:90:9
+     88|   member: Member,
+     89| ): SubscriptionResponse {
+     90|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     91| }
+     92| 
+ ❯ src/core/__tests__/pure-core.test.ts:278:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[92/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-010: buildSubscriptionResponse > (property) accessEndAt is always RFC 3339 UTC
+Error: Property failed after 1 tests
+{ seed: 562279795, path: "0:0", endOnFailure: true }
+Counterexample: [new Date("1970-01-01T00:00:00.000Z")]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:288:8
+    286| 
+    287|   it('(property) accessEndAt is always RFC 3339 UTC', () => {
+    288|     fc.assert(
+       |        ^
+    289|       fc.property(fc.date(), (date) => {
+    290|         const member = makeMember({ access_end_at: date });
+
+Caused by: Error: Not implemented yet
+ ❯ buildSubscriptionResponse src/core/index.ts:90:9
+ ❯ src/core/__tests__/pure-core.test.ts:291:26
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:288:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[93/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-011: buildCancelResponse > produces valid response with all required keys
+Error: Not implemented yet
+ ❯ buildCancelResponse src/core/index.ts:95:9
+     93| // PROP-BILL-011: REQ-BILL-025 — cancel response construction
+     94| export function buildCancelResponse(member: Member): CancelResponse {
+     95|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+     96| }
+     97| 
+ ❯ src/core/__tests__/pure-core.test.ts:307:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[94/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-012: formatRfc3339Utc > produces Z-suffixed ISO string
+Error: Not implemented yet
+ ❯ formatRfc3339Utc src/core/index.ts:100:9
+     98| // PROP-BILL-012: REQ-BILL-016, REQ-BILL-025 — RFC 3339 UTC formatting
+     99| export function formatRfc3339Utc(date: Date): string {
+    100|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    101| }
+    102| 
+ ❯ src/core/__tests__/pure-core.test.ts:321:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[95/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-012: formatRfc3339Utc > (property) always ends with Z
+Error: Property failed after 1 tests
+{ seed: 832785320, path: "0:0", endOnFailure: true }
+Counterexample: [new Date("2020-01-01T00:00:00.000Z")]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:325:8
+    323| 
+    324|   it('(property) always ends with Z', () => {
+    325|     fc.assert(
+       |        ^
+    326|       fc.property(
+    327|         fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-…
+
+Caused by: Error: Not implemented yet
+ ❯ formatRfc3339Utc src/core/index.ts:100:9
+ ❯ src/core/__tests__/pure-core.test.ts:329:26
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:325:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[96/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-013: isSameOrigin > origin='https://app.example.com' → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-013: isSameOrigin > origin='http://app.example.com' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-013: isSameOrigin > origin='https://evil.example.com' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-013: isSameOrigin > origin='https://app.example.com:8443' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-013: isSameOrigin > origin='null' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-013: isSameOrigin > origin='' → false
+Error: Not implemented yet
+ ❯ isSameOrigin src/core/index.ts:108:9
+    106|   allowedOrigin: string,
+    107| ): boolean {
+    108|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    109| }
+    110| 
+ ❯ src/core/__tests__/pure-core.test.ts:352:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[97/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-014: maskSensitiveLogFields > masks all sensitive keys
+Error: Not implemented yet
+ ❯ maskSensitiveLogFields src/core/index.ts:118:9
+    116|   logEntry: Record<string, unknown>,
+    117| ): Record<string, unknown> {
+    118|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    119| }
+    120| 
+ ❯ src/core/__tests__/pure-core.test.ts:370:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[98/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-014: maskSensitiveLogFields > (property) sensitive keys never leak raw values
+Error: Property failed after 1 tests
+{ seed: 1723072283, path: "0:0", endOnFailure: true }
+Counterexample: [""]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:379:8
+    377| 
+    378|   it('(property) sensitive keys never leak raw values', () => {
+    379|     fc.assert(
+       |        ^
+    380|       fc.property(fc.string(), (rawValue) => {
+    381|         for (const key of SENSITIVE_KEYS) {
+
+Caused by: Error: Not implemented yet
+ ❯ maskSensitiveLogFields src/core/index.ts:118:9
+ ❯ src/core/__tests__/pure-core.test.ts:382:26
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:379:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[99/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-015: validateFrontendBaseUrl > accepts valid origin-only URL
+Error: Not implemented yet
+ ❯ validateFrontendBaseUrl src/core/index.ts:123:9
+    121| // PROP-BILL-015: REQ-BILL-031 — FRONTEND_BASE_URL validation
+    122| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+    123|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    124| }
+    125| 
+ ❯ src/core/__tests__/pure-core.test.ts:395:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[100/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-015: validateFrontendBaseUrl > rejects trailing slash
+Error: Not implemented yet
+ ❯ validateFrontendBaseUrl src/core/index.ts:123:9
+    121| // PROP-BILL-015: REQ-BILL-031 — FRONTEND_BASE_URL validation
+    122| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+    123|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    124| }
+    125| 
+ ❯ src/core/__tests__/pure-core.test.ts:400:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[101/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-015: validateFrontendBaseUrl > rejects path segment
+Error: Not implemented yet
+ ❯ validateFrontendBaseUrl src/core/index.ts:123:9
+    121| // PROP-BILL-015: REQ-BILL-031 — FRONTEND_BASE_URL validation
+    122| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+    123|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    124| }
+    125| 
+ ❯ src/core/__tests__/pure-core.test.ts:404:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[102/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-015: validateFrontendBaseUrl > rejects empty string
+Error: Not implemented yet
+ ❯ validateFrontendBaseUrl src/core/index.ts:123:9
+    121| // PROP-BILL-015: REQ-BILL-031 — FRONTEND_BASE_URL validation
+    122| export function validateFrontendBaseUrl(raw: string): ValidationResult…
+    123|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    124| }
+    125| 
+ ❯ src/core/__tests__/pure-core.test.ts:408:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[103/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-015: validateFrontendBaseUrl > (property) strings with / after host are rejected
+Error: Property failed after 1 tests
+{ seed: -752728520, path: "0:0:0:0:0:0", endOnFailure: true }
+Counterexample: ["http://a.aa"]
+Shrunk 5 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError ../../node_modules/fast-check/lib/fast-check.js:2434:16
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/fast-check.js:2441:8
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/fast-check.js:2457:14
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2514:7
+ ❯ src/core/__tests__/pure-core.test.ts:412:8
+    410| 
+    411|   it('(property) strings with / after host are rejected', () => {
+    412|     fc.assert(
+       |        ^
+    413|       fc.property(fc.webUrl(), (url) => {
+    414|         const parsed = new URL(url);
+
+Caused by: Error: Not implemented yet
+ ❯ validateFrontendBaseUrl src/core/index.ts:123:9
+ ❯ src/core/__tests__/pure-core.test.ts:420:24
+ ❯ Property.predicate ../../node_modules/fast-check/lib/fast-check.js:1329:99
+ ❯ Property.run ../../node_modules/fast-check/lib/fast-check.js:1298:24
+ ❯ runIt ../../node_modules/fast-check/lib/fast-check.js:2477:24
+ ❯ check ../../node_modules/fast-check/lib/fast-check.js:2509:204
+ ❯ Proxy.assert ../../node_modules/fast-check/lib/fast-check.js:2512:14
+ ❯ src/core/__tests__/pure-core.test.ts:412:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[104/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-016: validateRequiredEnvVars > passes with all vars present
+Error: Not implemented yet
+ ❯ validateRequiredEnvVars src/core/index.ts:130:9
+    128|   env: Record<string, string | undefined>,
+    129| ): import('./env.js').EnvVarValidationResult {
+    130|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    131| }
+    132| 
+ ❯ src/core/__tests__/pure-core.test.ts:445:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[105/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-016: validateRequiredEnvVars > fails when PAYJP_SECRET_KEY is missing
+Error: Not implemented yet
+ ❯ validateRequiredEnvVars src/core/index.ts:130:9
+    128|   env: Record<string, string | undefined>,
+    129| ): import('./env.js').EnvVarValidationResult {
+    130|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    131| }
+    132| 
+ ❯ src/core/__tests__/pure-core.test.ts:450:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[106/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-016: validateRequiredEnvVars > fails when BILLING_INTERVAL_MONTHS is missing
+Error: Not implemented yet
+ ❯ validateRequiredEnvVars src/core/index.ts:130:9
+    128|   env: Record<string, string | undefined>,
+    129| ): import('./env.js').EnvVarValidationResult {
+    130|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    131| }
+    132| 
+ ❯ src/core/__tests__/pure-core.test.ts:456:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[107/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-067: validateFixedEnvVars > passes with correct fixed values
+Error: Not implemented yet
+ ❯ validateFixedEnvVars src/core/index.ts:137:9
+    135|   env: Record<string, string | undefined>,
+    136| ): FixedEnvVarValidationResult {
+    137|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    138| }
+    139| 
+ ❯ src/core/__tests__/pure-core.test.ts:471:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[108/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-067: validateFixedEnvVars > fails when BILLING_INTERVAL_MONTHS != 1
+Error: Not implemented yet
+ ❯ validateFixedEnvVars src/core/index.ts:137:9
+    135|   env: Record<string, string | undefined>,
+    136| ): FixedEnvVarValidationResult {
+    137|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    138| }
+    139| 
+ ❯ src/core/__tests__/pure-core.test.ts:480:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[109/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-067: validateFixedEnvVars > fails when INITIAL_FREE_CYCLES != 2
+Error: Not implemented yet
+ ❯ validateFixedEnvVars src/core/index.ts:137:9
+    135|   env: Record<string, string | undefined>,
+    136| ): FixedEnvVarValidationResult {
+    137|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    138| }
+    139| 
+ ❯ src/core/__tests__/pure-core.test.ts:490:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[110/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-017: getCorsHeaders > returns Access-Control-Allow-Credentials: true
+Error: Not implemented yet
+ ❯ getCorsHeaders src/core/index.ts:144:9
+    142|   frontendBaseUrl: string,
+    143| ): Record<string, string> {
+    144|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    145| }
+    146| 
+ ❯ src/core/__tests__/pure-core.test.ts:500:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[111/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-017: getCorsHeaders > returns Access-Control-Allow-Origin matching frontendBaseUrl
+Error: Not implemented yet
+ ❯ getCorsHeaders src/core/index.ts:144:9
+    142|   frontendBaseUrl: string,
+    143| ): Record<string, string> {
+    144|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    145| }
+    146| 
+ ❯ src/core/__tests__/pure-core.test.ts:505:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[112/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-018: shouldGrantRole > status='active' → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-018: shouldGrantRole > status='trial' → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-018: shouldGrantRole > status='canceled' → true
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-018: shouldGrantRole > status='paused' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-018: shouldGrantRole > status='deleted' → false
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-018: shouldGrantRole > status=null → false
+Error: Not implemented yet
+ ❯ shouldGrantRole src/core/index.ts:156:9
+    154| // PROP-BILL-018: REQ-BILL-015 — role grant decision
+    155| export function shouldGrantRole(status: string | null): boolean {
+    156|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    157| }
+    158| 
+ ❯ src/core/__tests__/pure-core.test.ts:522:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[113/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-019: determineSubscriptionStatus > returns "trial" for first-time user
+Error: Not implemented yet
+ ❯ determineSubscriptionStatus src/core/index.ts:163:9
+    161|   isFirstTime: boolean,
+    162| ): 'trial' | 'active' {
+    163|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    164| }
+    165| 
+ ❯ src/core/__tests__/pure-core.test.ts:531:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[114/141]⎯
+
+ FAIL  src/core/__tests__/pure-core.test.ts > PROP-BILL-019: determineSubscriptionStatus > returns "active" for non-first-time user
+Error: Not implemented yet
+ ❯ determineSubscriptionStatus src/core/index.ts:163:9
+    161|   isFirstTime: boolean,
+    162| ): 'trial' | 'active' {
+    163|   throw new Error(NOT_IMPLEMENTED);
+       |         ^
+    164| }
+    165| 
+ ❯ src/core/__tests__/pure-core.test.ts:535:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[115/141]⎯
+
+
+ Test Files  5 failed (5)
+      Tests  141 failed (141)
+   Start at  12:24:26
+   Duration  1.50s (transform 280ms, setup 0ms, collect 463ms, tests 864ms, environment 2ms, prepare 896ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nana/workspace/hayane_payjp/packages/billing-service
+npm error workspace @hayane/billing-service@0.0.1
+npm error location /Users/nana/workspace/hayane_payjp/packages/billing-service
+npm error command failed
+npm error command sh -c vitest run

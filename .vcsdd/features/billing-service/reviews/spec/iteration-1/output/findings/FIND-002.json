@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "HIGH",
+  "description": "REQ-BILL-031 lists 7 required environment variables for startup validation: FRONTEND_BASE_URL, DATABASE_URL, PAYJP_SECRET_KEY, PAYJP_PLAN_IDS, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_PAID_ROLE_ID. However, 2weeks-spec.md section 9 (lines 455-457) defines three additional fixed-value environment variables that must be validated at startup: BILLING_INTERVAL_MONTHS (fixed: 1), INITIAL_FREE_CYCLES (fixed: 2), CANCEL_NOTICE_CYCLES (fixed: 1). The spec states 'MVPでは固定値以外を許可しない（起動時に不一致ならエラー終了）'. These are missing from the behavioral spec entirely. Additionally, PAYJP_LIVEMODE (line 458) is needed by billing-service if it participates in any livemode-aware logic.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "461-468",
+    "snippet": "WHEN billing-service starts THE SYSTEM SHALL validate that FRONTEND_BASE_URL, DATABASE_URL, PAYJP_SECRET_KEY, PAYJP_PLAN_IDS, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_PAID_ROLE_ID are all present"
+  },
+  "sourceReference": {
+    "filePath": "docs/2weeks-spec.md",
+    "lineRange": "450-458",
+    "snippet": "4-6 は将来拡張との互換のために定義するが、MVPでは固定値以外を許可しない（起動時に不一致ならエラー終了）\n4. BILLING_INTERVAL_MONTHS（固定: 1）\n5. INITIAL_FREE_CYCLES（固定: 2）\n6. CANCEL_NOTICE_CYCLES（固定: 1）"
+  },
+  "remediation": "Add BILLING_INTERVAL_MONTHS, INITIAL_FREE_CYCLES, and CANCEL_NOTICE_CYCLES to REQ-BILL-031 with the constraint that they must equal their fixed values (1, 2, 1 respectively) or the process must exit non-zero. Also evaluate whether PAYJP_LIVEMODE is needed by billing-service and add if so. Update the pure core function validateRequiredEnvVars and PROP-BILL-016 accordingly.",
+  "routeToPhase": "1a"
+}

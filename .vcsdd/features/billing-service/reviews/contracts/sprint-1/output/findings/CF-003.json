@@ -1,0 +1,13 @@
+{
+  "id": "CF-003",
+  "severity": "HIGH",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "description": "PROP-BILL-057 (health check) test in cross-cutting.test.ts (lines 147-172) defines a local function buildHealthResponse() inside the test and asserts against it. This is a tautological test -- it tests a function written inside the test itself, not any production code. There is no actual health check endpoint implementation in the billing-service source files, and the test proves nothing about real system behavior. Similarly, PROP-BILL-058 (service boundary) tests at lines 177-218 hardcode a string array of method names and check that none contain 'payjp_event' or 'impact_log' -- this is a static string check, not a verification of actual runtime behavior.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts",
+    "lineRange": "147-172",
+    "snippet": "function buildHealthResponse(dbHealthy: boolean): { status: string; httpCode: number } {\n  return dbHealthy\n    ? { status: 'ok', httpCode: 200 }\n    : { status: 'degraded', httpCode: 503 };\n}\n\nconst response = buildHealthResponse(true);\nexpect(response.httpCode).toBe(200);"
+  },
+  "remediation": "The contract must flag that PROP-BILL-057 and PROP-BILL-058 require actual integration tests against production code, not tautological assertions. Either (a) defer these to Tier 3 manual verification with explicit contract criteria, or (b) require real health check endpoint implementation and real DB-backed service boundary tests."
+}

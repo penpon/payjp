@@ -1,0 +1,13 @@
+{
+  "id": "CF-008",
+  "severity": "MEDIUM",
+  "dimension": "implementation_correctness",
+  "category": "requirement_mismatch",
+  "description": "REQ-BILL-015 specifies Discord role sync retry with exact timing: 'max 3 attempts: 0s/1s/2s wait, 1s timeout each, total <= 6s'. The implementation in shell/subscribe.ts (lines 246-254) retries 3 times but has no wait between retries and no per-attempt timeout. The retry loop is a bare catch-and-retry with no delay. The contract dimension 2 ('Test Quality') mentions 'Tier 2: mock DI with call-count assertions' but does not require verifying retry timing. The test PROP-BILL-039 (subscribe-flow.test.ts lines 668-681) only verifies that 3 attempts were made and the third succeeded, but does not verify delay intervals or timeout behavior.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/subscribe.ts",
+    "lineRange": "244-254",
+    "snippet": "// Step 14: Role sync (retry 3x)\nlet roleAssigned = false;\nfor (let attempt = 0; attempt < ROLE_SYNC_MAX_RETRIES; attempt++) {\n  try {\n    await discord.assignRole(config.discordGuildId, discordUserId, config.discordPaidRoleId);\n    roleAssigned = true;\n    break;\n  } catch {\n    // retry\n  }\n}"
+  },
+  "remediation": "The contract should include a criterion that verifies retry delay timing (0s/1s/2s) and per-attempt timeout (1s). The implementation needs to add delays between retries and per-call timeouts. The test should inject a clock or timer mock to verify delay intervals. Without this, the implementation does not conform to REQ-BILL-015's explicit timing requirements."
+}

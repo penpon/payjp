@@ -1,0 +1,16 @@
+{
+  "findingId": "FIND-107",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "LOW",
+  "previousFinding": null,
+  "resolutionStatus": "NEW",
+  "description": "2weeks-spec.md section 9 lists PAYJP_PUBLIC_KEY (line 452) as an environment variable. While this is primarily used by the frontend for PAY.JP.js, the behavioral spec REQ-BILL-031 required env vars list (line 489) does not include it. This is acceptable if billing-service genuinely does not need PAYJP_PUBLIC_KEY (it uses PAYJP_SECRET_KEY for server-side API calls). Similarly, PAYJP_LIVEMODE (line 458), PAYJP_WEBHOOK_TOKEN (line 459), DISCORD_CLIENT_ID (line 463), DISCORD_CLIENT_SECRET (line 464), DISCORD_REDIRECT_URI (line 465), OAUTH_COOKIE_SECRET (line 466), and DAILY_RESYNC_CRON (line 469) are omitted from billing-service env vars. These are correctly scoped to auth-service or sync-service. However, PAYJP_LIVEMODE could be relevant if billing-service needs to validate livemode consistency when calling PAY.JP APIs. The current spec assumes billing-service does not perform livemode validation, which is acceptable for MVP since Webhook livemode validation is sync-service's responsibility.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "488-491",
+    "snippet": "Required Env Vars: FRONTEND_BASE_URL, DATABASE_URL, PAYJP_SECRET_KEY, PAYJP_PLAN_IDS, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_PAID_ROLE_ID, BILLING_INTERVAL_MONTHS, INITIAL_FREE_CYCLES, CANCEL_NOTICE_CYCLES"
+  },
+  "remediation": "Informational only. The env var scoping to billing-service is defensible. Consider documenting explicitly that PAYJP_LIVEMODE is not required by billing-service (sync-service only).",
+  "routeToPhase": "none"
+}

@@ -1,0 +1,114 @@
+{
+  "reviewer": "adversary",
+  "reviewType": "contract",
+  "feature": "billing-service",
+  "sprintNumber": 1,
+  "timestamp": "2026-04-06T12:00:00Z",
+  "iteration": 1,
+  "reviewContext": {
+    "reviewType": "contract",
+    "contractPath": "contracts/sprint-1.md",
+    "contractDigest": "c3bfe76f23dc5127b9ab7d391a416ced7dd4308e81c25cd6a0565eabf55cba9a",
+    "iteration": 1
+  },
+  "dimensions": [
+    {
+      "name": "spec_fidelity",
+      "verdict": "FAIL",
+      "findings": ["CF-002", "CF-004"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/types.ts:12-18",
+          "description": "PayjpToken interface lacks 'used' field required by REQ-BILL-009"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/types.ts:89-102",
+          "description": "updateMemberAfterSubscribe parameter type missing initial_charge_paid_at per REQ-BILL-013"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:43-49",
+          "description": "Contract dimension 1 prose does not surface token-used or initial_charge_paid_at gaps"
+        }
+      ]
+    },
+    {
+      "name": "edge_case_coverage",
+      "verdict": "FAIL",
+      "findings": ["CF-003", "CF-005", "CF-009"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts:147-218",
+          "description": "PROP-BILL-057 and PROP-BILL-058 tests are tautological -- test local functions or hardcoded string arrays instead of production code"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts:811-823",
+          "description": "PROP-BILL-065 test verifies mock calls were made but not encoding format"
+        }
+      ]
+    },
+    {
+      "name": "implementation_correctness",
+      "verdict": "FAIL",
+      "findings": ["CF-007", "CF-008"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/subscribe.ts:244-254",
+          "description": "Role sync retry has no delay or timeout per REQ-BILL-015 timing requirements"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/cancel.ts:76-86",
+          "description": "Link session validation deferred to Step 8 in cancel flow"
+        }
+      ]
+    },
+    {
+      "name": "structural_integrity",
+      "verdict": "FAIL",
+      "findings": ["CF-001", "CF-010"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:42-73",
+          "description": "No CRIT-XXX criteria identifiers. Numeric scoring (6/10 per dim, 7.0/10 weighted) contradicts VCSDD strict binary mode"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:68",
+          "description": "Misleading reference to 'shared errors.ts' when actual location is shell/errors.ts"
+        }
+      ]
+    },
+    {
+      "name": "verification_readiness",
+      "verdict": "FAIL",
+      "findings": ["CF-006"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/index.ts:4,252-254",
+          "description": "linkSessionTokenHash imports from node:crypto, violating pure core no-I/O claim without documented exception"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:56",
+          "description": "Contract claims '19 pure functions in core/ -- no I/O' but core imports node:crypto"
+        }
+      ]
+    }
+  ],
+  "overallVerdict": "FAIL",
+  "convergenceSignals": {
+    "findingCount": 10,
+    "allCriteriaEvaluated": false,
+    "evaluatedCriteria": [],
+    "duplicateFindings": []
+  },
+  "summary": "Contract FAIL across all 5 dimensions. Critical structural deficiency: no CRIT-XXX identifiers and numeric scoring instead of binary PASS/FAIL (CF-001). Spec fidelity gap: REQ-BILL-009 token-used check entirely missing from interface, implementation, and tests (CF-002); REQ-BILL-013 initial_charge_paid_at not persisted (CF-004). Edge case gaps: tautological tests for health check and service boundary (CF-003); PAY.JP encoding test verifies nothing about encoding (CF-005); multiple untested edge cases from spec (CF-009). Implementation correctness: role sync retry lacks required timing delays and per-attempt timeouts per REQ-BILL-015 (CF-008); cancel flow link session validation occurs after 6 DB operations (CF-007). Verification readiness: pure core imports node:crypto without documented exception (CF-006)."
+}

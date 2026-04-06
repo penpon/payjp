@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-012",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "MEDIUM",
+  "description": "The behavioral spec REQ-BILL-029 covers CORS headers for billing responses (Allow-Credentials + Allow-Origin) and mentions OPTIONS preflight. However, no REQ specifies WHICH HTTP methods, headers, and max-age should be returned in the preflight response. The OPTIONS preflight for POST /v1/subscriptions must at minimum allow Content-Type header and POST method. Without explicit preflight response requirements, an implementer may return incomplete preflight headers causing browser CORS failures. Additionally, there is no REQ specifying Access-Control-Allow-Headers or Access-Control-Allow-Methods for the preflight response.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "426-434",
+    "snippet": "Responses to OPTIONS preflight also include correct CORS headers"
+  },
+  "sourceReference": {
+    "filePath": "docs/2weeks-spec.md",
+    "lineRange": "87",
+    "snippet": "Cookie連携API（session/subscriptions/cancel）は FRONTEND_BASE_URL のみを許可Originに固定し、Access-Control-Allow-Credentials: true を必須とする"
+  },
+  "remediation": "Expand REQ-BILL-029 to specify the complete CORS preflight response: Access-Control-Allow-Methods (POST), Access-Control-Allow-Headers (Content-Type, Cookie or similar), Access-Control-Allow-Credentials (true), Access-Control-Allow-Origin (FRONTEND_BASE_URL). Add acceptance criteria for the OPTIONS preflight path explicitly.",
+  "routeToPhase": "1a"
+}

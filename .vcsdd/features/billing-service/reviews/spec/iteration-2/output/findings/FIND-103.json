@@ -1,0 +1,16 @@
+{
+  "findingId": "FIND-103",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "MEDIUM",
+  "previousFinding": "FIND-013",
+  "resolutionStatus": "UNRESOLVED",
+  "description": "FIND-013 suggested that calculateCancelAcceptanceStart should use property-based testing (fast-check) in addition to the case table, since date arithmetic with month-end rollup is complex. The verification architecture (line 76) still lists 'Vitest unit tests (boundary cases: 3/31->2/28, 5/31->4/30, leap year)' without adding a property-based test. This was a LOW finding in iteration-1 and was not listed in the fixesSummary. The case table approach remains adequate for a spec review, but the recommendation stands for implementation phase.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "76",
+    "snippet": "PROP-BILL-006 | calculateCancelAcceptanceStart correctly computes JST 1-month-before with month-end rollup | REQ-BILL-020 | true | Vitest unit tests (boundary cases: 3/31->2/28, 5/31->4/30, leap year)"
+  },
+  "remediation": "Consider adding a fast-check property test for calculateCancelAcceptanceStart during implementation. Not blocking for spec gate.",
+  "routeToPhase": "2a"
+}

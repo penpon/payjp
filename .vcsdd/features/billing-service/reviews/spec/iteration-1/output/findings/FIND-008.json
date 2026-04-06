@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-008",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "LOW",
+  "description": "2weeks-spec.md section 6.2 item 1 specifies GET /health as simply returning 200. But REQ-BILL-032 in the behavioral spec adds a PostgreSQL health check requirement (200 when DB healthy, 503 when unavailable). While this is a reasonable enhancement, it also contradicts the source spec. The implementation-design-mvp.md section 3.1 lists GET /health output as '200' with error '503（依存障害時）', which confirms the dependency check. However, the behavioral spec should note this interpretation explicitly since the 2weeks-spec main text is ambiguous.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "472-480",
+    "snippet": "WHEN GET /health is received THE SYSTEM SHALL respond 200 if all dependencies (PostgreSQL) are reachable, and 503 if any dependency is unavailable"
+  },
+  "sourceReference": {
+    "filePath": "docs/implementation-design-mvp.md",
+    "lineRange": "76",
+    "snippet": "GET /health | なし | 200 | 503（依存障害時）"
+  },
+  "remediation": "No change required since implementation-design-mvp.md confirms the dependency check behavior. This is informational only.",
+  "routeToPhase": "none"
+}

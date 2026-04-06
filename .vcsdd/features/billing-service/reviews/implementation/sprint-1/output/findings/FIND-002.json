@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "critical",
+  "description": "PROP-BILL-057 health check test (cross-cutting.test.ts lines 147-171) defines a local function buildHealthResponse() INSIDE the test body and tests that local function. This is a tautological test -- it does not test any actual billing-service implementation code. No health check endpoint (GET /health) exists in the source code (core/index.ts, shell/subscribe.ts, shell/cancel.ts, shell/types.ts, shell/errors.ts). REQ-BILL-032 requires a health check endpoint returning 200/503 based on DB status. This requirement is entirely unimplemented.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts",
+    "lineRange": "147-171",
+    "snippet": "it('returns 200 when DB healthy', () => {\n      function buildHealthResponse(dbHealthy: boolean): { status: string; httpCode: number } {\n        return dbHealthy\n          ? { status: 'ok', httpCode: 200 }\n          : { status: 'degraded', httpCode: 503 };\n      }\n      const response = buildHealthResponse(true);\n      expect(response.httpCode).toBe(200);"
+  },
+  "routeToPhase": "2b"
+}

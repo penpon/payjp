@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-004",
+  "dimension": "structural_integrity",
+  "category": "spec_gap",
+  "severity": "minor",
+  "description": "subscribe.ts has inconsistent step numbering comments. Line 53 says 'Step 3: planId validation' but line 67 also says 'Step 3: Upsert provisional member row'. Line 58 says 'Step 2 (advisory lock)' while 'Step 2' at line 37 is link session validation. This creates confusion when mapping code to the 14-step sequence in the spec. Functionally the ordering is correct per REQ-BILL-011, but the comment numbering is wrong and will cause maintenance confusion.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/subscribe.ts",
+    "lineRange": "37-68",
+    "snippet": "// Step 2: Link session validation (pre-check)\n...\n// Step 3: planId validation\n...\n// Step 2 (advisory lock): Acquire lock keyed by discordUserId\n...\n// Step 3: Upsert provisional member row"
+  },
+  "routeToPhase": "2b"
+}

@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-009",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-BILL-047 cancel idempotency test (cancel-flow.test.ts lines 327-339) asserts that PAY.JP cancelSubscription is not called and result.ok is true, but does NOT verify that consumeLinkSession is called or not called on the idempotent path. Given FIND-001 (link session not consumed on idempotent path contradicting REQ-BILL-022), this test should have caught the discrepancy but lacks the assertion.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cancel-flow.test.ts",
+    "lineRange": "327-339",
+    "snippet": "it('cancel_requested_at already set → 200, PAY.JP cancel calls = 0', async () => {\n      ...\n      expect(result.ok).toBe(true);\n      expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();\n      // Missing: expect(deps.db.consumeLinkSession).toHaveBeenCalled();\n    });"
+  },
+  "routeToPhase": "2b"
+}

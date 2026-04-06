@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-011",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-BILL-015 validateFrontendBaseUrl property test (pure-core.test.ts lines 411-424) is effectively a no-op. The test generates arbitrary URLs via fc.webUrl(), constructs conditional logic ('if pathname !== '/' || url.endsWith('/')') but never makes a meaningful assertion in that branch. The only assertion is 'expect(typeof result.ok).toBe('boolean')' which is trivially true for any input. This property test does not actually verify the rejection behavior for URLs with paths -- it merely confirms the return type.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/core/__tests__/pure-core.test.ts",
+    "lineRange": "411-424",
+    "snippet": "it('(property) strings with / after host are rejected', () => {\n    fc.assert(\n      fc.property(fc.webUrl(), (url) => {\n        const parsed = new URL(url);\n        if (parsed.pathname !== '/' || url.endsWith('/')) {\n          // URLs with paths should be rejected\n          // (webUrl() may generate paths)\n        }\n        // Just verify it doesn't throw\n        const result = validateFrontendBaseUrl(url);\n        expect(typeof result.ok).toBe('boolean');\n      }),\n    );\n  });"
+  },
+  "routeToPhase": "2b"
+}

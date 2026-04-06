@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-003",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "major",
+  "description": "PROP-BILL-058 service boundary test (cross-cutting.test.ts lines 178-218) checks a hardcoded string array of method names for substrings like 'payjp_event' and 'impact_log'. This does not inspect the actual DbClient interface from shell/types.ts. If someone adds a payjp_events method to the DbClient interface, this test would still pass because it checks a static list, not the real type or implementation. The test is tautological -- it asserts properties of a constant array defined in the test itself.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts",
+    "lineRange": "178-218",
+    "snippet": "const dbClientMethods = [\n        'findMemberByDiscordUserId',\n        'upsertProvisionalMember',\n        ...\n      ];\n      expect(dbClientMethods.some(m => m.toLowerCase().includes('payjp_event'))).toBe(false);"
+  },
+  "routeToPhase": "2b"
+}

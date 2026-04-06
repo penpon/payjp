@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-008",
+  "dimension": "implementation_correctness",
+  "category": "security_surface",
+  "severity": "major",
+  "description": "PROP-BILL-056 env startup validation test (cross-cutting.test.ts lines 79-101) only tests that validateRequiredEnvVars() returns { ok: false }. It does NOT test that the process actually exits with non-zero code. There is no startup code in the implementation that calls validateRequiredEnvVars(), validateFixedEnvVars(), or validateFrontendBaseUrl() and then calls process.exit(). REQ-BILL-031 requires: 'SHALL exit with non-zero code if any validation fails.' The test merely validates the pure function output, not the actual process exit behavior.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts",
+    "lineRange": "79-101",
+    "snippet": "it('process exits non-zero when required env var is missing', () => {\n      const result = validateRequiredEnvVars(incompleteEnv);\n      expect(result.ok).toBe(false);\n      if (!result.ok) {\n        expect(result.missingVars).toContain('DATABASE_URL');\n      }\n    });"
+  },
+  "routeToPhase": "2b"
+}

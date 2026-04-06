@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "critical",
+  "description": "REQ-BILL-022 states: 'Note: The __Host-link_session is consumed on this path (consumed at pre-validation pass point).' for the cancel idempotent case (cancel_requested_at IS NOT NULL). However, cancel.ts lines 88-93 return the idempotent response BEFORE the consumeLinkSession call at line 96. The link session is NOT consumed on the idempotent path, violating the spec. PROP-BILL-047 test does not verify consumeLinkSession was called.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/cancel.ts",
+    "lineRange": "88-96",
+    "snippet": "// Step 8: Link session consumption (validation already done at step 1b)\n    // Step 9: cancel_requested_at idempotency check\n    if (member.cancel_requested_at !== null) {\n      // Already cancelled — return idempotent response without calling PAY.JP again\n      return { ok: true, data: buildCancelResponse(member) };\n    }\n\n    // Consume link session before PAY.JP write\n    await db.consumeLinkSession(tokenHash, now);"
+  },
+  "routeToPhase": "2b"
+}

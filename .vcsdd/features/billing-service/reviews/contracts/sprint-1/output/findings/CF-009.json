@@ -1,0 +1,13 @@
+{
+  "id": "CF-009",
+  "severity": "MEDIUM",
+  "dimension": "edge_case_coverage",
+  "category": "test_coverage",
+  "description": "The contract lists 142 tests total (line 38) but does not include criteria for the following edge cases that ARE in the behavioral spec: (1) REQ-BILL-002 edge case: __Host-link_session cookie absent -- the subscribe test handles 'findLinkSession returns null' but no test specifically simulates cookie absence vs token-not-found. (2) REQ-BILL-007: canceled with access_end_at <= now allowing new subscription -- no test covers this re-subscription-after-expiry case explicitly. (3) REQ-BILL-017: 'no member' (null member) case for cancel -- the cancel test only tests status=null/paused/deleted but not the case where findMemberByDiscordUserId returns null, which is handled at cancel.ts line 41. (4) REQ-BILL-020: leap year boundary test -- only unit test covers leap year; no integration test covers cancel acceptance with leap year dates.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/contracts/sprint-1.md",
+    "lineRange": "29-38",
+    "snippet": "### Test Coverage\n| Category | File | Tests |\n... Total: 142"
+  },
+  "remediation": "Add contract criteria requiring integration tests for: (1) explicit cookie-absent scenario distinct from token-not-found, (2) re-subscription after canceled+expired access_end_at, (3) cancel with null member (no row in members table), (4) cancel acceptance boundary with leap year dates at integration level."
+}

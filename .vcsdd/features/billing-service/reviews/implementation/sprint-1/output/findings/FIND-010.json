@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-010",
+  "dimension": "implementation_correctness",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "description": "PROP-BILL-053a test (failure-handling.test.ts lines 283-303) tests customer creation failure but the reconciliation logic is flawed. In subscribe.ts lines 134-151, when createCustomer throws a definite (non-uncertain) error, the code attempts to reconcile by re-fetching the customer via member.payjp_customer_id. But at this point in the flow, member.payjp_customer_id is null (the customer was never created yet). So the reconciliation else-branch at line 144-147 runs: clearInflightOperation + return 503. This means for a definite failure during initial customer creation, the inflight IS cleared and 503 is returned. REQ-BILL-028 states 'clear inflight only if reconciliation succeeds' -- but this is a definite failure after a PAY.JP write attempt where the write may or may not have completed. Clearing inflight here could be unsafe if the customer was actually created on PAY.JP's side but the response was lost.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/subscribe.ts",
+    "lineRange": "134-151",
+    "snippet": "if (isUncertainError(err)) {\n  return { ... }; // uncertain: keep inflight\n}\ntry {\n  if (member.payjp_customer_id) {  // <-- always null for new customer\n    await payjp.fetchCustomer(member.payjp_customer_id);\n    customerId = member.payjp_customer_id;\n  } else {\n    await db.clearInflightOperation(member.id);  // <-- clears inflight even though write may have partially completed\n    return { ok: false, statusCode: 503, ... };\n  }\n}"
+  },
+  "routeToPhase": "2b"
+}

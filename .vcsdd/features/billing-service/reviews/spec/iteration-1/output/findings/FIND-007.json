@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-007",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "MEDIUM",
+  "description": "REQ-BILL-011 Acceptance Criteria lists the consumption ordering as: 'Consumption occurs after: Origin validation, link session validation, planId validation, inflight check, existing subscription check, Discord pre-check'. This omits 'advisory lock acquisition' and 'provisional member row creation' from the list, both of which occur between planId validation and inflight check per implementation-design-mvp.md section 5.1 steps 2-5. The ordering also omits step 3 (provisional member creation) which happens before step 4 (inflight check). An implementer following REQ-BILL-011 alone would not know that advisory lock and provisional member creation must precede the inflight operation check.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "204-206",
+    "snippet": "Consumption occurs after: Origin validation, link session validation, planId validation, inflight check, existing subscription check, Discord pre-check"
+  },
+  "sourceReference": {
+    "filePath": "docs/implementation-design-mvp.md",
+    "lineRange": "118-128",
+    "snippet": "1. Origin / link_session / planId を検証\n2. pg_advisory_xact_lock\n3. members行仮作成\n4. inflight_operation_* 残留チェック\n5. 既存subscription チェック\n6. Discord参加・権限検証\n7. operationId保存\n8. link_session消費"
+  },
+  "remediation": "Update REQ-BILL-011 acceptance criteria to include the full ordered sequence: Origin validation -> link session validation -> planId validation -> advisory lock acquisition -> provisional member creation -> inflight check -> existing subscription check -> Discord pre-check -> operationId persistence -> link session consumption -> PAY.JP token verification -> PAY.JP writes.",
+  "routeToPhase": "1a"
+}

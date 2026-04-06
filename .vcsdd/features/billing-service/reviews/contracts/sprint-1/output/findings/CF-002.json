@@ -1,0 +1,13 @@
+{
+  "id": "CF-002",
+  "severity": "HIGH",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "description": "REQ-BILL-009 requires verifying 'used = false' on the PAY.JP token before proceeding. The PayjpToken interface in shell/types.ts (line 12-18) has no 'used' field, and the subscribe orchestration in shell/subscribe.ts (lines 103-115) never checks the 'used' property. The contract's grading dimension 1 ('Spec Fidelity') does not call out this specific check. The 3DS verification is present but token-used verification is entirely absent from implementation, tests, and contract criteria.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/types.ts",
+    "lineRange": "12-18",
+    "snippet": "export interface PayjpToken {\n  id: string;\n  three_d_secure_status: string | null;\n  card: {\n    id: string;\n  };\n}"
+  },
+  "remediation": "Add 'used: boolean' to PayjpToken interface. Add a guard in subscribe.ts after fetchToken that rejects with 422 when payjpTokenData.used === true. Add a test case for this scenario. Add a contract criterion explicitly requiring token-used check verification."
+}

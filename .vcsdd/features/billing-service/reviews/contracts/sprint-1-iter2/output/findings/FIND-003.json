@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-003",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "medium",
+  "description": "PROP-BILL-057 (health check) and PROP-BILL-058 (service boundary) tests at cross-cutting.test.ts:146-218 remain tautological. They test locally-defined inline functions (buildHealthResponse) and hardcoded string arrays, not the actual production code. The prior review (CF-003) acknowledged this as acceptable for DI testing pattern, and the contract notes it. However, the contract's CRIT-017 ('npm run test:billing exits 0 with 142 tests passed') counts these toward the 142 total. A Phase 3 adversary should be aware these 4 tests contribute to the count but verify no production behavior.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts",
+    "lineRange": "147-218",
+    "snippet": "function buildHealthResponse(dbHealthy: boolean) { ... } — defined inline, not imported from production code. Service boundary test checks a hardcoded string array, not the actual DbClient interface type."
+  },
+  "routeToPhase": "3"
+}

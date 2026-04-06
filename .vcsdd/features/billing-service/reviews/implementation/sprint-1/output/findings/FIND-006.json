@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-006",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "major",
+  "description": "PROP-BILL-054 CORS test (cross-cutting.test.ts lines 21-34) only tests getCorsHeaders() as a pure function. It does NOT verify that CORS headers are actually included in HTTP responses from handleSubscribe or handleCancel. The shell layer returns SubscribeResult/CancelResult typed objects which have no field for HTTP headers. The integration tests for subscribe and cancel flows never assert on CORS headers. There is no evidence the CORS headers produced by getCorsHeaders() are actually attached to any response. REQ-BILL-029 requires CORS headers in ALL responses (success and error), but this is not tested at the integration level.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts",
+    "lineRange": "21-34",
+    "snippet": "describe('PROP-BILL-054: CORS headers', () => {\n    it('present in success responses', () => {\n      const headers = getCorsHeaders(FRONTEND_BASE_URL);\n      expect(headers['Access-Control-Allow-Credentials']).toBe('true');\n    });"
+  },
+  "routeToPhase": "2b"
+}

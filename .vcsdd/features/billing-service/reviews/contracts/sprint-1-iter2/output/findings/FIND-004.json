@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-004",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "medium",
+  "description": "PROP-BILL-065 (PAY.JP API encoding) at subscribe-flow.test.ts:812-823 still only verifies that mock methods were called (fetchToken, createCustomer, createCharge, createSubscription). It asserts nothing about encoding format (form-urlencoded vs JSON). The test comment acknowledges 'encoding is the responsibility of the client implementation' but the contract CRIT does not exist for this proof obligation. REQ-BILL-034 remains unverifiable at the shell integration test level because the DI boundary abstracts away the encoding. The contract should either (a) add a CRIT covering the PayjpClient implementation's encoding or (b) explicitly defer PROP-BILL-065 to Tier 3 manual verification.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+    "lineRange": "812-823",
+    "snippet": "expect(deps.payjp.fetchToken).toHaveBeenCalledWith(PAYJP_TOKEN_ID); expect(deps.payjp.createCustomer).toHaveBeenCalled(); — no Content-Type assertion."
+  },
+  "routeToPhase": "2b"
+}

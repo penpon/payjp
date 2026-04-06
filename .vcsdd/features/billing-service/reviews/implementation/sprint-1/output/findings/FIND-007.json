@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-007",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "severity": "major",
+  "description": "PROP-BILL-055 structured logging test (cross-cutting.test.ts lines 39-73) only tests maskSensitiveLogFields() as a pure function. It does NOT test that structured logging is actually invoked during handleSubscribe or handleCancel execution. The shell layer (subscribe.ts, cancel.ts) contains NO calls to structuredLog() or any logging function. REQ-BILL-030 requires structured log entries for every request with required keys (timestamp, service, endpoint, result, operationId). No structured logging implementation exists in the shell layer.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/subscribe.ts",
+    "lineRange": "1-283",
+    "snippet": "// No occurrence of 'log' or 'structuredLog' anywhere in subscribe.ts or cancel.ts"
+  },
+  "routeToPhase": "2b"
+}

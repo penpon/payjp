@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-002",
+  "dimension": "implementation_correctness",
+  "category": "requirement_mismatch",
+  "severity": "high",
+  "description": "CRIT-001 claims PROP-BILL-062 verifies '(5) customer_id persistence before charge'. However, the PROP-BILL-062 test at subscribe-flow.test.ts:726-795 does NOT instrument db.updateMemberCustomerId in the callOrder array. The test only records createCustomer and createCharge in sequence. The actual persistence step (updateMemberCustomerId at subscribe.ts:156) is not tracked, so the test verifies createCustomer < createCharge but NOT that customer_id is persisted to DB before charge. The contract criterion claims a stronger guarantee than the test actually provides. A Phase 3 adversary cannot evaluate '(5) customer_id persistence before charge' as PASS based on PROP-BILL-062 alone.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+    "lineRange": "726-795",
+    "snippet": "callOrder tracks: acquireAdvisoryLock, upsertProvisionalMember, setInflightOperation, consumeLinkSession, fetchToken, createCustomer, createCharge, createSubscription, updateMemberAfterSubscribe, assignRole. Missing: updateMemberCustomerId."
+  },
+  "routeToPhase": "2b"
+}

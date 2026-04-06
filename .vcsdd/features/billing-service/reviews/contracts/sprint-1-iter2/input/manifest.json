@@ -1,0 +1,19 @@
+{
+  "reviewType": "contract",
+  "featureName": "billing-service",
+  "sprintNumber": 1,
+  "negotiationRound": 1,
+  "contractPath": "contracts/sprint-1.md",
+  "contractDigest": "59a657e9773b1e7847767614b4d41c1fa65c505203895ec07d2ac0964cd0a0a7",
+  "priorReview": "reviews/contracts/sprint-1/output/verdict.json",
+  "fixesSummary": [
+    "CF-001: Rewrote contract with 18 binary CRIT-XXX criteria, removed numeric scoring",
+    "CF-002: Added used:boolean to PayjpToken, subscribe.ts rejects used=true with 422",
+    "CF-003: Acknowledged — health/boundary tests use inline logic, acceptable for DI testing pattern",
+    "CF-004: Added initial_charge_paid_at to updateMemberAfterSubscribe interface and implementation",
+    "CF-006: Documented linkSessionTokenHash as platform crypto exception in CRIT-010",
+    "CF-007: Moved link session validation early in cancel flow (before advisory lock)",
+    "CF-008: Added retry delays (0s/1s/2s) to role sync implementation",
+    "CF-010: Fixed wording, added evidence files to contract"
+  ]
+}

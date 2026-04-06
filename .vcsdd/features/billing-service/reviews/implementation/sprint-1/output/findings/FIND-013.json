@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-013",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "critical",
+  "description": "CRIT-001 asserts '(5) charge_id persistence before subscription'. REQ-BILL-013 requires 'immediately persist members.payjp_initial_charge_id and members.initial_charge_paid_at, then create a subscription'. In subscribe.ts, after createCharge succeeds (line 166), the charge id is stored in a local variable initialChargeId (line 190), but is NOT persisted to DB until updateMemberAfterSubscribe (line 235-236). The subscription creation happens at line 212, BEFORE the charge_id is persisted. If subscription creation fails after charge succeeds, the charge_id is lost from DB (only in local variable). PROP-BILL-062 test asserts 'createCharge < createSubscription' (execution order) but does NOT assert charge_id DB persistence before subscription creation. There is no separate DB call to persist payjp_initial_charge_id immediately after charge.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/subscribe.ts",
+    "lineRange": "160-238",
+    "snippet": "// Step 11: Initial charge\n    ...\n    charge = await payjp.createCharge({...});  // line 166\n    ...\n    initialChargeId = charge!.id;  // line 190 (local var only)\n    // NO db.persistChargeId() here\n\n    // Step 12: Subscription creation\n    subscription = await payjp.createSubscription(subscriptionParams);  // line 212\n\n    // Step 13: Member state update (charge_id finally persisted here)\n    const updatedMember = await db.updateMemberAfterSubscribe(member.id, {\n      payjp_initial_charge_id: initialChargeId,  // line 236"
+  },
+  "routeToPhase": "2b"
+}

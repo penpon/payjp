@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-010",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "MEDIUM",
+  "description": "REQ-BILL-012 specifies two paths: (1) new customer created -> payjp_customer_id saved immediately, (2) existing customer reused -> payjp_customer_id already present. PROP-BILL-032 only tests path (1) with injected post-customer failure to verify persistence survives. There is no PROP that explicitly tests the customer-reuse path (member already has payjp_customer_id from a previous failed subscription attempt where customer was created but subscription failed). This is a real scenario after inflight operation resolution.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "104",
+    "snippet": "PROP-BILL-032 | members.payjp_customer_id persisted immediately after customer creation, survives subsequent failure | REQ-BILL-012"
+  },
+  "sourceReference": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "214-219",
+    "snippet": "New customer created -> payjp_customer_id saved immediately; Existing customer reused -> payjp_customer_id already present (no overwrite needed)"
+  },
+  "remediation": "Add a PROP (or expand PROP-BILL-032) to test the customer-reuse path: set up a member with payjp_customer_id from a prior partial failure, then issue a new subscription request. Verify that no new PAY.JP customer is created and the existing customer_id is used for charge/subscription creation.",
+  "routeToPhase": "1b"
+}

@@ -1,0 +1,176 @@
+{
+  "reviewer": "adversary",
+  "reviewType": "implementation",
+  "sprintNumber": 1,
+  "feature": "billing-service",
+  "timestamp": "2026-04-06T12:00:00Z",
+  "overallVerdict": "FAIL",
+  "dimensions": {
+    "spec_fidelity": {
+      "verdict": "FAIL",
+      "criteria": {
+        "CRIT-001": "FAIL",
+        "CRIT-002": "FAIL",
+        "CRIT-003": "PASS",
+        "CRIT-004": "PASS",
+        "CRIT-005": "PASS"
+      },
+      "findings": ["FIND-001", "FIND-013"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/subscribe.ts",
+          "description": "CRIT-001 FAIL: payjp_initial_charge_id NOT persisted to DB before subscription creation. Charge id held in local variable (line 190), persisted only in updateMemberAfterSubscribe (line 236), but createSubscription at line 212 executes before that. Violates REQ-BILL-013 'immediately persist' and CRIT-001 assertion (5)."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/cancel.ts",
+          "description": "CRIT-002 FAIL: Cancel idempotent path (cancel_requested_at set) at lines 90-93 returns BEFORE link session consumption at line 96. REQ-BILL-022 Note says link session IS consumed on idempotent path."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/types.ts",
+          "description": "CRIT-003 PASS: PayjpToken interface includes used: boolean (line 14). handleSubscribe rejects used=true at subscribe.ts:113."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/index.ts",
+          "description": "CRIT-004 PASS: validateFixedEnvVars correctly rejects non-MVP values. Tests pass per evidence log."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/subscribe.ts",
+          "description": "CRIT-005 PASS: initial_charge_paid_at set at line 237 to now for first-time users with successful charge."
+        }
+      ]
+    },
+    "edge_case_coverage": {
+      "verdict": "FAIL",
+      "criteria": {
+        "CRIT-006": "FAIL",
+        "CRIT-007": "PASS",
+        "CRIT-008": "PASS",
+        "CRIT-009": "PASS"
+      },
+      "findings": ["FIND-002", "FIND-003", "FIND-006", "FIND-007", "FIND-009", "FIND-011"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/__tests__/pure-core.test.ts",
+          "description": "CRIT-006 FAIL: validateFrontendBaseUrl property test (PROP-BILL-015, lines 411-424) is effectively a no-op -- asserts only typeof result.ok === 'boolean', does not verify rejection behavior. Additionally, PROP-BILL-057 health check test is tautological (tests inline function, not implementation)."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/__tests__/pure-core.test.ts",
+          "description": "CRIT-007 PASS: PROP-BILL-006 covers 3/31->2/28, 5/31->4/30, leap year 2028, year boundary 1/31->12/31. PROP-BILL-007 covers boundary +/-1s."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/__tests__/pure-core.test.ts",
+          "description": "CRIT-008 PASS: PROP-BILL-005 exhaustive case table: verified=true, attempted/failed/error/unverified/null/empty=false."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+          "description": "CRIT-009 PASS: PROP-BILL-023 concurrent test verifies exactly one success via advisory lock mock."
+        }
+      ]
+    },
+    "implementation_correctness": {
+      "verdict": "FAIL",
+      "criteria": {
+        "CRIT-012": "PASS",
+        "CRIT-013": "PASS",
+        "CRIT-014": "PASS",
+        "CRIT-015": "PASS",
+        "CRIT-016": "PASS"
+      },
+      "findings": ["FIND-005", "FIND-008", "FIND-010"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/failure-handling.test.ts",
+          "description": "CRIT-012 PASS: PROP-BILL-051 verifies timeout -> 503 + operationId, clearInflightOperation NOT called."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/failure-handling.test.ts",
+          "description": "CRIT-013 PASS: PROP-BILL-052 verifies 3DS failure -> clearInflightOperation called, 422 returned."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/failure-handling.test.ts",
+          "description": "CRIT-014 PASS: PROP-BILL-053a-053e tests pass per evidence log. Reconciliation paths tested."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+          "description": "CRIT-015 PASS: PROP-BILL-039 verifies 3 retry attempts. PROP-BILL-040 verifies final failure -> 503 + operationId."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/cancel.ts",
+          "description": "CRIT-016 PASS: Link session validated at lines 32-42 before advisory lock at line 45. Invalid/expired/consumed -> 401 before member operations."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/subscribe.ts",
+          "description": "FIND-005: Race window between updateMemberAfterSubscribe clearing inflight (line 248) and re-setting it on role sync failure (line 269). FIND-010: Customer creation definite failure reconciliation clears inflight even when customer may have been created on PAY.JP side."
+        }
+      ]
+    },
+    "structural_integrity": {
+      "verdict": "PASS",
+      "criteria": {
+        "CRIT-010": "PASS",
+        "CRIT-011": "PASS"
+      },
+      "findings": ["FIND-004", "FIND-012"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/index.ts",
+          "description": "CRIT-010 PASS: All 22 functions in core/index.ts are synchronous with no async/await, no DB, no HTTP. Only linkSessionTokenHash uses node:crypto (documented platform crypto exception)."
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/types.ts",
+          "description": "CRIT-011 PASS: BillingDeps interface (line 126-133) aggregates all external dependencies. handleSubscribe and handleCancel accept BillingDeps as second parameter."
+        }
+      ]
+    },
+    "verification_readiness": {
+      "verdict": "PASS",
+      "criteria": {
+        "CRIT-017": "PASS",
+        "CRIT-018": "PASS"
+      },
+      "findings": [],
+      "evidence": [
+        {
+          "type": "test-output",
+          "location": ".vcsdd/features/billing-service/evidence/sprint-1-green-phase.log",
+          "description": "CRIT-017 PASS: 143 tests passed (68 tier1 + 75 tier2), 5 test files, all green."
+        },
+        {
+          "type": "test-output",
+          "location": ".vcsdd/features/billing-service/evidence/sprint-1-green-phase.log",
+          "description": "CRIT-018 PASS: auth-service 102 tests passed (regression baseline)."
+        }
+      ]
+    }
+  },
+  "convergenceSignals": {
+    "findingCount": 13,
+    "allCriteriaEvaluated": true,
+    "evaluatedCriteria": [
+      "CRIT-001", "CRIT-002", "CRIT-003", "CRIT-004", "CRIT-005",
+      "CRIT-006", "CRIT-007", "CRIT-008", "CRIT-009",
+      "CRIT-010", "CRIT-011",
+      "CRIT-012", "CRIT-013", "CRIT-014", "CRIT-015", "CRIT-016",
+      "CRIT-017", "CRIT-018"
+    ],
+    "duplicateFindings": []
+  },
+  "summary": "FAIL: 3 dimensions failed (spec_fidelity, edge_case_coverage, implementation_correctness). 13 findings total (3 critical, 6 major, 4 minor). Critical issues: (1) CRIT-001 FAIL - charge_id not persisted to DB before subscription creation violating REQ-BILL-013 immediate persistence requirement, (2) CRIT-002 FAIL - cancel idempotent path skips link session consumption violating REQ-BILL-022, (3) CRIT-006 FAIL - validateFrontendBaseUrl property test is a no-op. Additional concerns: health check endpoint unimplemented (PROP-BILL-057 tautological), structured logging unimplemented in shell layer, CORS headers not verified in integration responses, race window in role sync failure inflight re-set, customer creation reconciliation logic clears inflight unsafely."
+}

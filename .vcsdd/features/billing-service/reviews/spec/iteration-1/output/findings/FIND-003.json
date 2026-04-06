@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-003",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "MEDIUM",
+  "description": "2weeks-spec.md line 190 explicitly requires: 'PAY.JP API呼び出しは公式SDKまたは application/x-www-form-urlencoded で実行する（JSON POSTしない）'. This is a security/correctness constraint on how PAY.JP API calls are made. The behavioral spec has no REQ covering this PAY.JP API invocation format requirement. An implementer could inadvertently use JSON POST, which PAY.JP may reject or handle incorrectly.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "1-517",
+    "snippet": "(absent - no REQ covers PAY.JP API call format)"
+  },
+  "sourceReference": {
+    "filePath": "docs/2weeks-spec.md",
+    "lineRange": "190",
+    "snippet": "PAY.JP API呼び出しは公式SDKまたは application/x-www-form-urlencoded で実行する（JSON POSTしない）"
+  },
+  "remediation": "Add a new REQ (e.g., REQ-BILL-034) specifying that all PAY.JP API calls from billing-service must use the official payjp npm SDK or application/x-www-form-urlencoded encoding, and that JSON POST bodies are prohibited. Add a corresponding PROP obligation to verify this in integration tests.",
+  "routeToPhase": "1a"
+}

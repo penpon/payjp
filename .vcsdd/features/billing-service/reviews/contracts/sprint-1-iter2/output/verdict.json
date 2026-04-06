@@ -1,0 +1,164 @@
+{
+  "reviewer": "adversary",
+  "reviewType": "contract",
+  "feature": "billing-service",
+  "sprintNumber": 1,
+  "timestamp": "2026-04-06T16:00:00Z",
+  "iteration": 2,
+  "reviewContext": {
+    "reviewType": "contract",
+    "contractPath": "contracts/sprint-1.md",
+    "contractDigest": "59a657e9773b1e7847767614b4d41c1fa65c505203895ec07d2ac0964cd0a0a7",
+    "iteration": 2
+  },
+  "overallVerdict": "FAIL",
+  "dimensions": [
+    {
+      "name": "spec_fidelity",
+      "verdict": "FAIL",
+      "findings": ["FIND-001"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/types.ts:12-19",
+          "description": "PayjpToken interface now includes used: boolean (CF-002 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/subscribe.ts:113",
+          "description": "Implementation checks payjpTokenData.used and rejects with 422 (CF-002 resolved in code)"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/types.ts:90-104",
+          "description": "updateMemberAfterSubscribe now includes initial_charge_paid_at: Date | null (CF-004 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts:446-461",
+          "description": "PROP-BILL-029 tests 3DS status exhaustively but NO test exists for used=true token rejection — CRIT-003 not fully evaluable"
+        }
+      ]
+    },
+    {
+      "name": "edge_case_coverage",
+      "verdict": "PASS",
+      "findings": ["FIND-003", "FIND-004"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/__tests__/pure-core.test.ts:68-97",
+          "description": "PROP-BILL-001 validatePlanId: exhaustive + property test with fast-check verified"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/__tests__/pure-core.test.ts:166-210",
+          "description": "PROP-BILL-006 calculateCancelAcceptanceStart: 6 date boundary cases including month-end rollup and leap year verified"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/__tests__/pure-core.test.ts:148-161",
+          "description": "PROP-BILL-005 isThreeDSecureVerified: 7-row exhaustive case table verified"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts:291-313",
+          "description": "PROP-BILL-023 concurrent subscribe guard: advisory lock serialization verified"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts:107-141",
+          "description": "PROP-BILL-067 fixed env var rejection: BILLING_INTERVAL_MONTHS and INITIAL_FREE_CYCLES cases verified"
+        }
+      ]
+    },
+    {
+      "name": "implementation_correctness",
+      "verdict": "FAIL",
+      "findings": ["FIND-002"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/subscribe.ts:251-265",
+          "description": "Role sync retry now includes ROLE_SYNC_DELAYS_MS = [0, 1000, 2000] (CF-008 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/shell/cancel.ts:32-43",
+          "description": "Link session validation now occurs before advisory lock in cancel flow (CF-007 resolved)"
+        },
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts:726-795",
+          "description": "PROP-BILL-062 ordering test does not track updateMemberCustomerId — CRIT-001 claim '(5) customer_id persistence before charge' not actually verified"
+        }
+      ]
+    },
+    {
+      "name": "structural_integrity",
+      "verdict": "PASS",
+      "findings": ["FIND-005"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:41-113",
+          "description": "18 CRIT-XXX criteria with binary PASS/FAIL structure (CF-001 fully resolved — no numeric scoring)"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:79-81",
+          "description": "CRIT-010 now documents linkSessionTokenHash as platform crypto exception (CF-006 documented)"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:117-119",
+          "description": "Evidence files referenced for red and green phases"
+        }
+      ]
+    },
+    {
+      "name": "verification_readiness",
+      "verdict": "PASS",
+      "findings": [],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/billing-service/src/core/index.ts:4,252-254",
+          "description": "linkSessionTokenHash imports node:crypto — documented exception in CRIT-010 (CF-006 resolved)"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/contracts/sprint-1.md:107-113",
+          "description": "CRIT-017 and CRIT-018 are concrete: npm run test:billing exits 0 with 142 tests, npm run test:auth exits 0 with 102 tests"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/specs/verification-architecture.md:65-147",
+          "description": "Proof obligations PROP-BILL-001 through PROP-BILL-067 mapped to CRIT criteria. Phase 3 adversary can evaluate each CRIT against specific test IDs."
+        }
+      ]
+    }
+  ],
+  "convergenceSignals": {
+    "findingCount": 5,
+    "allCriteriaEvaluated": true,
+    "evaluatedCriteria": [
+      "CRIT-001", "CRIT-002", "CRIT-003", "CRIT-004", "CRIT-005", "CRIT-006",
+      "CRIT-007", "CRIT-008", "CRIT-009", "CRIT-010", "CRIT-011", "CRIT-012",
+      "CRIT-013", "CRIT-014", "CRIT-015", "CRIT-016", "CRIT-017", "CRIT-018"
+    ],
+    "duplicateFindings": []
+  },
+  "priorFindingResolution": {
+    "CF-001": "RESOLVED — Contract rewritten with 18 binary CRIT-XXX criteria, no numeric scoring",
+    "CF-002": "PARTIALLY_RESOLVED — PayjpToken.used: boolean added, subscribe.ts rejects used=true with 422. But NO test case exercises used=true path (FIND-001)",
+    "CF-003": "ACKNOWLEDGED — Tautological health/boundary tests accepted as DI testing pattern limitation (FIND-003 carried forward at medium severity)",
+    "CF-004": "RESOLVED — initial_charge_paid_at added to updateMemberAfterSubscribe interface and implementation",
+    "CF-005": "NOT_RESOLVED — PROP-BILL-065 still verifies only mock call presence, not encoding format (FIND-004)",
+    "CF-006": "RESOLVED — linkSessionTokenHash documented as platform crypto exception in CRIT-010",
+    "CF-007": "RESOLVED — Link session validation moved before advisory lock in cancel flow (cancel.ts:32-43)",
+    "CF-008": "RESOLVED — Retry delays [0, 1000, 2000] added to role sync implementation (subscribe.ts:252)",
+    "CF-009": "NOT_REVIEWED — Prior finding was about untested edge cases from spec; many now covered by CRIT criteria",
+    "CF-010": "RESOLVED — Wording fixed, evidence files referenced in contract"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-009",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "HIGH",
+  "description": "The subscribe endpoint has a specific step ordering defined in implementation-design-mvp.md section 5.1 (14 steps). No single PROP obligation verifies the COMPLETE step ordering end-to-end. Individual PROPs verify fragments (e.g., PROP-BILL-030 verifies operationId before PAY.JP write, PROP-BILL-031 verifies link session consumption timing). But the full sequence has critical ordering dependencies between steps: (1) advisory lock MUST precede member lookup, (2) provisional member creation MUST precede inflight check, (3) operationId persistence MUST precede link session consumption, (4) link session consumption MUST precede PAY.JP token verification, (5) customer_id persistence MUST precede charge, (6) charge_id persistence MUST precede subscription creation. There is no PROP that tests the full orchestration ordering or catches misorderings between non-adjacent steps.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "92-131",
+    "snippet": "Tier 2 PROPs test individual ordering constraints but no PROP covers the complete 14-step orchestration"
+  },
+  "sourceReference": {
+    "filePath": "docs/implementation-design-mvp.md",
+    "lineRange": "118-131",
+    "snippet": "Steps 1-14 of POST /v1/subscriptions sequence"
+  },
+  "remediation": "Add a PROP (e.g., PROP-BILL-062) that verifies the complete subscribe orchestration ordering by intercepting DB writes and PAY.JP API calls and asserting the precise sequence. This could use a mock PAY.JP server that records call order and DB state inspection between calls. Similarly, add PROP-BILL-063 for the complete cancel orchestration (steps 1-12).",
+  "routeToPhase": "1b"
+}

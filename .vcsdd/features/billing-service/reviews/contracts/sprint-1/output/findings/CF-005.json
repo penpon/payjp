@@ -1,0 +1,13 @@
+{
+  "id": "CF-005",
+  "severity": "MEDIUM",
+  "dimension": "edge_case_coverage",
+  "category": "test_quality",
+  "description": "PROP-BILL-065 (PAY.JP API encoding) test in subscribe-flow.test.ts (lines 811-823) only verifies that mock PayjpClient methods were called. It does not inspect Content-Type headers or encoding format. The verification-architecture.md (line 144) explicitly requires 'inspect mock server Content-Type'. Since all PAY.JP calls go through the PayjpClient interface with mocks, the actual encoding is never verified in any test. The contract does not distinguish between 'calls were made' and 'calls used correct encoding'.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+    "lineRange": "811-823",
+    "snippet": "// shell implements PayjpClient interface,\n// encoding is client implementation responsibility.\n// Here we verify client was called.\nexpect(deps.payjp.fetchToken).toHaveBeenCalledWith(PAYJP_TOKEN_ID);"
+  },
+  "remediation": "The contract should explicitly note that PROP-BILL-065 cannot be verified at the shell orchestration level (since encoding is an adapter concern). Either (a) require a separate PayjpClient adapter test that verifies form-urlencoded encoding, or (b) defer this to Tier 3 with a concrete E2E verification criterion. The contract as written misleadingly includes PROP-BILL-065 in Sprint 1 scope without acknowledging that the test does not actually verify encoding."
+}

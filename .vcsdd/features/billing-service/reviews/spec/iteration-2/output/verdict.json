@@ -1,0 +1,151 @@
+{
+  "reviewer": "adversary",
+  "reviewType": "spec",
+  "feature": "billing-service",
+  "iteration": 2,
+  "timestamp": "2026-04-06T16:00:00Z",
+  "overallVerdict": "PASS",
+  "dimensions": {
+    "spec_fidelity": {
+      "verdict": "PASS",
+      "findings": ["FIND-101", "FIND-102", "FIND-107"],
+      "evidence": [
+        {
+          "type": "cross-reference",
+          "description": "All 35 REQs (REQ-BILL-001 through REQ-BILL-035) and 4 NFRs verified against 2weeks-spec.md sections 5-9, implementation-design-mvp.md sections 2-5, tdd-acceptance-matrix-mvp.md T-P0-02 through T-P0-05"
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+          "description": "All 35 REQs and 4 NFRs reviewed line-by-line. REQ-BILL-034 (PAY.JP API encoding) and REQ-BILL-035 (write no-retry) added per FIND-003/FIND-006 remediation."
+        },
+        {
+          "type": "file",
+          "location": "docs/implementation-design-mvp.md",
+          "description": "Section 5.1 step ordering verified against REQ-BILL-011 step order (lines 207-215). Section 5.2 step ordering verified against REQ-BILL-021 step order (lines 349-357). Both now match the source document exactly."
+        },
+        {
+          "type": "file",
+          "location": "docs/2weeks-spec.md",
+          "description": "Section 9 env vars (lines 448-471) verified against REQ-BILL-031 (lines 486-504). BILLING_INTERVAL_MONTHS/INITIAL_FREE_CYCLES/CANCEL_NOTICE_CYCLES now included with fixed-value validation."
+        }
+      ],
+      "iterationResolution": {
+        "FIND-001": {
+          "status": "RESOLVED",
+          "severity": "HIGH",
+          "verification": "REQ-BILL-011 (lines 204-220) now correctly places link session consumption at step 8, after operationId persistence at step 7. The step order list (lines 207-215) matches implementation-design-mvp.md section 5.1 exactly. Acceptance criteria (line 218) includes operationId persistence in the after-list."
+        },
+        "FIND-002": {
+          "status": "RESOLVED",
+          "severity": "HIGH",
+          "verification": "REQ-BILL-031 (lines 486-504) now includes BILLING_INTERVAL_MONTHS, INITIAL_FREE_CYCLES, CANCEL_NOTICE_CYCLES in required env vars list. Fixed-value validation (BILLING_INTERVAL_MONTHS=1, INITIAL_FREE_CYCLES=2, CANCEL_NOTICE_CYCLES=1) specified with exit-non-zero on mismatch. Pure core function validateFixedEnvVars added (line 29)."
+        },
+        "FIND-003": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "REQ-BILL-034 (lines 531-538) added covering PAY.JP API form-urlencoded encoding requirement. PROP-BILL-065 added in verification architecture (line 144)."
+        },
+        "FIND-004": {
+          "status": "RESOLVED",
+          "severity": "HIGH",
+          "verification": "REQ-BILL-021 (lines 345-362) now includes advisory lock in step 2 of the cancel step order. Acceptance criteria (line 360) explicitly lists advisory lock in the consumption-after sequence."
+        },
+        "FIND-005": {
+          "status": "UNRESOLVED",
+          "severity": "MEDIUM",
+          "verification": "See FIND-101. No changes made to address how discord_user_id flows from link session to advisory lock/member lookup in cancel flow."
+        },
+        "FIND-006": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "REQ-BILL-035 (lines 541-549) added as explicit PAY.JP write auto-retry prohibition. PROP-BILL-066 added (line 145)."
+        },
+        "FIND-007": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "REQ-BILL-011 acceptance criteria (line 218) now includes the full ordered sequence: advisory lock, provisional member creation, inflight check are all present between planId validation and existing subscription check."
+        },
+        "FIND-008": {
+          "status": "NOT_APPLICABLE",
+          "severity": "LOW",
+          "verification": "Originally informational about GET /health interpretation. No change required per original remediation."
+        },
+        "FIND-009": {
+          "status": "RESOLVED",
+          "severity": "HIGH",
+          "verification": "PROP-BILL-062 (line 141) added for subscribe orchestration ordering with 7 ordering assertions. PROP-BILL-063 (line 142) added for cancel orchestration ordering with 4 ordering assertions. Both are Tier 2 integration tests using mock call-order recording."
+        },
+        "FIND-010": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "PROP-BILL-064 (line 143) added for customer reuse path testing."
+        },
+        "FIND-011": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "PROP-BILL-053 split into PROP-BILL-053a through PROP-BILL-053e (lines 128-132) covering 5 distinct failure injection points: after customer, after charge, after subscription, after cancel, and reconciliation failure."
+        },
+        "FIND-012": {
+          "status": "PARTIALLY_RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "See FIND-102. getCorsPreflight added to pure core with specific values but REQ-BILL-029 still vague on preflight specifics."
+        },
+        "FIND-013": {
+          "status": "UNRESOLVED",
+          "severity": "LOW",
+          "verification": "See FIND-103. Property-based test for calculateCancelAcceptanceStart not added. Acceptable for spec gate."
+        },
+        "FIND-014": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "linkSessionTokenHash added to pure core (line 27) as 'SHA-256 hash of link session token (deterministic, uses platform crypto)'. This addresses the hash computation gap."
+        },
+        "FIND-015": {
+          "status": "RESOLVED",
+          "severity": "MEDIUM",
+          "verification": "calculateCancelAcceptanceStart signature updated to include jstOffsetMinutes: 540 parameter (line 17). JST offset explicitly documented as 'pure constant parameter, not runtime I/O'."
+        }
+      }
+    },
+    "verification_readiness": {
+      "verdict": "PASS",
+      "findings": ["FIND-103", "FIND-104", "FIND-105", "FIND-106"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+          "description": "All 67 Tier 1/2 PROPs (PROP-BILL-001 through PROP-BILL-067) and 5 Tier 3 PROPs reviewed. 22 pure core functions mapped to Tier 1 unit/property tests. 48 integration PROPs cover effectful shell. Traceability matrix maps all 35 REQs and 4 NFRs to at least one PROP."
+        },
+        {
+          "type": "cross-reference",
+          "description": "Traceability matrix (lines 250-290) verified: every REQ-BILL-XXX has PROP coverage. New PROPs (062-067) correctly added for iteration-1 remediation items. Minor traceability gaps noted (FIND-104, FIND-105) but all PROPs exist and are specified."
+        },
+        {
+          "type": "cross-reference",
+          "description": "PROP tool selections verified: Vitest + fast-check for Tier 1, testcontainers + mock HTTP for Tier 2, manual E2E for Tier 3. All feasible for the described test scenarios."
+        }
+      ]
+    }
+  },
+  "convergenceSignals": {
+    "findingCount": 7,
+    "criticalFindings": 0,
+    "highFindings": 0,
+    "mediumFindings": 5,
+    "lowFindings": 2,
+    "allDimensionsEvaluated": true,
+    "duplicateFindings": [],
+    "iteration1Resolution": {
+      "totalFindings": 15,
+      "resolved": 11,
+      "partiallyResolved": 1,
+      "unresolved": 2,
+      "notApplicable": 1,
+      "highFindingsResolved": "4/4",
+      "mediumFindingsResolved": "7/9",
+      "lowFindingsResolved": "0/2"
+    }
+  },
+  "summary": "PASS. All 4 HIGH findings from iteration-1 are properly resolved: FIND-001 (subscribe step ordering), FIND-002 (fixed env var validation), FIND-004 (cancel advisory lock ordering), FIND-009 (orchestration ordering PROPs). No new HIGH or CRITICAL findings. 5 MEDIUM findings remain: FIND-101 (discord_user_id flow in cancel, carried from FIND-005), FIND-102 (CORS preflight REQ vagueness, partial fix of FIND-012), FIND-103 (property-based test for date calc, carried from FIND-013), FIND-104 (traceability matrix missing PROP-BILL-067 for REQ-BILL-031), FIND-105 (traceability matrix missing PROP-BILL-062/063 for REQ-BILL-011/021). 2 LOW findings: FIND-106 (signature inconsistency between behavioral-spec and verification-architecture for calculateCancelAcceptanceStart), FIND-107 (env var scoping informational). The behavioral spec now contains 35 REQs and 4 NFRs faithfully covering billing-service requirements. The verification architecture has 67 Tier 1/2 PROPs with complete traceability. The spec is ready to proceed to TDD phase."
+}

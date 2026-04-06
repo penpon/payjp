@@ -1,0 +1,37 @@
+{
+  "reviewType": "contract",
+  "featureName": "billing-service",
+  "sprintNumber": 1,
+  "contractPath": "contracts/sprint-1.md",
+  "contractDigest": "c3bfe76f23dc5127b9ab7d391a416ced7dd4308e81c25cd6a0565eabf55cba9a",
+  "artifactsToReview": {
+    "spec": [
+      "specs/behavioral-spec.md",
+      "specs/verification-architecture.md"
+    ],
+    "tests": [
+      "packages/billing-service/src/core/__tests__/pure-core.test.ts",
+      "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+      "packages/billing-service/src/__tests__/integration/cancel-flow.test.ts",
+      "packages/billing-service/src/__tests__/integration/failure-handling.test.ts",
+      "packages/billing-service/src/__tests__/integration/cross-cutting.test.ts"
+    ],
+    "source": [
+      "packages/billing-service/src/core/index.ts",
+      "packages/billing-service/src/core/env.ts",
+      "packages/billing-service/src/shell/types.ts",
+      "packages/billing-service/src/shell/subscribe.ts",
+      "packages/billing-service/src/shell/cancel.ts",
+      "packages/billing-service/src/shell/errors.ts",
+      "packages/billing-service/src/shell/index.ts",
+      "packages/shared/src/types.ts"
+    ]
+  },
+  "reviewDimensions": [
+    "spec_fidelity",
+    "edge_case_coverage",
+    "implementation_correctness",
+    "structural_integrity",
+    "verification_readiness"
+  ]
+}

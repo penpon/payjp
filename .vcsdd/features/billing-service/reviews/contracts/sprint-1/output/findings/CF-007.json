@@ -1,0 +1,13 @@
+{
+  "id": "CF-007",
+  "severity": "MEDIUM",
+  "dimension": "implementation_correctness",
+  "category": "security_surface",
+  "description": "The cancel handler in shell/cancel.ts performs link session validation (find + check) at Step 8 (lines 76-86), AFTER the advisory lock, member lookup, inflight guard, access_end_at check, payjp_subscription_id check, and acceptance boundary check. This means that for the cancel flow, the link session is only validated late in the flow. If an attacker sends a request without a valid link session cookie, the system still performs DB lookups (advisory lock acquisition, member lookup, multiple guard checks) before rejecting. The subscribe handler validates the link session at Step 2 (line 39), much earlier. The contract dimension 1 references step ordering from implementation-design-mvp.md but does not highlight this asymmetry or mandate that the cancel flow must match the spec's exact step sequence where link session validation appears as Step 1 in behavioral-spec REQ-BILL-002.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/cancel.ts",
+    "lineRange": "76-86",
+    "snippet": "// Step 8: Link session validation and consumption\nconst tokenHash = linkSessionTokenHash(req.linkSessionToken);\nconst linkSession = await db.findLinkSession(tokenHash);\nif (!linkSession) {\n  return { ok: false, statusCode: 401, ... };\n}"
+  },
+  "remediation": "The contract should explicitly acknowledge that cancel link session validation occurs after multiple DB operations (as specified in REQ-BILL-021's step ordering). If this is intentional per the spec, the contract must state why this security ordering is acceptable. If unintentional, the spec and implementation should be aligned to validate the link session earlier to minimize unnecessary DB work for unauthenticated requests."
+}

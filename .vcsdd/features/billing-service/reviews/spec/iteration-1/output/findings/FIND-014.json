@@ -1,0 +1,14 @@
+{
+  "findingId": "FIND-014",
+  "dimension": "spec_fidelity",
+  "category": "security_surface",
+  "severity": "MEDIUM",
+  "description": "REQ-BILL-002 specifies link session validation using SHA-256 hash of the cookie value, but the behavioral spec does not include a pure core function for computing the hash. The effectful shell function consumeLinkSession accepts 'tokenHash' as input, implying the hash is computed elsewhere. No REQ or pure function specifies: (1) the exact hash algorithm (SHA-256), (2) encoding of the cookie value before hashing, (3) encoding of the hash output (hex vs base64). If the hash computation is treated as trivial implementation detail, it becomes a security-critical gap where different implementations could use different encodings and fail to match the auth-service's hash stored in discord_link_sessions.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "76-78",
+    "snippet": "WHEN POST /v1/subscriptions or POST /v1/subscriptions/cancel is received with cookie __Host-link_session THE SYSTEM SHALL validate link_session_token_hash = SHA-256(cookie)"
+  },
+  "remediation": "Add a pure core function (e.g., computeLinkSessionTokenHash(cookieValue: string): string) to the purity boundary that specifies SHA-256 with a defined encoding (e.g., UTF-8 input, hex output). Add a PROP obligation verifying that this function produces the same hash format as auth-service. Alternatively, explicitly state that the shared package provides this function and billing-service imports it.",
+  "routeToPhase": "1a"
+}

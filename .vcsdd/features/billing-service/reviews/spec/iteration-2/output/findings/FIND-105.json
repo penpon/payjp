@@ -1,0 +1,16 @@
+{
+  "findingId": "FIND-105",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "MEDIUM",
+  "previousFinding": null,
+  "resolutionStatus": "NEW",
+  "description": "The new PROP-BILL-062 and PROP-BILL-063 (orchestration ordering) were added to address FIND-009 (HIGH). PROP-BILL-062 (line 141) asserts 7 ordering invariants for the subscribe flow and PROP-BILL-063 (line 142) asserts 4 for cancel. However, the traceability matrix for REQ-BILL-011 (line 262) still only lists PROP-BILL-031 as the sole PROP obligation. PROP-BILL-062 references REQ-BILL-011 in its REQ column, but the traceability matrix row for REQ-BILL-011 does not include PROP-BILL-062. Same for REQ-BILL-021 (line 272) which only lists PROP-BILL-046 but not PROP-BILL-063. Traceability matrix inconsistency means an auditor checking the matrix alone would miss these critical orchestration PROPs.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "262",
+    "snippet": "| REQ-BILL-011 | PROP-BILL-031 | T-P0-02 link session consumption |"
+  },
+  "remediation": "Update traceability matrix: REQ-BILL-011 should include PROP-BILL-062. REQ-BILL-021 should include PROP-BILL-063. REQ-BILL-010 should include PROP-BILL-062. REQ-BILL-012, REQ-BILL-013, REQ-BILL-014 should also include PROP-BILL-062 as it covers their ordering dependencies.",
+  "routeToPhase": "1b"
+}

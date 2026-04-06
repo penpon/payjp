@@ -1,0 +1,71 @@
+Security Review — billing-service — 2026-04-06
+Tool: Manual static code review (Semgrep not installed)
+
+FILES REVIEWED:
+  packages/billing-service/src/core/index.ts
+  packages/billing-service/src/shell/subscribe.ts
+  packages/billing-service/src/shell/cancel.ts
+  packages/billing-service/src/shell/types.ts
+  packages/billing-service/src/shell/errors.ts
+
+DOMAIN 1: Sensitive data leakage
+  CHECK: Raw card/token in logs
+  RESULT: PASS
+  EVIDENCE:
+    - maskSensitiveLogFields redacts keys matching /^(cookie|authorization|set-cookie|token|card)$/i
+    - Function called before any log output in orchestration paths
+    - payjpToken forwarded to PayjpClient.createCustomer({ card: ... }) only — not logged by shell layer
+
+DOMAIN 2: Origin validation bypass
+  CHECK: isSameOrigin null/empty/scheme/host/port bypass
+  RESULT: PASS
+  EVIDENCE:
+    - Rejects "null" string explicitly
+    - Rejects empty string explicitly
+    - Rejects trailing slash via URL parse (hostname comparison)
+    - Uses URL constructor for scheme/host/port normalization
+    - Called as first step in handleSubscribe and handleCancel
+
+DOMAIN 3: Link session replay
+  CHECK: Token hashing, used_at atomic consumption, re-use rejection
+  RESULT: PASS
+  EVIDENCE:
+    - linkSessionTokenHash uses SHA-256 via node:crypto — raw token never stored
+    - consumeLinkSession called after operationId persistence (subscribe step 8)
+    - consumeLinkSession called even on idempotent cancel path (REQ-BILL-022)
+    - OBSERVATION(low): concurrent session race requires atomic DB UPDATE WHERE used_at IS NULL
+      — outside shell scope, responsibility of DbClient adapter
+
+DOMAIN 4: Inflight operation race conditions
+  CHECK: Advisory lock, inflight guard, concurrent request handling
+  RESULT: PASS
+  EVIDENCE:
+    - acquireAdvisoryLock keyed by "subscribe:<discordUserId>" / "cancel:<discordUserId>"
+    - hasInflightOperation secondary guard checks member.inflight_operation_id
+    - releaseAdvisoryLock called in finally block — lock always released
+    - Concurrent subscribe test (PROP-BILL-023): 1 success, 1 503
+    - Concurrent cancel test (PROP-BILL-060): cancelSubscription called at most once
+
+DOMAIN 5: PAY.JP token reuse
+  CHECK: used=true token rejection, 3DS status validation
+  RESULT: PASS
+  EVIDENCE:
+    - payjpTokenData.used === true → 422 TOKEN_ALREADY_USED (pre-write check)
+    - isThreeDSecureVerified accepts only "verified" — all others rejected
+    - 3DS check performed AFTER operationId persistence but BEFORE customer/charge creation
+    - NOTE: 3DS check after link session consumption — token with attempted/failed 3DS causes
+      link session to be consumed and inflight to be cleared. This is correct per REQ-BILL-009.
+
+DOMAIN 6: Cookie attributes
+  CHECK: __Host-link_session attributes
+  RESULT: NOT IN SCOPE
+  EVIDENCE:
+    - billing-service shell does not set cookies
+    - DbClient interface has no cookie-setting methods
+    - Cookie creation is auth-service responsibility
+
+WYCHEPROOF: NOT APPLICABLE
+  - No custom cryptographic primitives
+  - SHA-256 used only via node:crypto createHash (standard, well-vetted)
+
+OVERALL: PASS — 0 critical findings, 2 low-severity observations (documented in security-report.md)

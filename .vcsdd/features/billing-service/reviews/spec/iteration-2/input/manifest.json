@@ -1,0 +1,33 @@
+{
+  "reviewType": "spec",
+  "feature": "billing-service",
+  "iteration": 2,
+  "artifactsToReview": [
+    "specs/behavioral-spec.md",
+    "specs/verification-architecture.md"
+  ],
+  "reviewDimensions": [
+    "spec_fidelity",
+    "verification_readiness"
+  ],
+  "sourceDocuments": [
+    "2weeks-spec.md",
+    "implementation-design-mvp.md",
+    "tdd-acceptance-matrix-mvp.md"
+  ],
+  "priorFindings": "reviews/spec/iteration-1/output/verdict.json",
+  "fixesSummary": [
+    "FIND-001: Fixed REQ-BILL-011 consumption timing — now after operationId persistence (step 7), before token verification (step 9)",
+    "FIND-002: Added BILLING_INTERVAL_MONTHS/INITIAL_FREE_CYCLES/CANCEL_NOTICE_CYCLES to REQ-BILL-031 with fixed-value validation",
+    "FIND-004: Fixed REQ-BILL-021 — added advisory lock to pre-cancel validation list with explicit step ordering",
+    "FIND-007: Fixed REQ-BILL-011 — added advisory lock and provisional member creation to pre-subscribe validation list",
+    "FIND-009: Added PROP-BILL-062 (subscribe orchestration ordering) and PROP-BILL-063 (cancel orchestration ordering)",
+    "FIND-003: Added REQ-BILL-034 (PAY.JP API form-urlencoded encoding) and PROP-BILL-065",
+    "FIND-006: Added REQ-BILL-035 (PAY.JP write auto-retry prohibition) and PROP-BILL-066",
+    "FIND-010: Added PROP-BILL-064 (customer reuse path)",
+    "FIND-011: Split PROP-BILL-053 into PROP-BILL-053a-053e (5 granular failure scenarios)",
+    "FIND-014: Added linkSessionTokenHash to pure core",
+    "FIND-015: Added JST offset constant (540min) to calculateCancelAcceptanceStart signature",
+    "Added PROP-BILL-067 for fixed env var rejection"
+  ]
+}

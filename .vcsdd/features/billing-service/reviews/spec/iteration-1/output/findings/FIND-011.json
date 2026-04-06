@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-011",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "MEDIUM",
+  "description": "REQ-BILL-028 specifies behavior for definite failure AFTER PAY.JP write: re-fetch PAY.JP state, reconcile with members, clear inflight only if reconciliation succeeds. PROP-BILL-053 describes this test but the verification architecture does not specify WHICH partial failure scenarios must be tested. There are multiple distinct post-write failure points: (1) after customer creation but before charge, (2) after charge but before charge_id persistence, (3) after charge_id persistence but before subscription creation, (4) after subscription creation but before subscription_id persistence, (5) after subscription_id persistence but before member state update, (6) after cancel API call but before state update. Each requires different reconciliation logic. A single PROP is insufficient.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "125",
+    "snippet": "PROP-BILL-053 | Definite failure after PAY.JP write -> re-fetch PAY.JP state; reconcile success -> clear; reconcile fail -> 503 + operationId | REQ-BILL-028"
+  },
+  "sourceReference": {
+    "filePath": "docs/implementation-design-mvp.md",
+    "lineRange": "124-131",
+    "snippet": "Steps 10-14 showing multiple PAY.JP write points with intermediate persistence"
+  },
+  "remediation": "Expand PROP-BILL-053 into multiple sub-PROPs (PROP-BILL-053a through PROP-BILL-053f) covering each distinct failure injection point. At minimum: (a) failure after customer creation, (b) failure after charge but before subscription, (c) failure after subscription creation but before member update, (d) failure after cancel API call. Each must verify correct re-fetch and reconciliation behavior.",
+  "routeToPhase": "1b"
+}

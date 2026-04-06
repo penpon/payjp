@@ -1,0 +1,16 @@
+{
+  "findingId": "FIND-102",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "MEDIUM",
+  "previousFinding": "FIND-012",
+  "resolutionStatus": "PARTIALLY_RESOLVED",
+  "description": "FIND-012 noted that CORS preflight response details were missing. The iteration-2 behavioral spec now includes getCorsPreflight in the pure core (line 31) specifying 'Allow-Methods: POST, OPTIONS + Allow-Headers: Content-Type + credentials + origin'. The REQ-BILL-029 acceptance criteria (line 456) still only says 'Responses to OPTIONS preflight also include correct CORS headers' without specifying the exact values. The pure core function definition (line 31) serves as the de facto specification, but there is a disconnect: the REQ does not reference the pure core function's output format, so an implementer reading only the REQ would not know the exact preflight values. However, this is a MEDIUM-to-LOW issue since the pure core section does specify the values.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "31",
+    "snippet": "getCorsPreflight(frontendBaseUrl: string): Record<string, string> — preflight: Allow-Methods: POST, OPTIONS + Allow-Headers: Content-Type + credentials + origin"
+  },
+  "remediation": "Reference getCorsPreflight output in REQ-BILL-029 acceptance criteria for clarity. Minor issue since the pure core section is authoritative.",
+  "routeToPhase": "1a"
+}

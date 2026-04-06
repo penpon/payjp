@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-005",
+  "dimension": "implementation_correctness",
+  "category": "purity_boundary",
+  "severity": "major",
+  "description": "In subscribe.ts lines 266-276, after role sync failure, the implementation re-sets the inflight operation via db.setInflightOperation(). However, updateMemberAfterSubscribe (called at line 235) already cleared inflight_operation_* fields (its params include inflight_operation_id: null). This means there is a window between updateMemberAfterSubscribe completing and setInflightOperation being called where the member has no inflight guard, violating the atomicity intent of REQ-BILL-015. A concurrent request arriving in this window could bypass the inflight guard. The comment at line 268 acknowledges this: 're-set since updateMemberAfterSubscribe cleared it'.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/subscribe.ts",
+    "lineRange": "235-276",
+    "snippet": "const updatedMember = await db.updateMemberAfterSubscribe(member.id, {\n      ...\n      inflight_operation_id: null,  // CLEARED here\n      ...\n    });\n\n    // Step 14: Role sync\n    ...\n    if (!roleAssigned) {\n      // 503 + operationId, inflight retained (re-set since updateMemberAfterSubscribe cleared it)\n      await db.setInflightOperation(member.id, operationId, 'subscribe', now);"
+  },
+  "routeToPhase": "2b"
+}

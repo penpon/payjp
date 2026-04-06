@@ -1,0 +1,21 @@
+{
+  "findingId": "FIND-101",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "MEDIUM",
+  "previousFinding": "FIND-005",
+  "resolutionStatus": "UNRESOLVED",
+  "description": "FIND-005 identified that no REQ specifies how discord_user_id is obtained for the cancel flow. The cancel endpoint needs discord_user_id to acquire the advisory lock (REQ-BILL-004) and look up the member. REQ-BILL-002 describes link session validation returning a record but does not explicitly state that the record contains discord_user_id. The effectful shell function validateLinkSession (behavioral-spec.md line 43) returns LinkSessionRecord but this type is not defined, so an implementer cannot confirm it includes discord_user_id. The subscribe flow uses consumeLinkSession (line 42) which is also underspecified. This finding was NOT listed in the fixesSummary and remains unresolved. While the purity boundary section implicitly assumes discord_user_id flows from the link session, the REQs themselves do not make this explicit for the cancel path.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "42-43",
+    "snippet": "consumeLinkSession(db, tokenHash): Promise<LinkSessionRecord | null>\nvalidateLinkSession(db, tokenHash): Promise<LinkSessionRecord | null>"
+  },
+  "sourceReference": {
+    "filePath": "docs/2weeks-spec.md",
+    "lineRange": "400-407",
+    "snippet": "discord_link_sessions: link_session_token_hash (text, unique), discord_user_id (text), expires_at, used_at"
+  },
+  "remediation": "Add a note to REQ-BILL-002 or a dedicated REQ clarifying that LinkSessionRecord includes discord_user_id, and that both the subscribe and cancel flows obtain discord_user_id from the link session. This is implementation-critical because advisory lock acquisition depends on it.",
+  "routeToPhase": "1a"
+}

@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "spec_fidelity",
+  "category": "test_coverage",
+  "severity": "high",
+  "description": "CRIT-003 claims 'handleSubscribe rejects used=true with 422' and references PROP-BILL-029 for 3DS coverage, but there is NO test case anywhere in the test suite that sends a token with used=true. PROP-BILL-029 only tests non-verified 3DS statuses (attempted, failed, error, unverified, null) with used=false. The implementation at subscribe.ts:113 does check payjpTokenData.used, but the contract's binary test cannot be evaluated as PASS because no test exercises the used=true rejection path. CRIT-003 is not fully evaluable in Phase 3 without this test.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+    "lineRange": "446-461",
+    "snippet": "PROP-BILL-029 only tests three_d_secure_status variants: ['attempted', 'failed', 'error', 'unverified', null]. No test calls makePayjpToken({ used: true })."
+  },
+  "routeToPhase": "2b"
+}

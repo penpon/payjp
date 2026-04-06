@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-005",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "MEDIUM",
+  "description": "The cancel endpoint (POST /v1/subscriptions/cancel) requires resolving the discord_user_id from the link session to look up the member and acquire the advisory lock. However, no REQ in the behavioral spec describes HOW discord_user_id is obtained for the cancel flow. REQ-BILL-002 describes link session validation/consumption but does not specify that the link session record contains discord_user_id. The subscribe flow implicitly gets discord_user_id from consumeLinkSession return value, but for cancel, link session is only validated (not consumed) during pre-validations and consumed later. The spec never explicitly states that validateLinkSession (listed in the effectful shell) returns discord_user_id, nor that this is used to drive the advisory lock and member lookup for cancel.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "40-41",
+    "snippet": "validateLinkSession(db, tokenHash): Promise<LinkSessionRecord | null> — read-only validation (no consumption)"
+  },
+  "sourceReference": {
+    "filePath": "docs/2weeks-spec.md",
+    "lineRange": "221",
+    "snippet": "ユーザー単位の排他制御として pg_advisory_xact_lock(hashtext(discord_user_id)) を取得する"
+  },
+  "remediation": "Add an explicit REQ (or augment REQ-BILL-002) stating that link session validation for the cancel flow returns the associated discord_user_id from discord_link_sessions, and that this discord_user_id is used for advisory lock acquisition and member lookup. Clarify that for cancel, a read-only validation extracts the discord_user_id first, followed by lock acquisition and member state checks, with full consumption deferred to after all pre-cancel validations pass.",
+  "routeToPhase": "1a"
+}

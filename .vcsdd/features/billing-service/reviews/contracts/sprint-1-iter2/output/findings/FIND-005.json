@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-005",
+  "dimension": "structural_integrity",
+  "category": "spec_gap",
+  "severity": "low",
+  "description": "CRIT-002 states 'link session validated early (before advisory lock)' for the cancel flow. In cancel.ts:32-43, findLinkSession + expiry/used checks happen before acquireAdvisoryLock at line 46. This is correctly implemented. However, CRIT-002 also states 'consumed after acceptance boundary' but the PROP-BILL-063 test does not explicitly assert that consumeLinkSession occurs AFTER the acceptance boundary check — it only asserts findMember < consumeSession < setInflight. The acceptance boundary check (calculateCancelAcceptanceStart + isCancelAcceptable) is a pure-core function call at cancel.ts:80-85 that is not instrumented in the callOrder recording. The step ordering test would pass even if consumption happened before the boundary check, because the pure function calls are not tracked.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/cancel-flow.test.ts",
+    "lineRange": "453-504",
+    "snippet": "PROP-BILL-063 call order: findLinkSession → acquireAdvisoryLock → findMemberByDiscordUserId → consumeLinkSession → setInflightOperation → cancelSubscription → updateMemberAfterCancel. Missing: calculateCancelAcceptanceStart/isCancelAcceptable are not tracked because they are pure function calls without mock recording."
+  },
+  "routeToPhase": "3"
+}

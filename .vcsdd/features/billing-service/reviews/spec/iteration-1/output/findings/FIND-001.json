@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-001",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "HIGH",
+  "description": "REQ-BILL-011 states link session consumption occurs 'After all pre-payment validations pass, before PAY.JP writes begin', listing consumption BEFORE 'PAY.JP token verification, operationId persistence, PAY.JP writes'. However, implementation-design-mvp.md section 5.1 specifies step 7 as 'operationId preservation + inflight_operation_* setting' and step 8 as 'link session consumption'. The 2weeks-spec.md line 192 also states operationId is saved BEFORE link session consumption. The behavioral spec REQ ordering contradicts the source documents by placing consumption before operationId persistence.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "200-207",
+    "snippet": "Consumption occurs before: PAY.JP token verification, operationId persistence, PAY.JP writes"
+  },
+  "sourceReference": {
+    "filePath": "docs/implementation-design-mvp.md",
+    "lineRange": "124-128",
+    "snippet": "7. operationId を保存し inflight_operation_*（type=subscribe）を設定する\n8. 認証前提検証通過時点で __Host-link_session を消費する"
+  },
+  "remediation": "Correct REQ-BILL-011 acceptance criteria to state: consumption occurs AFTER operationId persistence (step 7 in implementation-design) but BEFORE PAY.JP token verification (step 9). The sequence must be: pre-validations -> operationId persistence -> link session consumption -> PAY.JP token verification -> PAY.JP writes.",
+  "routeToPhase": "1a"
+}

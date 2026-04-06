@@ -1,0 +1,14 @@
+{
+  "findingId": "FIND-015",
+  "dimension": "verification_readiness",
+  "category": "purity_boundary",
+  "severity": "MEDIUM",
+  "description": "The pure core function calculateCancelAcceptanceStart(accessEndAt: Date): Date performs JST-aware date arithmetic (computing 1-month-before at 00:00:00 JST). However, JST timezone handling requires knowing the timezone offset (UTC+9). If the implementation uses the system timezone or a timezone library, this introduces an implicit dependency on runtime environment configuration or an external library. The purity boundary classification claims this function is 'deterministic, side-effect-free', but timezone handling can be impure if it depends on: (1) system timezone setting, (2) timezone database version (for historical DST changes, though JST has none), (3) timezone library initialization. The behavioral spec should explicitly state that the JST offset is a hardcoded constant (UTC+9, no DST) to preserve purity.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "17",
+    "snippet": "calculateCancelAcceptanceStart(accessEndAt: Date): Date — JST 1-month-before same-day 00:00:00"
+  },
+  "remediation": "Add an explicit note in the purity boundary that JST is treated as a fixed UTC+9 offset (Japan does not observe DST) and that calculateCancelAcceptanceStart must not depend on system timezone or IANA timezone database. Alternatively, change the function signature to accept the UTC offset as a parameter for testability: calculateCancelAcceptanceStart(accessEndAt: Date, utcOffsetMinutes: number): Date.",
+  "routeToPhase": "1a"
+}

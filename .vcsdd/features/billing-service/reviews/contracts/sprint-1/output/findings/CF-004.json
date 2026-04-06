@@ -1,0 +1,13 @@
+{
+  "id": "CF-004",
+  "severity": "MEDIUM",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "description": "REQ-BILL-013 specifies that billing-service must 'immediately persist members.payjp_initial_charge_id and members.initial_charge_paid_at' after the initial charge. The subscribe orchestration in shell/subscribe.ts does pass payjp_initial_charge_id in updateMemberAfterSubscribe (line 230), but initial_charge_paid_at is never set in the subscribe flow. The updateMemberAfterSubscribe signature in shell/types.ts (lines 89-102) does not include initial_charge_paid_at as a parameter. The contract does not call attention to this field. Tests in subscribe-flow.test.ts also never assert that initial_charge_paid_at is set.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/shell/types.ts",
+    "lineRange": "89-102",
+    "snippet": "updateMemberAfterSubscribe(memberId: string, params: {\n    payjp_initial_charge_id: string | null;\n    payjp_subscription_id: string;\n    ...\n    // initial_charge_paid_at is missing\n  }): Promise<Member>;"
+  },
+  "remediation": "Add initial_charge_paid_at to the updateMemberAfterSubscribe parameter type. Set it to the current timestamp for first-time users in subscribe.ts. Add a test assertion verifying the field is set. Add a contract criterion specifically covering initial_charge_paid_at persistence."
+}

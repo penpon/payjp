@@ -1,0 +1,13 @@
+{
+  "id": "CF-001",
+  "severity": "HIGH",
+  "dimension": "structural_integrity",
+  "category": "spec_gap",
+  "description": "Contract uses prose-based grading dimensions with numeric scores (>= 6/10 per dimension, >= 7.0/10 weighted total) instead of discrete CRIT-XXX criteria with binary PASS/FAIL verdicts. VCSDD strict mode requires binary-evaluable criteria. Phase 3 adversary cannot populate evaluatedCriteria in convergenceSignals because no CRIT-XXX identifiers exist. The pass threshold at line 72 ('Each dimension must score >= 6/10 and weighted total must be >= 7.0/10') allows grade inflation through partial credit.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/contracts/sprint-1.md",
+    "lineRange": "42-73",
+    "snippet": "## Pass Threshold\nEach dimension must score >= 6/10 and weighted total must be >= 7.0/10."
+  },
+  "remediation": "Replace the five prose grading dimensions with discrete CRIT-XXX criteria (one per reviewable obligation). Each criterion must have an explicit PASS/FAIL condition. Remove numeric scoring and weighted totals. Use binary pass threshold: overall PASS requires all criteria PASS."
+}

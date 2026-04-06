@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-004",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "HIGH",
+  "description": "REQ-BILL-021 specifies cancel link session consumption timing, listing the following pre-cancel validations that must pass before consumption: 'Origin, link session validity, existing subscription, inflight check, access_end_at, payjp_subscription_id, acceptance boundary'. However, implementation-design-mvp.md section 5.2 specifies the cancel sequence as: step 1 (Origin + link_session), step 2 (advisory lock), step 3 (existing subscription check), step 4 (inflight check), step 5-6 (access_end_at/payjp_subscription_id check), step 7 (acceptance boundary), step 8 (link session consumption). Critically, the behavioral spec REQ-BILL-021 omits 'advisory lock acquisition' from the list of pre-cancel validations, while implementation-design step 2 shows it occurs before the existing subscription check. The advisory lock must be acquired before checking member state but the REQ does not specify this ordering.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "334-340",
+    "snippet": "Consumption after all pre-cancel validations pass (Origin, link session validity, existing subscription, inflight check, access_end_at, payjp_subscription_id, acceptance boundary)"
+  },
+  "sourceReference": {
+    "filePath": "docs/implementation-design-mvp.md",
+    "lineRange": "133-142",
+    "snippet": "1. Origin / __Host-link_session を検証する\n2. pg_advisory_xact_lock(hashtext(discord_user_id)) を取得する\n3. active/trial/canceled の既存購読が無い場合は 409"
+  },
+  "remediation": "Update REQ-BILL-021 to explicitly include advisory lock acquisition in the pre-cancel validation sequence. The complete ordered list should be: Origin validation -> link session validation -> advisory lock acquisition -> existing subscription check -> inflight check -> access_end_at check -> payjp_subscription_id check -> acceptance boundary -> link session consumption.",
+  "routeToPhase": "1a"
+}

@@ -1,0 +1,16 @@
+{
+  "findingId": "FIND-104",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "MEDIUM",
+  "previousFinding": null,
+  "resolutionStatus": "NEW",
+  "description": "REQ-BILL-031 now includes BILLING_INTERVAL_MONTHS, INITIAL_FREE_CYCLES, CANCEL_NOTICE_CYCLES with fixed-value validation (lines 491-503), and PROP-BILL-067 tests rejection of wrong fixed values. However, the traceability matrix (line 282) for REQ-BILL-031 lists only PROP-BILL-015, PROP-BILL-016, PROP-BILL-056. The newly added PROP-BILL-067 is missing from REQ-BILL-031's traceability row. It appears at line 289 under REQ-BILL-034/REQ-BILL-035 block but has no traceability row of its own linking back to REQ-BILL-031. Similarly, the new validateFixedEnvVars pure core function (line 29) has no PROP in the Tier 1 table. PROP-BILL-067 is a Tier 2 integration test that spawns the process; there is no Tier 1 unit test verifying validateFixedEnvVars logic in isolation.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "282",
+    "snippet": "| REQ-BILL-031 | PROP-BILL-015, PROP-BILL-016, PROP-BILL-056 | T-P0-02 env validation |"
+  },
+  "remediation": "Add PROP-BILL-067 to the REQ-BILL-031 traceability row. Add a Tier 1 unit test PROP for validateFixedEnvVars covering each fixed-value mismatch case in isolation.",
+  "routeToPhase": "1b"
+}

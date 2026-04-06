@@ -1,0 +1,32 @@
+target-feature-tests: PASS
+regression-baseline: PASS
+billing-service: 143 passed (68 tier1 + 75 tier2)
+auth-service: 102 passed (regression)
+phase: 2c (contract-approved)
+---
+
+
+> test:billing
+> npm -w packages/billing-service run test
+
+
+> @hayane/billing-service@0.0.1 test
+> vitest run
+
+
+ RUN  v3.2.4 /Users/nana/workspace/hayane_payjp/packages/billing-service
+
+ ✓ src/__tests__/integration/cross-cutting.test.ts (12 tests) 7ms
+ ✓ src/__tests__/integration/failure-handling.test.ts (7 tests) 18ms
+ ✓ src/__tests__/integration/cancel-flow.test.ts (19 tests) 34ms
+ ✓ src/core/__tests__/pure-core.test.ts (68 tests) 819ms
+   ✓ PROP-BILL-015: validateFrontendBaseUrl > (property) strings with / after host are rejected  741ms
+ ✓ src/__tests__/integration/subscribe-flow.test.ts (37 tests) 6077ms
+   ✓ POST /v1/subscriptions — Integration > PROP-BILL-039: Role sync retry > retries up to 3 times on Discord 429/5xx  3002ms
+   ✓ POST /v1/subscriptions — Integration > PROP-BILL-040: Role sync final failure > 503 + operationId, inflight_operation_* retained  3004ms
+
+ Test Files  5 passed (5)
+      Tests  143 passed (143)
+   Start at  13:08:51
+   Duration  6.83s (transform 382ms, setup 0ms, collect 706ms, tests 6.95s, environment 2ms, prepare 838ms)
+

@@ -1,0 +1,19 @@
+{
+  "findingId": "FIND-006",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "MEDIUM",
+  "description": "2weeks-spec.md section 8 line 431 states: 'customer/subscription/charge/cancel のPAY.JP書き込みAPIは自動再試行しない'. Implementation-design-mvp.md line 208 reiterates: 'customer/subscription/charge 作成系APIは自動再試行しない（重複作成リスク回避）'. The behavioral spec mentions this constraint only in REQ-BILL-026 (uncertain failure returns 503) and REQ-BILL-015 (Discord role retry). There is no explicit REQ stating that PAY.JP write APIs (customer/charge/subscription creation, cancel) MUST NOT be automatically retried. This is a critical safety invariant that should be a first-class requirement, not merely implied by the failure handling REQs.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/behavioral-spec.md",
+    "lineRange": "393-402",
+    "snippet": "REQ-BILL-026 mentions PAY.JP write NOT retried automatically but only in context of uncertain failure"
+  },
+  "sourceReference": {
+    "filePath": "docs/2weeks-spec.md",
+    "lineRange": "431",
+    "snippet": "customer/subscription/charge/cancel のPAY.JP書き込みAPIは自動再試行しない"
+  },
+  "remediation": "Add an explicit REQ (e.g., REQ-BILL-035) as a blanket safety invariant: 'AT ALL TIMES billing-service MUST NOT automatically retry any PAY.JP write API call (POST /v1/customers, POST /v1/charges, POST /v1/subscriptions, cancel subscription). Retry is permitted only through the manual resync CLI.' Add a corresponding PROP to verify no retry logic exists for PAY.JP write paths.",
+  "routeToPhase": "1a"
+}

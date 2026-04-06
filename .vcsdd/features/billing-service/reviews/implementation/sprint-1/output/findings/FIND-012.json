@@ -1,0 +1,13 @@
+{
+  "findingId": "FIND-012",
+  "dimension": "spec_fidelity",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "PROP-BILL-065 PAY.JP API encoding test (subscribe-flow.test.ts lines 831-843) does NOT actually verify encoding. It only checks that PayjpClient methods were called, not that form-urlencoded was used instead of JSON. The test comment acknowledges this: 'エンコード方式はクライアント実装の責務'. REQ-BILL-034 requires form-urlencoded encoding but this is untestable at the shell level since the PayjpClient interface abstracts away encoding. No PayjpClient implementation exists in the sprint to verify encoding.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/__tests__/integration/subscribe-flow.test.ts",
+    "lineRange": "831-843",
+    "snippet": "describe('PROP-BILL-065: PAY.JP API encoding', () => {\n    it('all PAY.JP calls use form-urlencoded; no JSON POST', async () => {\n      // shell 実装は PayjpClient インターフェース経由のため、\n      // エンコード方式はクライアント実装の責務。\n      const deps = makeSuccessfulDeps();\n      await handleSubscribe(makeSubscribeRequest(), deps);\n      expect(deps.payjp.fetchToken).toHaveBeenCalledWith(PAYJP_TOKEN_ID);"
+  },
+  "routeToPhase": "2b"
+}

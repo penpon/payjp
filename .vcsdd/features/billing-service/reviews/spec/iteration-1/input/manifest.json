@@ -1,0 +1,18 @@
+{
+  "reviewType": "spec",
+  "feature": "billing-service",
+  "iteration": 1,
+  "artifactsToReview": [
+    "specs/behavioral-spec.md",
+    "specs/verification-architecture.md"
+  ],
+  "reviewDimensions": [
+    "spec_fidelity",
+    "verification_readiness"
+  ],
+  "sourceDocuments": [
+    "2weeks-spec.md",
+    "implementation-design-mvp.md",
+    "tdd-acceptance-matrix-mvp.md"
+  ]
+}

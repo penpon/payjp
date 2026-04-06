@@ -1,0 +1,13 @@
+{
+  "id": "CF-006",
+  "severity": "MEDIUM",
+  "dimension": "verification_readiness",
+  "category": "purity_boundary",
+  "description": "The pure core function linkSessionTokenHash in core/index.ts (line 252) imports createHash from 'node:crypto', a platform I/O module. The behavioral spec (line 27) acknowledges this ('deterministic, uses platform crypto') and the contract's purity boundary dimension (line 56) claims '19 pure functions in core/ -- no I/O, deterministic, testable without mocks'. While SHA-256 is deterministic, importing from node:crypto introduces a platform dependency that is not side-effect-free in the strictest sense. The contract does not acknowledge this exception or justify why it belongs in pure core rather than the effectful shell.",
+  "evidence": {
+    "filePath": "packages/billing-service/src/core/index.ts",
+    "lineRange": "4,252-254",
+    "snippet": "import { createHash } from 'node:crypto';\n...\nexport function linkSessionTokenHash(token: string): string {\n  return createHash('sha256').update(token).digest('hex');\n}"
+  },
+  "remediation": "The contract should explicitly acknowledge linkSessionTokenHash as a boundary case: deterministic but platform-dependent. Either (a) move it to the shell layer and inject a hash function, or (b) document in the contract that this function is classified as pure-with-platform-dependency and explain why it remains in core."
+}

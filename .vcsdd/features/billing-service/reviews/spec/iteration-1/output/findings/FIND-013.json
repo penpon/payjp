@@ -1,0 +1,14 @@
+{
+  "findingId": "FIND-013",
+  "dimension": "verification_readiness",
+  "category": "verification_tool_mismatch",
+  "severity": "LOW",
+  "description": "PROP-BILL-006 specifies testing calculateCancelAcceptanceStart with '8+ date pairs (month-end rollup, leap year, standard months, edge cases)'. However, the verification architecture does not use property-based testing (fast-check) for this function despite it being a prime candidate. The function has complex date arithmetic with month-end rollup that would benefit from property testing: for any Date input, the result should satisfy the invariant that adding 1 month to the result and normalizing should equal or exceed the input date. The unit case table approach may miss edge cases that property testing would catch (e.g., DST transitions in JST, year boundaries, dates around February in various year types).",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/specs/verification-architecture.md",
+    "lineRange": "73",
+    "snippet": "PROP-BILL-006 | calculateCancelAcceptanceStart correctly computes JST 1-month-before with month-end rollup | REQ-BILL-020 | true | Vitest unit tests (boundary cases: 3/31->2/28, 5/31->4/30, leap year)"
+  },
+  "remediation": "Consider adding a property-based test (fast-check) for calculateCancelAcceptanceStart that generates arbitrary dates and verifies the invariant: result is exactly 1 month before the input in JST, with month-end rollup correctly applied. This would supplement the case table with randomly generated edge cases.",
+  "routeToPhase": "1b"
+}

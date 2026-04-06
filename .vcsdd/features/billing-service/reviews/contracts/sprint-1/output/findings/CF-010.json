@@ -1,0 +1,13 @@
+{
+  "id": "CF-010",
+  "severity": "LOW",
+  "dimension": "structural_integrity",
+  "category": "spec_gap",
+  "description": "The contract Artifact Set table (lines 18-28) lists shared types at 'packages/shared/src/types.ts' but does not list the evidence log files that it references in lines 76-77 (.vcsdd/features/billing-service/evidence/sprint-1-red-phase.log and sprint-1-green-phase.log). The contract also claims 'isUncertainError extracted to shared errors.ts during refactor' (line 68) but isUncertainError is in packages/billing-service/src/shell/errors.ts, not in a shared package. The term 'shared errors.ts' is misleading -- it is the billing-service shell layer's errors.ts, not a package-level shared module.",
+  "evidence": {
+    "filePath": ".vcsdd/features/billing-service/contracts/sprint-1.md",
+    "lineRange": "68",
+    "snippet": "isUncertainError extracted to shared errors.ts during refactor"
+  },
+  "remediation": "Clarify the contract: (1) 'shared errors.ts' should read 'shell/errors.ts' to avoid confusion with the @hayane/shared package. (2) Evidence log files should be listed in the artifact set if they are referenced as pass criteria."
+}
