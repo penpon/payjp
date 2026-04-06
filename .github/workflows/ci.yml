@@ -6,7 +6,7 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
