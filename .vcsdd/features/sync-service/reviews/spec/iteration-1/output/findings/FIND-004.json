@@ -1,0 +1,9 @@
+{
+  "id": "FIND-004",
+  "dimension": "verification_coverage",
+  "severity": "minor",
+  "title": "subscription.renewed event type is in the allowlist but has no dedicated integration test exercising its processing path",
+  "description": "The behavioral spec (REQ-SYNC-003, line 91) and source design doc (implementation-design-mvp.md line 150) list 7 allowed event types including subscription.renewed. According to REQ-SYNC-005, renewed events require data.status (non-created/deleted). PROP-SYNC-002 verifies the allowlist membership, but no INT-SYNC test exercises the full webhook processing pipeline with a subscription.renewed event. While it may be argued that renewed follows the same code path as updated, without an explicit test this is an unverified assumption. If renewed has subtly different payload structure from PAY.JP, the system could fail silently.",
+  "location": "specs/verification-architecture.md lines 98-130 (INT-SYNC tests) — no renewed-specific test",
+  "recommendation": "Add an INT-SYNC test for a subscription.renewed happy path (event received, member status updated, role synced) to confirm the renewed event type is handled identically to updated."
+}

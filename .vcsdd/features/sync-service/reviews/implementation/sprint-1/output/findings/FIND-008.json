@@ -1,0 +1,10 @@
+{
+  "id": "FIND-008",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "title": "REQ-SYNC-021 --discord-user-id member not found should exit 1, implementation returns exit 0",
+  "description": "REQ-SYNC-021 specifies 'Look up the member by discord_user_id (not found -> exit code 1)'. The implementation at cli.ts:387-398 handleUserReconciliation returns { success: false } when member is not found. In runResyncCli at cli.ts:72-76, failed=1 is set, and the exit code is determineCliExitCode(1, false) which returns 2 (completed with failures), NOT 1 (CLI error). The spec explicitly says 'exit code 1' for member not found, which corresponds to a CLI error. Exit code 2 means 'completed with failures' which has different operational semantics.",
+  "location": "packages/sync-service/src/shell/cli.ts:72-76,387-398",
+  "recommendation": "Treat member-not-found in --discord-user-id mode as a CLI error (cliError=true) to produce exit code 1, matching the spec. Alternatively, clarify the spec if exit code 2 is the intended behavior."
+}

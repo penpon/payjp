@@ -1,0 +1,10 @@
+{
+  "id": "FIND-013",
+  "dimension": "behavioral_completeness",
+  "category": "spec_gap",
+  "severity": "major",
+  "title": "REQ-SYNC-016 daily resync not implemented as a separate scheduled job — only testable via --all CLI",
+  "description": "REQ-SYNC-016 specifies a daily resync job triggered by 'schedule from DAILY_RESYNC_CRON'. The implementation has no cron scheduling mechanism — the daily resync logic is only reachable through the CLI --all path (cli.ts:77-83 -> handleAllReconciliation). While reconcileMember() implements the correct checks (access_end_at expiration, PAY.JP subscription state, no inflight clearing), there is no standalone daily resync entry point that uses DAILY_RESYNC_CRON. The environment variable DAILY_RESYNC_CRON is validated by validateWebhookRequiredEnvVars (core/index.ts:114) but never consumed. Tests INT-SYNC-010/011/012 use --all CLI as a proxy.",
+  "location": "packages/sync-service/src/shell/cli.ts:77-83",
+  "recommendation": "Implement a scheduled daily resync entry point or explicitly document that --all CLI is the intended mechanism for daily resync (triggered externally, e.g., via cron job or Kubernetes CronJob). If external scheduling is intended, remove DAILY_RESYNC_CRON from required env vars or document its consumption point."
+}

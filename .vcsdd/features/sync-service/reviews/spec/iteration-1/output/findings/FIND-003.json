@@ -1,0 +1,9 @@
+{
+  "id": "FIND-003",
+  "dimension": "purity_boundary",
+  "severity": "major",
+  "title": "validateWebhookToken claims constant-time comparison but purity boundary does not enforce or verify this",
+  "description": "The behavioral spec (line 13) states validateWebhookToken performs 'constant-time token comparison' and is classified as pure. However, constant-time comparison is a security property that depends on the implementation (e.g., using crypto.timingSafeEqual in Node.js). The verification architecture (line 17) mentions 'Constant-time comparison; empty -> false' as a verifiable property, but PROP-SYNC-001 (line 80) only tests 'Equal strings -> true; any diff -> false' using fc.string() pairs — it does not verify constant-time behavior. If the pure implementation uses simple === comparison, it is functionally correct but timing-vulnerable. This is a security_surface finding because timing attacks on webhook token verification could allow token guessing.",
+  "location": "specs/behavioral-spec.md line 13; specs/verification-architecture.md lines 17, 80",
+  "recommendation": "Either (a) add a verification note that constant-time comparison is an implementation constraint verified by code review (not by property test), or (b) add a specific test that asserts the use of crypto.timingSafeEqual or equivalent. The PROP test description should not claim to verify constant-time when it only verifies correctness."
+}

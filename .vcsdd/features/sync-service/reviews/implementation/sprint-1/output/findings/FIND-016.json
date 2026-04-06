@@ -1,0 +1,10 @@
+{
+  "id": "FIND-016",
+  "dimension": "behavioral_completeness",
+  "category": "test_coverage",
+  "severity": "major",
+  "title": "Missing test for REQ-SYNC-011 safe-side revocation when member cannot be resolved",
+  "description": "REQ-SYNC-011 specifies two cases for unknown status: (1) member resolved + existing role -> revoke (safe-side), (2) member cannot be resolved -> no role action. The test INT-SYNC-006 at webhook-flow.test.ts:189-206 only tests case 1 (member resolved -> revoke). There is no test for case 2 (unknown status with unresolvable member -> no role action). The implementation at webhook.ts:140-155 returns 'failed' with 'member_not_found' before reaching the unknown status check, which means case 2 is implicitly handled but not tested or verified.",
+  "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:189-206",
+  "recommendation": "Add a test where the event has an unknown status AND the member cannot be resolved (both metadata and subscription_id lookups fail). Verify that the response is 200/failed and syncRole is NOT called."
+}

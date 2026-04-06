@@ -1,0 +1,10 @@
+{
+  "id": "FIND-108",
+  "dimension": "spec_completeness",
+  "category": "requirement_mismatch",
+  "severity": "minor",
+  "title": "REQ-SYNC-011 still combines 'record as failed' and 'role revocation' without specifying behavior when member resolution fails for unknown status",
+  "description": "Previous iteration FIND-005 identified that REQ-SYNC-011 (behavioral-spec.md lines 168-172) mixes two potentially conflicting behaviors: (1) recording the event as 'failed' without updating members, and (2) revoking the Discord role as a 'safe-side' measure. The requirement still does not specify what happens when the member cannot be resolved (REQ-SYNC-009 member resolution fails) during an unknown status event. If member resolution fails, there is no member to revoke a role from, yet the requirement implies revocation should occur. INT-SYNC-006 tests 'unknown status → failed + role revocation' but the spec does not constrain the behavior when resolution fails. The implementation could either skip revocation (silent gap) or error (unspecified).",
+  "location": ".vcsdd/features/sync-service/specs/behavioral-spec.md lines 168-172 (REQ-SYNC-011)",
+  "recommendation": "Add a clause: 'WHEN member resolution succeeds, THE SYSTEM SHALL revoke the Discord role. WHEN member resolution fails, THE SYSTEM SHALL record as failed without attempting revocation.' This eliminates the ambiguity about revocation when no member context exists."
+}

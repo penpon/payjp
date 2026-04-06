@@ -1,0 +1,10 @@
+{
+  "id": "FIND-003",
+  "dimension": "purity_compliance",
+  "category": "purity_boundary",
+  "severity": "critical",
+  "title": "validateWebhookToken imports and calls crypto.timingSafeEqual but is classified as pure core",
+  "description": "The function validateWebhookToken at core/index.ts:121-127 calls timingSafeEqual from 'node:crypto' (imported at line 4). While timingSafeEqual is deterministic for the same inputs, it is a Node.js native binding that performs I/O-level operations (accessing system-level timing mechanisms). The spec at behavioral-spec.md:13 and verification-architecture.md:17 classify this function as pure core, but the import of node:crypto means the pure core module has a dependency on a Node.js native module. This violates the strict purity boundary: the pure core should have zero imports from Node.js built-in modules that perform native bindings. The property test PROP-SYNC-001 passes, but it tests through the crypto binding rather than testing pure logic.",
+  "location": "packages/sync-service/src/core/index.ts:4,121-127",
+  "recommendation": "Accept this as a pragmatic boundary exception but document it explicitly, OR extract the comparison to a shell-injected dependency and have the pure core accept a comparator function. The spec itself prescribes this approach, so if accepted, add an explicit purity exception annotation."
+}

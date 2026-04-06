@@ -1,0 +1,10 @@
+{
+  "id": "FIND-002",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "critical",
+  "title": "insertPayjpEvent does not persist ignore_reason, fail_reason, or data_metadata_operation_id (REQ-SYNC-002, REQ-SYNC-014)",
+  "description": "The insertPayjpEvent function at webhook.ts:268-275 executes an INSERT with only 5 columns (id, event_type, payload, processing_result, member_id). The PayjpEventInsert type at types.ts:6-15 declares fields ignore_reason, fail_reason, and data_metadata_operation_id, and the caller populates them (e.g., webhook.ts:63-66 sets ignore_reason and data_metadata_operation_id). However, the SQL INSERT statement never includes these columns. REQ-SYNC-002 requires 'process_status=ignored, ignore_reason=livemode_mismatch'. REQ-SYNC-014 requires 'store data.metadata.operation_id in payjp_events.data_metadata_operation_id'. Neither is actually persisted to the database.",
+  "location": "packages/sync-service/src/shell/webhook.ts:268-275",
+  "recommendation": "Add ignore_reason, fail_reason, and data_metadata_operation_id columns to the INSERT statement. Write integration tests that verify these columns are present in the inserted row."
+}

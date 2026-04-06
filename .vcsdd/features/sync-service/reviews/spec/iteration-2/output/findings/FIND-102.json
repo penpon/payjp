@@ -1,0 +1,10 @@
+{
+  "id": "FIND-102",
+  "dimension": "traceability",
+  "category": "test_coverage",
+  "severity": "major",
+  "title": "INT-SYNC-023 is defined but unmapped in the traceability matrix; PROP-SYNC-010 is also orphaned",
+  "description": "INT-SYNC-023 ('CLI last_payjp_event_created_at update after recovery', verification-architecture.md line 122) exists in the integration test catalog but is not referenced in any row of the traceability matrix (lines 154-185). This test covers the behavior specified in REQ-SYNC-019 step 6 ('Update last_payjp_event_created_at = max(existing, resyncStartUnix)') but the REQ-SYNC-019 row (line 174) omits INT-SYNC-023 from its integration test list. Similarly, PROP-SYNC-010 tests calculateLastEventTimestamp (line 89) but does not appear in any traceability row. Both are verification artifacts with no traceability anchor, meaning their pass/fail status cannot be attributed to any requirement during convergence review.",
+  "location": ".vcsdd/features/sync-service/specs/verification-architecture.md lines 122, 89, 174",
+  "recommendation": "Add INT-SYNC-023 and PROP-SYNC-010 to the REQ-SYNC-019 row in the traceability matrix."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "FIND-006",
+  "dimension": "spec_completeness",
+  "severity": "major",
+  "title": "No requirement specifies concurrent webhook processing behavior or serialization guarantees",
+  "description": "The source design document (implementation-design-mvp.md line 158-159) explicitly acknowledges concurrent processing concerns: 'event.created == last (same-second) is NOT ignored and processed normally. In single-worker this is arrival order; in multiple workers this is DB commit order and non-deterministic.' However, the behavioral spec has no requirement addressing webhook concurrency. There is no mention of pg_advisory_xact_lock or any serialization mechanism for webhook processing. If two webhook events for the same member arrive simultaneously, the stale event check (REQ-SYNC-007) and last_payjp_event_created_at update (REQ-SYNC-010) could race. This could result in both events being processed and the older one overwriting the newer status. The billing-service spec uses pg_advisory_xact_lock for concurrency — the sync-service spec should explicitly address whether webhook processing requires serialization.",
+  "location": "specs/behavioral-spec.md — no concurrency requirement present; cf. implementation-design-mvp.md lines 158-159",
+  "recommendation": "Add a requirement specifying either (a) webhook processing is single-worker and does not require serialization, or (b) concurrent webhook processing for the same member is serialized via advisory lock or similar mechanism. The choice directly affects the correctness of REQ-SYNC-007 (stale event rejection)."
+}

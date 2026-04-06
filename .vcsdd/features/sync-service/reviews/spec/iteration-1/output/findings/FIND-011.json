@@ -1,0 +1,9 @@
+{
+  "id": "FIND-011",
+  "dimension": "spec_completeness",
+  "severity": "minor",
+  "title": "REQ-SYNC-016 Daily Resync does not specify error handling for individual member processing failures",
+  "description": "REQ-SYNC-016 (behavioral-spec.md lines 208-215) specifies the daily resync iterates all members and checks access_end_at/subscription state, but does not specify what happens when processing a single member fails (e.g., PAY.JP API timeout for one member during bulk resync). Should the job continue to the next member or abort entirely? Should the failure be recorded in member_impact_logs? The source design doc (implementation-design-mvp.md line 167) is also silent on per-member error handling during daily resync. This ambiguity means an implementer could either skip-and-continue or abort-all, with very different operational outcomes.",
+  "location": "specs/behavioral-spec.md lines 208-215 (REQ-SYNC-016)",
+  "recommendation": "Add acceptance criteria specifying: (a) per-member failure during daily resync records a member_impact_log and continues to the next member, (b) the daily resync job completes even if some members fail, (c) the job reports total/succeeded/failed counts."
+}

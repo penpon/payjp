@@ -1,0 +1,10 @@
+{
+  "id": "FIND-104",
+  "dimension": "ears_compliance",
+  "category": "spec_gap",
+  "severity": "minor",
+  "title": "REQ-SYNC-015 still uses bare 'THE SYSTEM SHALL' without WHEN trigger despite previous finding FIND-007 recommending reformulation",
+  "description": "Previous iteration FIND-007 recommended reformulating both REQ-SYNC-013 and REQ-SYNC-015 to include proper EARS triggers. REQ-SYNC-013 (line 189) was fixed to include 'WHEN POST /v1/payjp/webhook completes processing'. However, REQ-SYNC-015 (line 204) still reads 'THE SYSTEM SHALL NOT store raw header/body or card information in logs' without any triggering condition. This is a Ubiquitous EARS pattern, which is technically valid but inconsistent with the style applied to REQ-SYNC-013's fix. More importantly, the scope of 'logs' is ambiguous — does this apply only to webhook processing logs or to all sync-service logs including CLI and daily resync?",
+  "location": ".vcsdd/features/sync-service/specs/behavioral-spec.md line 204 (REQ-SYNC-015)",
+  "recommendation": "Add scope clarification: 'WHEN the sync-service produces any log output THE SYSTEM SHALL NOT store raw header/body or card information. Sensitive fields SHALL be masked...' This clarifies the requirement applies to all sync-service log outputs, not just webhook processing."
+}

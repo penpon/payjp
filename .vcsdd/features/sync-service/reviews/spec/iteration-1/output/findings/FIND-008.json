@@ -1,0 +1,9 @@
+{
+  "id": "FIND-008",
+  "dimension": "traceability",
+  "severity": "major",
+  "title": "INT-SYNC test IDs do not map to REQ-SYNC IDs, making traceability non-obvious",
+  "description": "The verification architecture lists 30 integration tests (INT-SYNC-001 through INT-SYNC-030) but does not provide a traceability matrix mapping each INT-SYNC to its corresponding REQ-SYNC requirement(s). For example: INT-SYNC-024 ('member_impact_logs: insert on failure, resolve on recovery') corresponds to REQ-SYNC-023, not REQ-SYNC-024 as the numbering might suggest. INT-SYNC-012 ('Daily resync: does NOT clear inflight_operation') maps to REQ-SYNC-025, not REQ-SYNC-012. Without an explicit mapping, it is impossible to verify at a glance whether all 27 REQ-SYNC requirements have at least one INT-SYNC test, and which requirements lack integration-level coverage.",
+  "location": "specs/verification-architecture.md lines 98-130 (INT-SYNC section)",
+  "recommendation": "Add a REQ-SYNC to INT-SYNC traceability matrix at the end of the verification architecture, listing each REQ-SYNC-XXX and its corresponding INT-SYNC test(s). This will immediately reveal gaps such as REQ-SYNC-024 having no INT-SYNC coverage."
+}

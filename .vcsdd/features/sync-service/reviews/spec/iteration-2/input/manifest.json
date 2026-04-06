@@ -1,0 +1,19 @@
+{
+  "reviewType": "spec",
+  "iteration": 2,
+  "feature": "sync-service",
+  "artifacts": [
+    ".vcsdd/features/sync-service/specs/behavioral-spec.md",
+    ".vcsdd/features/sync-service/specs/verification-architecture.md"
+  ],
+  "sourceDocuments": [
+    "docs/implementation-design-mvp.md",
+    "docs/tdd-acceptance-matrix-mvp.md"
+  ],
+  "previousIteration": {
+    "path": ".vcsdd/features/sync-service/reviews/spec/iteration-1/output/verdict.json",
+    "findingCount": 15,
+    "overall": "FAIL"
+  },
+  "outputDirectory": ".vcsdd/features/sync-service/reviews/spec/iteration-2/output"
+}

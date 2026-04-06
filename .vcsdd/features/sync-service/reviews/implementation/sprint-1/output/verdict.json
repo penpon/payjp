@@ -1,0 +1,142 @@
+{
+  "phase": "3",
+  "sprint": 1,
+  "feature": "sync-service",
+  "timestamp": "2026-04-06T18:00:00Z",
+  "overallVerdict": "FAIL",
+  "dimensions": {
+    "spec_fidelity": {
+      "verdict": "FAIL",
+      "findings": ["FIND-002", "FIND-005", "FIND-008", "FIND-010", "FIND-011", "FIND-015"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/webhook.ts:268-275",
+          "description": "insertPayjpEvent SQL INSERT omits ignore_reason, fail_reason, data_metadata_operation_id columns despite PayjpEventInsert type declaring them and callers populating them. REQ-SYNC-002 and REQ-SYNC-014 violated."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/cli.ts:123-134",
+          "description": "REQ-SYNC-024 escalation log missing resolution_possible, assignee, detected_at fields."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/cli.ts:387-398",
+          "description": "REQ-SYNC-021 member not found should exit 1 (CLI error), implementation produces exit 2."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/cli.ts:401-430",
+          "description": "REQ-SYNC-022 missing post-completion inflight residual verification."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/cli.ts:63-98",
+          "description": "REQ-SYNC-023 failed_count not reconciled with countUnresolvedImpactLogs."
+        }
+      ]
+    },
+    "behavioral_completeness": {
+      "verdict": "FAIL",
+      "findings": ["FIND-006", "FIND-007", "FIND-009", "FIND-013", "FIND-014", "FIND-016"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:309-326",
+          "description": "INT-SYNC-028 is tautological: does not verify operation_id is persisted to DB, which it is not (FIND-002)."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:399-420",
+          "description": "INT-SYNC-036 concurrent webhook test does not verify advisory locking — mock DB has no lock semantics."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:363-378",
+          "description": "INT-SYNC-025 mocks away retry logic entirely — does not test 429/5xx retry behavior."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:290-306",
+          "description": "INT-SYNC-027 log security test passes because raw body is never logged, not because masking works."
+        }
+      ]
+    },
+    "safety_security": {
+      "verdict": "FAIL",
+      "findings": ["FIND-001", "FIND-004", "FIND-012", "FIND-017"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/webhook.ts:119-247",
+          "description": "No pg_advisory_xact_lock for concurrent member updates. REQ-SYNC-029 violated."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/core/index.ts:123-126",
+          "description": "validateWebhookToken short-circuits on length mismatch, leaking timing information. Not constant-time per REQ-SYNC-001."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/webhook.ts:60,79",
+          "description": "Date.now()-based fallback event IDs are non-deterministic and collision-prone."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/shell/webhook.ts:309-331",
+          "description": "SQL column names interpolated from object keys without whitelist validation."
+        }
+      ]
+    },
+    "purity_compliance": {
+      "verdict": "FAIL",
+      "findings": ["FIND-003"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/core/index.ts:4",
+          "description": "Pure core imports node:crypto (timingSafeEqual). While deterministic, this introduces a native module dependency into the pure core. Spec prescribes this but strict purity boundary is violated."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/core/__tests__/pure-core.test.ts",
+          "description": "All 20 PROP-SYNC property tests present and structurally sound. However PROP-SYNC-011 has a case-sensitivity precondition issue (FIND-018)."
+        }
+      ]
+    },
+    "traceability": {
+      "verdict": "FAIL",
+      "findings": ["FIND-018"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/core/__tests__/pure-core.test.ts",
+          "description": "Property tests PROP-SYNC-001 through PROP-SYNC-020 all present with REQ-SYNC mapping annotations."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts",
+          "description": "Integration tests INT-SYNC-001 through INT-SYNC-039 partially present (INT-SYNC-025/026/027/028/036 are structurally weak or tautological)."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/__tests__/integration/resync-flow.test.ts",
+          "description": "CLI/resync integration tests INT-SYNC-010 through INT-SYNC-037 present with REQ-SYNC mapping annotations."
+        },
+        {
+          "type": "file",
+          "location": "packages/sync-service/src/core/__tests__/pure-core.test.ts:318-327",
+          "description": "PROP-SYNC-011 has case-sensitivity issue in precondition that could cause intermittent false failures."
+        }
+      ]
+    }
+  },
+  "summary": "18 findings across all 5 dimensions. 4 critical: (1) Missing pg_advisory_xact_lock for concurrent webhook serialization (REQ-SYNC-029), (2) insertPayjpEvent SQL omits ignore_reason/fail_reason/data_metadata_operation_id columns (REQ-SYNC-002/014), (3) validateWebhookToken not constant-time on length mismatch (REQ-SYNC-001), (4) Pure core imports node:crypto native binding. 14 major findings covering: tautological tests (INT-SYNC-025/027/028/036), missing spec behaviors (REQ-SYNC-021 exit code, REQ-SYNC-022 inflight residual, REQ-SYNC-023 failed_count reconciliation, REQ-SYNC-024 escalation log fields), SQL injection surface in dynamic column construction, and test coverage gaps for REQ-SYNC-011 case 2 and Discord retry logic.",
+  "convergenceSignals": {
+    "findingCount": 18,
+    "criticalCount": 4,
+    "majorCount": 14,
+    "allDimensionsFail": true,
+    "requiresHardening": true
+  }
+}

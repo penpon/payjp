@@ -1,0 +1,9 @@
+{
+  "id": "FIND-007",
+  "dimension": "ears_compliance",
+  "severity": "minor",
+  "title": "REQ-SYNC-013 uses non-EARS format (THE SYSTEM SHALL without trigger clause)",
+  "description": "REQ-SYNC-013 (behavioral-spec.md lines 187-190) uses a bare 'THE SYSTEM SHALL' pattern without a WHEN/WHERE/IF trigger: 'THE SYSTEM SHALL return: 200 for all processed/ignored/failed events...' This is technically a 'Ubiquitous' EARS pattern (always applies), but the spec does not label it as such. More importantly, the '200 for all processed/ignored/failed events' is not truly ubiquitous — it is conditioned on the webhook endpoint being invoked. A proper EARS formulation would be: 'WHEN POST /v1/payjp/webhook is received AND token verification passes THE SYSTEM SHALL return 200 for processed/ignored/failed events.'",
+  "location": "specs/behavioral-spec.md lines 187-190 (REQ-SYNC-013)",
+  "recommendation": "Reformulate REQ-SYNC-013 using proper EARS trigger: 'WHEN POST /v1/payjp/webhook is received THE SYSTEM SHALL return...' to clarify the scope. Similar issue exists in REQ-SYNC-015 (line 202)."
+}

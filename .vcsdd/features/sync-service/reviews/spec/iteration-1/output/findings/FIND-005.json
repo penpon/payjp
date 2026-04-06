@@ -1,0 +1,9 @@
+{
+  "id": "FIND-005",
+  "dimension": "ears_compliance",
+  "severity": "minor",
+  "title": "REQ-SYNC-011 EARS pattern mixes two behaviors (failed record + role revocation) in one requirement without clear trigger separation",
+  "description": "REQ-SYNC-011 (behavioral-spec.md line 169-170) states: 'WHEN a webhook event contains an unrecognized data.status THE SYSTEM SHALL record as failed, NOT update members, and revoke the Discord role (safe-side).' This combines two actions that could conflict: (1) NOT updating members, and (2) revoking the Discord role. Revoking the role implies actively calling Discord API for a member whose record is NOT updated. The EARS pattern should clearly distinguish: under what member state does the role revocation occur? Does the system look up the existing member to revoke, or does it skip? If the member cannot be resolved (REQ-SYNC-009 fails), does revocation still happen? These questions are left ambiguous.",
+  "location": "specs/behavioral-spec.md lines 169-170 (REQ-SYNC-011)",
+  "recommendation": "Split REQ-SYNC-011 into two sub-requirements: (a) recording as failed with members unchanged, and (b) role revocation when member is resolved. Specify explicitly that role revocation requires successful member resolution and describe the behavior when member resolution fails for an unknown status event."
+}

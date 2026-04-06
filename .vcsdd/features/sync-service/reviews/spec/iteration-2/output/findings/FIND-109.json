@@ -1,0 +1,10 @@
+{
+  "id": "FIND-109",
+  "dimension": "verification_coverage",
+  "category": "test_quality",
+  "severity": "minor",
+  "title": "REQ-SYNC-013 has no negative-path integration test verifying that 503 is returned exclusively for DB unavailability",
+  "description": "REQ-SYNC-013 (behavioral-spec.md line 189-193) defines a strict response boundary: 200 for processed/ignored/failed, 401 for token mismatch, 503 only for DB unavailability. The traceability matrix (verification-architecture.md line 168) maps REQ-SYNC-013 to INT-SYNC-005 (token mismatch → 401) and INT-SYNC-001 (happy path → 200). Neither of these tests verifies the 503 DB unavailability path. There is no INT-SYNC test that injects a database connection failure during webhook processing and asserts a 503 response. Without this, the boundary between 200-for-failures and 503-for-DB-outage is unverified.",
+  "location": ".vcsdd/features/sync-service/specs/verification-architecture.md line 168",
+  "recommendation": "Add an INT-SYNC test (e.g., INT-SYNC-039) that injects a DB connection failure during webhook processing and verifies: (a) 503 is returned, (b) no payjp_events record is created, (c) no members update occurs."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "FIND-014",
+  "dimension": "verification_coverage",
+  "severity": "minor",
+  "title": "No integration test for CLI --operation-id cancel recovery with offset>900 pagination limit (fail-close)",
+  "description": "REQ-SYNC-020 (behavioral-spec.md line 256) specifies pagination with offset<=900 for cancel subscription search. The source design doc (implementation-design-mvp.md line 174) mandates: 'offset<=900 (max 1000 items), has_more=true at offset=900 -> fail-close'. INT-SYNC-029 covers the subscribe charge search offset>900 case, but there is no corresponding INT-SYNC test for the cancel subscription search pagination limit. INT-SYNC-030 covers metadata absent + period_end mismatch but not the pagination boundary.",
+  "location": "specs/verification-architecture.md lines 128-129 — INT-SYNC-029 is subscribe-only; no cancel pagination limit test",
+  "recommendation": "Add an INT-SYNC test: 'CLI --operation-id cancel recovery: offset>900 with has_more=true -> fail-close'."
+}

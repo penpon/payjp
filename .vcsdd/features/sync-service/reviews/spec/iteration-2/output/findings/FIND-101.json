@@ -1,0 +1,10 @@
+{
+  "id": "FIND-101",
+  "dimension": "spec_completeness",
+  "category": "spec_gap",
+  "severity": "major",
+  "title": "REQ-SYNC-021 is duplicated in the behavioral spec with divergent content",
+  "description": "REQ-SYNC-021 appears twice in behavioral-spec.md: once at line 267 as a brief EARS statement ('look up the member and perform full state reconciliation'), and again at line 333 as 'REQ-SYNC-021 (expanded)' with a detailed 6-step procedure. These two definitions have different levels of specificity and the expanded version adds behaviors not present in the original (e.g., step 6 about canResolveInflightOperation inflight clearing). A single requirement ID must have exactly one authoritative definition. The traceability matrix at verification-architecture.md line 176 maps REQ-SYNC-021 to INT-SYNC-019 without distinguishing which version of REQ-SYNC-021 is under test.",
+  "location": ".vcsdd/features/sync-service/specs/behavioral-spec.md lines 267-271 and 333-342",
+  "recommendation": "Remove the original REQ-SYNC-021 (line 267-271) and retain only the expanded version at line 333 as the single authoritative definition, renumbered or relocated to the correct position in the requirement sequence."
+}

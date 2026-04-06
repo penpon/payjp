@@ -1,0 +1,9 @@
+{
+  "id": "FIND-013",
+  "dimension": "verification_coverage",
+  "severity": "minor",
+  "title": "No integration test for CLI --operation-id cancel recovery when payjp_customer_id is NULL (fail-close)",
+  "description": "REQ-SYNC-020 (behavioral-spec.md line 253) specifies: 'Check members.payjp_customer_id -- if NULL -> fail-close'. The source design doc (implementation-design-mvp.md line 174) explicitly mandates: 'members.payjp_customer_id IS NULL -> fail-close (cancel execution/inflight clear prohibited, member_impact_logs record, escalation)'. INT-SYNC-016 covers the subscribe recovery customer_id NULL case, but there is no corresponding INT-SYNC test for the cancel recovery customer_id NULL case. INT-SYNC-017 and INT-SYNC-018 cover cancel recovery with search and metadata fallback, but neither tests the NULL customer_id precondition.",
+  "location": "specs/verification-architecture.md lines 116-118 (INT-SYNC-017/018) — missing cancel customer_id NULL test",
+  "recommendation": "Add an INT-SYNC test: 'CLI --operation-id cancel recovery: customer_id NULL -> fail-close + member_impact_logs + escalation'."
+}

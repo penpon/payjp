@@ -1,0 +1,10 @@
+{
+  "id": "FIND-011",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "title": "REQ-SYNC-022 --all does not verify inflight_operation_id residual count = 0",
+  "description": "REQ-SYNC-022 states 'After completion, verify members.inflight_operation_id residual count = 0.' The implementation of handleAllReconciliation at cli.ts:401-430 does not call findMembersWithInflightOperations or any equivalent query after processing all members to verify the residual count. The test INT-SYNC-020 at resync-flow.test.ts:261-282 only checks target='all' and processed_count=2, without verifying the inflight residual verification step.",
+  "location": "packages/sync-service/src/shell/cli.ts:401-430",
+  "recommendation": "After the for-loop, query for remaining inflight operations and either log a warning or include the residual count in the result. Update the test to verify this behavior."
+}

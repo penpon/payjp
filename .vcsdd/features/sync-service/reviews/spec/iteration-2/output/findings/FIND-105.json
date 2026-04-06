@@ -1,0 +1,10 @@
+{
+  "id": "FIND-105",
+  "dimension": "purity_boundary",
+  "category": "purity_boundary",
+  "severity": "minor",
+  "title": "evaluateSubscriptionSearchResult verifiable property still compressed despite FIND-012 recommendation to expand branch enumeration",
+  "description": "Previous iteration FIND-012 recommended expanding the verifiable property for evaluateSubscriptionSearchResult to enumerate all branches: (a) metadata match with 1 candidate → single-match, (b) no metadata + 1 candidate + period_end match → single-match, (c) no metadata + 1 candidate + period_end mismatch → fail-close, (d) no metadata + access_end_at null → fail-close, (e) 0 candidates → fail-close, (f) 2+ candidates → fail-close. The current property (verification-architecture.md line 42) still reads 'metadata match or period_end fallback; 0/2+ → fail-close', which does not distinguish cases (c) and (d) from (e) and (f). A property test using fc.array() + fc.string() + fc.option(fc.integer()) cannot verify the period_end fallback branch correctly without these explicit sub-properties being documented.",
+  "location": ".vcsdd/features/sync-service/specs/verification-architecture.md line 42",
+  "recommendation": "Expand the 'Verifiable Property' column to enumerate all 6 branches listed in FIND-012, or add a dedicated PROP-SYNC entry for evaluateSubscriptionSearchResult that exercises each branch explicitly."
+}

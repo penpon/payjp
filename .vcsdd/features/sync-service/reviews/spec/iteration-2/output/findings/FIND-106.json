@@ -1,0 +1,10 @@
+{
+  "id": "FIND-106",
+  "dimension": "spec_completeness",
+  "category": "spec_gap",
+  "severity": "minor",
+  "title": "REQ-SYNC-024 defines 30-minute 'monitoring-enhanced' state without specifying what operationally changes",
+  "description": "REQ-SYNC-024 (behavioral-spec.md lines 289-293) states: 'inflight_operation_started_at older than 30 minutes as monitoring-enhanced'. The 6-hour escalation behavior is well-defined (record resolution possibility, assignee, timestamp). However, the 30-minute 'monitoring-enhanced' state has no defined operational consequence. The pure function isInflightOperationStale(startedAt, now, thresholdMinutes) returns boolean, and INT-SYNC-033 tests '30min threshold detection', but the spec does not specify what the system DOES when this threshold is crossed. Does it log at a higher level? Does it increase check frequency? Does it merely return true and leave the caller to decide? Without a specified behavior, INT-SYNC-033 can only test that the function returns true, which is a tautological test — it verifies the arithmetic, not a system behavior.",
+  "location": ".vcsdd/features/sync-service/specs/behavioral-spec.md lines 289-293 (REQ-SYNC-024)",
+  "recommendation": "Specify the concrete system behavior at the 30-minute threshold: e.g., 'THE SYSTEM SHALL log a warning-level structured entry containing member_id, operation_id, and elapsed_minutes when inflight_operation_started_at exceeds 30 minutes.' This gives INT-SYNC-033 a concrete assertion target."
+}

@@ -1,0 +1,10 @@
+{
+  "id": "FIND-006",
+  "dimension": "behavioral_completeness",
+  "category": "test_quality",
+  "severity": "critical",
+  "title": "INT-SYNC-028 does not verify data_metadata_operation_id is actually stored in DB",
+  "description": "The test INT-SYNC-028 at webhook-flow.test.ts:309-326 claims to verify 'data.metadata.operation_id stored in payjp_events'. However, the test only asserts that res.status is 200 and res.body.status is 'processed'. It does NOT inspect the SQL parameters of the INSERT INTO payjp_events call to verify that operation_id='op_123' was actually passed. Given FIND-002 (the INSERT statement does not include the data_metadata_operation_id column), this test passes despite the feature being completely broken. This is a tautological test.",
+  "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:309-326",
+  "recommendation": "Assert that the DB query mock was called with the operation_id in the correct parameter position. Additionally, fix the INSERT statement (FIND-002) and verify the column is populated."
+}

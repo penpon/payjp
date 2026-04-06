@@ -1,0 +1,10 @@
+{
+  "id": "FIND-103",
+  "dimension": "verification_coverage",
+  "category": "test_coverage",
+  "severity": "major",
+  "title": "canResolveInflightOperation is a pure core function with complex boolean logic but has no property-based test",
+  "description": "canResolveInflightOperation (behavioral-spec.md line 35, verification-architecture.md line 39) is classified in the pure core with 4 nullable string parameters and a multi-condition boolean return ('Status known AND IDs consistent AND customer exists'). This function guards inflight operation resolution — a safety-critical decision point. Despite being listed as pure and deterministic, it has no PROP-SYNC entry among PROP-SYNC-001 through PROP-SYNC-015. The function's verifiable property description ('IDs consistent') is also underspecified — it does not define whether 'consistent' means payjpSubId === memberSubId, or both non-null, or something else. Without a property test, boundary conditions (e.g., payjpSubId non-null but memberSubId null, or vice versa) have no formal verification.",
+  "location": ".vcsdd/features/sync-service/specs/verification-architecture.md lines 39, 76-95",
+  "recommendation": "Add PROP-SYNC-016 for canResolveInflightOperation with explicit enumeration of all boolean branches. Define 'IDs consistent' precisely in the verifiable property column."
+}

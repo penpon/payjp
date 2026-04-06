@@ -1,0 +1,6 @@
+Phase 2b Green Phase Evidence — sync-service Sprint 1
+Date: 2026-04-06
+Pure Core: 65 property tests PASSED
+Webhook Integration: 17 tests PASSED
+Resync/CLI Integration: 25 tests PASSED
+Total: 107 tests ALL PASSED

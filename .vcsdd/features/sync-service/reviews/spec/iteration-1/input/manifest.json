@@ -1,0 +1,8 @@
+{
+  "reviewType": "spec",
+  "iteration": 1,
+  "artifacts": [
+    "specs/behavioral-spec.md",
+    "specs/verification-architecture.md"
+  ]
+}

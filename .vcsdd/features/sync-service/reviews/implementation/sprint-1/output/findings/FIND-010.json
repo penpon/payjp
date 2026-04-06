@@ -1,0 +1,10 @@
+{
+  "id": "FIND-010",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "title": "REQ-SYNC-023 failed_count must equal unresolved member_impact_logs count — not verified",
+  "description": "REQ-SYNC-023 states 'failed_count Must equal member_impact_logs.resolved_at IS NULL count.' The CLI implementation at cli.ts:63-98 calculates failed_count by counting individual operation failures (success/failure per member). It does NOT query countUnresolvedImpactLogs (listed in behavioral-spec.md:62 as an effectful shell function) to reconcile the final failed_count with the actual unresolved impact log count. These two values could diverge if a member both succeeds and has a pre-existing unresolved impact log from a different issue_code. No test verifies this invariant.",
+  "location": "packages/sync-service/src/shell/cli.ts:63-98",
+  "recommendation": "After all members are processed, query countUnresolvedImpactLogs and set failed_count to the result, or at minimum assert that the computed failed_count matches the DB count. Add a test for this invariant."
+}

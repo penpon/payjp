@@ -1,0 +1,10 @@
+{
+  "id": "FIND-007",
+  "dimension": "behavioral_completeness",
+  "category": "test_quality",
+  "severity": "major",
+  "title": "INT-SYNC-036 concurrent webhook test is tautological — does not test advisory locking",
+  "description": "INT-SYNC-036 at webhook-flow.test.ts:399-420 claims to test 'per-member advisory lock prevents race conditions' but uses a mock DB with no locking semantics. The test fires two concurrent handleWebhook calls and checks both return 200. This would pass even if advisory locking is completely absent (which it is — see FIND-001). The test name and comment acknowledge this ('structural test', 'Full advisory lock testing requires real PostgreSQL') but the verification architecture (INT-SYNC-036) requires this to actually verify concurrent webhook serialization.",
+  "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:399-420",
+  "recommendation": "Either implement a mock DB that tracks lock acquisition calls and verifies pg_advisory_xact_lock is called, or mark this test as insufficient pending a real PostgreSQL integration test."
+}

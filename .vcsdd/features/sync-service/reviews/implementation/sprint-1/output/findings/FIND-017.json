@@ -1,0 +1,10 @@
+{
+  "id": "FIND-017",
+  "dimension": "spec_fidelity",
+  "category": "sql_injection",
+  "severity": "critical",
+  "title": "updateMemberFromWebhook constructs SQL column names from object keys without validation",
+  "description": "The function updateMemberFromWebhook at webhook.ts:309-331 iterates over the keys of the 'updates' object and interpolates them directly into SQL: `setClauses.push('${key} = $${i}')`. While the keys come from hardcoded paths in the handleWebhook function (lines 206-219), the pattern is inherently unsafe. If any future code path passes user-controlled data into the updates object keys (e.g., from webhook event payload fields), it would enable SQL injection. Additionally, the current_period_end -> access_end_at conversion at line 218 uses `new Date(event.data.current_period_end * 1000)` which would produce an Invalid Date for non-numeric values, silently persisting NULL or invalid data.",
+  "location": "packages/sync-service/src/shell/webhook.ts:309-331",
+  "recommendation": "Use a whitelist of allowed column names and validate keys against it before constructing the SQL query. Consider using a structured update interface instead of Record<string, unknown>."
+}

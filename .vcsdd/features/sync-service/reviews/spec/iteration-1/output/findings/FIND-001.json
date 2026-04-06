@@ -1,0 +1,9 @@
+{
+  "id": "FIND-001",
+  "dimension": "spec_completeness",
+  "severity": "major",
+  "title": "REQ-SYNC-024 (Inflight Operation Monitoring Threshold) has no corresponding test in verification architecture",
+  "description": "REQ-SYNC-024 specifies that inflight_operation_started_at older than 30 minutes should be monitoring-enhanced, and 6+ hours should trigger escalation with specific recorded fields (resolution possibility, assignee, timestamp). The verification architecture declares isInflightOperationStale in the purity boundary map (line 38) but there is no PROP-SYNC or INT-SYNC test covering this requirement. The escalation behavior (6+ hours, record fields) is entirely untested.",
+  "location": "specs/verification-architecture.md, lines 76-93 (PROP section) and lines 98-130 (INT section) — REQ-SYNC-024 absent from both",
+  "recommendation": "Add PROP-SYNC test for isInflightOperationStale (30-minute and 6-hour boundaries) and an INT-SYNC test verifying escalation record creation with required fields (resolution possibility, assignee, timestamp) when 6+ hours threshold is breached."
+}

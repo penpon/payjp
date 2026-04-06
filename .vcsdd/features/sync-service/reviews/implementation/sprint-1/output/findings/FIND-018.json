@@ -1,0 +1,10 @@
+{
+  "id": "FIND-018",
+  "dimension": "traceability",
+  "category": "test_coverage",
+  "severity": "major",
+  "title": "PROP-SYNC-011 maskSensitiveLogFields test has false-negative risk for case-insensitive matching",
+  "description": "The SENSITIVE_FIELD_PATTERN at core/index.ts:105 uses the /i flag for case-insensitive matching. The property test PROP-SYNC-011 at pure-core.test.ts:308-327 tests exact lowercase sensitive keys ('card', 'token', 'authorization', 'cookie', 'set-cookie') and uses fc.pre(!SENSITIVE_KEYS.includes(key.toLowerCase())) for the non-sensitive case. However, the precondition only excludes exact lowercase matches. A key like 'CARD' or 'Token' would be excluded by fc.pre but would actually be masked by the regex /i flag. This means the 'non-sensitive keys are preserved' test could generate a key like 'TOKEN' that passes the precondition (since 'TOKEN' !== 'token') but would actually be masked, causing a test failure — but only probabilistically. This is a fragile test design.",
+  "location": "packages/sync-service/src/core/__tests__/pure-core.test.ts:318-327",
+  "recommendation": "Fix the precondition to check case-insensitively: fc.pre(!SENSITIVE_KEYS.some(k => k.toLowerCase() === key.toLowerCase())). Add explicit test cases for mixed-case sensitive keys like 'CARD', 'Token', 'AUTHORIZATION'."
+}

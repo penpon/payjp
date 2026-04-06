@@ -1,0 +1,10 @@
+{
+  "id": "FIND-009",
+  "dimension": "behavioral_completeness",
+  "category": "test_coverage",
+  "severity": "major",
+  "title": "INT-SYNC-025 does not actually test 429 retry behavior — mocks away retry logic",
+  "description": "INT-SYNC-025 at webhook-flow.test.ts:363-378 claims to test 'Discord role retry: 429 -> success on retry 2'. The test creates a syncRole mock that simply resolves successfully on first call (vi.fn().mockResolvedValue(undefined)). The retry logic (max 3 attempts: 0s/1s/2s wait, 1s timeout each) per REQ-SYNC-012 is supposed to be inside the syncRole implementation, but since syncRole is a dependency injection point (WebhookHandlerDeps.syncRole), the retry logic must exist somewhere — and neither the test nor the implementation verifies it. The test passes regardless of whether retry logic exists.",
+  "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:363-378",
+  "recommendation": "Implement the retry logic in a testable syncDiscordRole wrapper function and test it separately with a mock that returns 429 on first call, then succeeds on second. The current test structure makes this untestable."
+}

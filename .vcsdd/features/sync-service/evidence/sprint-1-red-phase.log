@@ -1,0 +1,5 @@
+Phase 2a Red Phase Evidence — sync-service Sprint 1
+Date: 2026-04-06
+Tests: 65 pure core property tests FAILED (all throwing 'Not implemented')
+Integration tests: 41 stub tests PASSED (expected: throw 'Shell not implemented')
+Total: 106 tests (65 FAIL + 41 PASS)

@@ -1,0 +1,10 @@
+{
+  "id": "FIND-014",
+  "dimension": "behavioral_completeness",
+  "category": "test_quality",
+  "severity": "major",
+  "title": "INT-SYNC-027 log security test does not verify masking of card/token/authorization/cookie/set-cookie fields",
+  "description": "INT-SYNC-027 at webhook-flow.test.ts:290-306 tests that 'secret123' (the value of a 'token' field in the body) does not appear in the log. However, the token mismatch log is built from event:{type:...} (see webhook.ts:38-41), not from the raw body. The raw body {card:'sensitive', token:'secret123'} is never logged directly. The test passes because the code simply does not log the body at all — not because maskSensitiveLogFields actively masks it. The test does not verify that the masking function is applied to fields like 'card', 'authorization', 'cookie', 'set-cookie' in any actual log output.",
+  "location": "packages/sync-service/src/__tests__/integration/webhook-flow.test.ts:290-306",
+  "recommendation": "Create a test that feeds a log entry containing sensitive field names (card, authorization, cookie, set-cookie) through the actual log path and asserts they are '[REDACTED]' in the output. The current test does not exercise maskSensitiveLogFields in a meaningful way."
+}

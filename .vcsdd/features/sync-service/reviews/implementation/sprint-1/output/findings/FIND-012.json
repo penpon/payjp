@@ -1,0 +1,10 @@
+{
+  "id": "FIND-012",
+  "dimension": "safety_security",
+  "category": "security_surface",
+  "severity": "major",
+  "title": "Webhook handler uses Date.now() for fallback event IDs — non-deterministic, potential collision",
+  "description": "At webhook.ts:60, when event.id is missing, the code generates a fallback ID: `event.id ?? 'unknown-${Date.now()}'`. This is used for the INSERT into payjp_events. Two events arriving within the same millisecond without an event.id would collide. More critically, this bypasses the ON CONFLICT (id) DO NOTHING clause, meaning a second event with the same Date.now() would silently be ignored. The WebhookEvent type at core/index.ts:15 makes id optional, so this code path is reachable. REQ-SYNC-005 requires validating required fields including event.id, but this fallback is reached BEFORE required field validation (line 74).",
+  "location": "packages/sync-service/src/shell/webhook.ts:60,79",
+  "recommendation": "Move required field validation (REQ-SYNC-005) to occur before the ignore reason check (REQ-SYNC-002/003/004), or use a UUID for fallback IDs, or reject events without event.id before any DB insert."
+}

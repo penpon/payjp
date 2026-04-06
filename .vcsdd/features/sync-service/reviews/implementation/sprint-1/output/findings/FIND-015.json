@@ -1,0 +1,10 @@
+{
+  "id": "FIND-015",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "title": "REQ-SYNC-021 missing resolve of member_impact_logs for matched issue codes",
+  "description": "REQ-SYNC-021 step 5 states 'Resolve matching member_impact_logs (same member_id + issue_code)'. The reconcileMember function at cli.ts:432-478 only resolves the issue_code 'resync_individual_error' (line 475). It does not resolve other issue codes that may have been previously recorded for the member (e.g., 'subscribe_recovery_no_customer', 'cancel_recovery_subscription_ambiguous', 'escalation_6h_inflight'). If a --discord-user-id resync successfully reconciles a member that had previous recovery failures, those impact logs remain unresolved.",
+  "location": "packages/sync-service/src/shell/cli.ts:474-476",
+  "recommendation": "Resolve all relevant issue codes for the member after successful reconciliation, not just 'resync_individual_error'. Consider resolving based on member_id alone (all unresolved logs for that member) or enumerate all possible issue codes."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "FIND-002",
+  "dimension": "spec_completeness",
+  "severity": "major",
+  "title": "validateWebhookRequiredEnvVars declared in purity boundary but has no REQ, no PROP, and no INT test",
+  "description": "The function validateWebhookRequiredEnvVars is declared in the Pure Core (behavioral-spec.md line 39) and in the Purity Boundary Map (verification-architecture.md line 43), but there is no REQ-SYNC-XXX requirement governing startup environment validation behavior. There is also no PROP-SYNC or INT-SYNC test covering it. This means the function exists in the purity boundary without any traceability to a requirement or test, creating a spec gap: what happens at startup when required env vars are missing?",
+  "location": "specs/behavioral-spec.md line 39; specs/verification-architecture.md line 43",
+  "recommendation": "Either add a REQ-SYNC-028 specifying startup behavior when required environment variables are missing (with corresponding PROP and INT tests), or remove the function from the purity boundary if it is not in scope for sync-service behavioral requirements."
+}

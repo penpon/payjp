@@ -1,0 +1,9 @@
+{
+  "id": "FIND-010",
+  "dimension": "verification_coverage",
+  "severity": "major",
+  "title": "Sprint contract uses weighted percentage thresholds instead of binary PASS/FAIL, violating strict mode requirements",
+  "description": "The verification architecture (lines 151-159) defines a Sprint Contract with weighted percentages (Spec Fidelity 30%, Behavioral Completeness 25%, etc.) and a pass threshold of 'All dimensions >= 70%, weighted total >= 75%'. This contradicts strict VCSDD mode which requires binary PASS/FAIL per dimension with no partial credit. A dimension that is 'only 70% complete' should be a FAIL, not a conditional pass. The percentage-based grading enables the exact grade inflation that strict mode is designed to prevent.",
+  "location": "specs/verification-architecture.md lines 151-159 (Sprint Contract section)",
+  "recommendation": "Replace percentage-based grading with binary PASS/FAIL per dimension. Each dimension should have concrete, enumerable pass criteria (e.g., 'All 27 REQs have at least one corresponding test' — either they all do or they do not). Remove the weighted total calculation."
+}

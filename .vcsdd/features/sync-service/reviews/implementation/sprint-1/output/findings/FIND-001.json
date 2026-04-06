@@ -1,0 +1,10 @@
+{
+  "id": "FIND-001",
+  "dimension": "safety_security",
+  "category": "security_surface",
+  "severity": "critical",
+  "title": "Webhook handler lacks pg_advisory_xact_lock for concurrent webhook serialization (REQ-SYNC-029)",
+  "description": "REQ-SYNC-029 mandates 'serialize member updates using pg_advisory_xact_lock(hashtext(discord_user_id)) or equivalent per-member locking to prevent race conditions in members table updates.' The webhook handler at webhook.ts performs SELECT + UPDATE on the members table without any advisory lock acquisition. The mock-based integration test INT-SYNC-036 at webhook-flow.test.ts:401-420 only fires two concurrent calls against a mock DB that has no locking semantics, making it a tautological pass that cannot detect the actual missing lock. In a real PostgreSQL environment, two concurrent webhooks for the same member would race on the SELECT-then-UPDATE sequence, potentially causing lost updates.",
+  "location": "packages/sync-service/src/shell/webhook.ts:119-247",
+  "recommendation": "Wrap the member resolution + update + event insert in a transaction that acquires pg_advisory_xact_lock(hashtext(discord_user_id)) before the SELECT. Write an integration test against a real PostgreSQL instance (or a mock that tracks lock acquisition) to verify serialization."
+}

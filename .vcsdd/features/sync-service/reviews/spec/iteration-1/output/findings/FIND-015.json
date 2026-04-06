@@ -1,0 +1,9 @@
+{
+  "id": "FIND-015",
+  "dimension": "spec_completeness",
+  "severity": "minor",
+  "title": "REQ-SYNC-021 (Resync by Discord User ID) is underspecified compared to REQ-SYNC-019/020",
+  "description": "REQ-SYNC-021 (behavioral-spec.md lines 266-267) states: 'WHEN --discord-user-id is specified THE SYSTEM SHALL look up the member and perform full state reconciliation: verify PAY.JP subscription state, update member, sync role, resolve matching member_impact_logs.' This is significantly less detailed than REQ-SYNC-019 (subscribe recovery, 12 sub-steps) and REQ-SYNC-020 (cancel recovery, 9 sub-steps). 'Full state reconciliation' is not decomposed: what does it do when payjp_subscription_id is NULL? What if PAY.JP returns 404? What if inflight_operation_* is present? REQ-SYNC-016 covers 404->deleted for daily resync, but REQ-SYNC-021 does not reference it or specify its own behavior for these edge cases.",
+  "location": "specs/behavioral-spec.md lines 266-267 (REQ-SYNC-021)",
+  "recommendation": "Decompose REQ-SYNC-021 with explicit sub-steps: (a) subscription lookup behavior (and 404 handling), (b) status update logic, (c) inflight_operation_* handling (skip or process?), (d) access_end_at expiration check, (e) member_impact_logs resolution criteria."
+}

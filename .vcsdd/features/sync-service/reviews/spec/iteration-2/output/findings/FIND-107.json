@@ -1,0 +1,10 @@
+{
+  "id": "FIND-107",
+  "dimension": "verification_coverage",
+  "category": "test_coverage",
+  "severity": "minor",
+  "title": "Multiple pure core functions lack property-based tests: isSubscriptionDataObject, isEventDuplicate, isSubscriptionCreatedEvent, shouldSyncRole, isStatusUnknown",
+  "description": "The purity boundary map lists 27 pure functions (verification-architecture.md lines 15-43), but only 15 have PROP-SYNC entries (PROP-SYNC-001 through PROP-SYNC-015). The following pure core functions have no property tests: isSubscriptionDataObject, isEventDuplicate, isSubscriptionCreatedEvent, shouldSyncRole, isStatusUnknown, buildTokenMismatchLog, buildCliResult, canResolveInflightOperation, evaluateSubscriptionSearchResult, validateWebhookRequiredEnvVars. While some are trivial (e.g., isSubscriptionCreatedEvent is a single string comparison), others like shouldSyncRole (used in REQ-SYNC-010 to decide when role sync triggers) and isStatusUnknown (used in REQ-SYNC-011 for safe-side revocation) guard critical behavioral boundaries. The Sprint 1 contract dimension 'Purity Compliance' (line 201) requires 'All pure functions tested without mocks; property tests for all boundary conditions' — the current coverage does not satisfy this.",
+  "location": ".vcsdd/features/sync-service/specs/verification-architecture.md lines 15-43 vs. 76-95",
+  "recommendation": "Add PROP-SYNC entries for at minimum shouldSyncRole, isStatusUnknown, canResolveInflightOperation, and evaluateSubscriptionSearchResult. These four guard safety-critical decisions (role sync trigger, safe-side revocation, inflight resolution, subscription search evaluation)."
+}

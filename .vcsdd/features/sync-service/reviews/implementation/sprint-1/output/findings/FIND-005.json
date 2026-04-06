@@ -1,0 +1,10 @@
+{
+  "id": "FIND-005",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "title": "REQ-SYNC-024 escalation log missing required fields: resolution_possible, assignee, detected_at",
+  "description": "REQ-SYNC-024 specifies that when inflight > 6h, the log must include 'resolution_possible (boolean), assignee (string, from env or \"unassigned\"), detected_at (RFC 3339 UTC)'. The implementation at cli.ts:123-134 emits a log with keys (timestamp, service, endpoint, result, issue, member_id, operation_id) but is missing resolution_possible, assignee, and detected_at. The test INT-SYNC-034 at resync-flow.test.ts:536-560 only checks that a log with issue='escalation_6h_inflight' exists, without validating the presence of these three required fields.",
+  "location": "packages/sync-service/src/shell/cli.ts:123-134",
+  "recommendation": "Add resolution_possible (call canResolveInflightOperation), assignee (from deps.env or 'unassigned'), and detected_at (formatRfc3339Utc(deps.now())) to the escalation log entry. Update INT-SYNC-034 to assert all three fields."
+}

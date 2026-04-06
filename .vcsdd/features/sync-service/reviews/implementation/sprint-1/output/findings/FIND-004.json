@@ -1,0 +1,10 @@
+{
+  "id": "FIND-004",
+  "dimension": "safety_security",
+  "category": "security_surface",
+  "severity": "critical",
+  "title": "validateWebhookToken leaks timing information on length mismatch",
+  "description": "At core/index.ts:125, when the Buffer lengths differ, the function returns false immediately without calling timingSafeEqual. This short-circuits and reveals that the token lengths differ via timing side-channel. An attacker can first determine the correct token length by measuring response times (faster responses indicate length mismatch), then brute-force individual characters. REQ-SYNC-001 and the spec at behavioral-spec.md:13 specifically require 'constant-time token comparison using crypto.timingSafeEqual'. The current implementation is NOT constant-time when lengths differ.",
+  "location": "packages/sync-service/src/core/index.ts:123-126",
+  "recommendation": "Use a fixed-length hash (e.g., SHA-256) of both inputs before comparison, or pad the shorter buffer to match the longer one and XOR a flag, ensuring timingSafeEqual is always called. Example: hash both with createHash('sha256') then compare hashes with timingSafeEqual."
+}

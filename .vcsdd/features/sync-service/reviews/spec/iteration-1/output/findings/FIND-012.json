@@ -1,0 +1,9 @@
+{
+  "id": "FIND-012",
+  "dimension": "purity_boundary",
+  "severity": "minor",
+  "title": "evaluateSubscriptionSearchResult takes discordUserId and accessEndAtUnix but verification architecture does not document the period_end fallback logic as a verifiable property",
+  "description": "The pure function evaluateSubscriptionSearchResult (behavioral-spec.md line 38; verification-architecture.md line 42) takes candidates, discordUserId, and accessEndAtUnix. The verifiable property states 'metadata match or period_end fallback; 0/2+ -> fail-close'. However, the fallback logic is complex: when metadata.discord_user_id is absent, candidates must be exactly 1 AND current_period_end must equal floor(epoch(access_end_at)) as integer seconds. This multi-condition fallback is not decomposed into testable sub-properties. The behavioral spec REQ-SYNC-020 (lines 257-259) and the source design doc (implementation-design-mvp.md lines 174) describe this in detail, but the verification property summary is too compressed to ensure the implementation matches the spec.",
+  "location": "specs/verification-architecture.md line 42",
+  "recommendation": "Expand the verifiable property for evaluateSubscriptionSearchResult to enumerate all branches: (a) metadata match with 1 candidate -> single-match, (b) no metadata + 1 candidate + period_end match -> single-match, (c) no metadata + 1 candidate + period_end mismatch -> fail-close, (d) no metadata + access_end_at null -> fail-close, (e) 0 candidates -> fail-close, (f) 2+ candidates -> fail-close."
+}

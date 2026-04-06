@@ -1,0 +1,9 @@
+{
+  "id": "FIND-009",
+  "dimension": "purity_boundary",
+  "severity": "minor",
+  "title": "canResolveInflightOperation is classified as pure but its semantics imply domain-state coupling that is underspecified",
+  "description": "canResolveInflightOperation(payjpState, memberState) is classified as pure (behavioral-spec.md line 35; verification-architecture.md line 39) with the verifiable property 'Integrity match'. However, neither artifact defines what constitutes an 'integrity match'. The function takes PayjpSubscriptionState and MemberState as inputs — types whose structure is not specified in the behavioral spec. Without knowing the fields of these types and the comparison logic, the function's purity cannot be properly verified. A pure function must have deterministic behavior that can be described without reference to external state, but 'integrity match' is too vague to serve as a property specification.",
+  "location": "specs/behavioral-spec.md line 35; specs/verification-architecture.md line 39",
+  "recommendation": "Define the PayjpSubscriptionState and MemberState types in the behavioral spec (at minimum, their required fields). Specify the exact integrity comparison logic: which fields must match, and what constitutes a mismatch. Add a PROP-SYNC test that exercises the integrity match boundaries."
+}
