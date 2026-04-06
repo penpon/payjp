@@ -5,21 +5,27 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Table 1: members — 会員・購読状態の正 (billing-service / sync-service 管理)
 CREATE TABLE members (
-  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  discord_user_id           TEXT NOT NULL UNIQUE,
-  email                     TEXT NOT NULL,
-  subscription_status       TEXT NOT NULL CHECK (subscription_status IN ('active', 'trial', 'canceled', 'paused', 'deleted')),
-  plan_id                   TEXT,
-  payjp_customer_id         TEXT UNIQUE,
-  payjp_subscription_id     TEXT UNIQUE,
-  payjp_initial_charge_id   TEXT UNIQUE,
-  access_end_at             TIMESTAMPTZ,
-  first_trial_granted_at    TIMESTAMPTZ,
-  inflight_operation_id     TEXT,
-  inflight_operation_type   TEXT,
-  inflight_operation_at     TIMESTAMPTZ,
-  created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discord_user_id                 TEXT NOT NULL UNIQUE,
+  email                           TEXT NOT NULL,
+  subscription_status             TEXT CHECK (subscription_status IN ('active', 'trial', 'canceled', 'paused', 'deleted')),
+  payjp_plan_id                   TEXT,
+  payjp_customer_id               TEXT UNIQUE,
+  payjp_subscription_id           TEXT UNIQUE,
+  payjp_initial_charge_id         TEXT UNIQUE,
+  access_end_at                   TIMESTAMPTZ,
+  next_billing_at                 TIMESTAMPTZ,
+  first_trial_granted_at          TIMESTAMPTZ,
+  initial_charge_paid_at          TIMESTAMPTZ,
+  cancel_requested_at             TIMESTAMPTZ,
+  role_state                      TEXT NOT NULL DEFAULT 'unknown' CHECK (role_state IN ('granted', 'revoked', 'unknown')),
+  last_synced_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_payjp_event_created_at     BIGINT,
+  inflight_operation_id           TEXT,
+  inflight_operation_type         TEXT CHECK (inflight_operation_type IN ('subscribe', 'cancel')),
+  inflight_operation_started_at   TIMESTAMPTZ,
+  created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX members_payjp_subscription_id_idx ON members (payjp_subscription_id) WHERE payjp_subscription_id IS NOT NULL;

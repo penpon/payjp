@@ -456,6 +456,11 @@ async function reconcileMember(
   const discordUserId = member.discord_user_id as string;
   const subscriptionId = member.payjp_subscription_id as string | null;
 
+  // Skip members with inflight operations — these must be resolved via --operation-id
+  if (member.inflight_operation_id) {
+    return { success: true };
+  }
+
   // Check access_end_at expiration
   const accessEndAt = member.access_end_at as Date | null;
   if (isAccessEndExpired(accessEndAt, deps.now())) {

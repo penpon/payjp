@@ -806,12 +806,12 @@ describe('POST /v1/subscriptions — Integration', () => {
       const idxUpdateMember = callOrder.indexOf('updateMemberAfterSubscribe');
       const idxAssignRole = callOrder.indexOf('assignRole');
 
-      // Lock → provisional → inflight (before PAY.JP) → consumeSession → fetchToken → createCustomer → charge → sub → updateMember → assignRole
+      // Lock → provisional → inflight (before PAY.JP) → fetchToken (3DS validation) → consumeSession → createCustomer → charge → sub → updateMember → assignRole
       expect(idxLock).toBeLessThan(idxProvisional);
       expect(idxProvisional).toBeLessThan(idxInflight);
-      expect(idxInflight).toBeLessThan(idxConsumeSession);
-      expect(idxConsumeSession).toBeLessThan(idxFetchToken);
-      expect(idxFetchToken).toBeLessThan(idxCreateCustomer);
+      expect(idxInflight).toBeLessThan(idxFetchToken);
+      expect(idxFetchToken).toBeLessThan(idxConsumeSession);
+      expect(idxConsumeSession).toBeLessThan(idxCreateCustomer);
       expect(idxCreateCustomer).toBeLessThan(idxPersistCustomerId);
       expect(idxPersistCustomerId).toBeLessThan(idxCreateCharge);
       expect(idxCreateCharge).toBeLessThan(idxPersistChargeId);

@@ -97,28 +97,27 @@ export async function handleSubscribe(
     const operationId = generateOperationId();
     await db.setInflightOperation(member.id, operationId, 'subscribe', now);
 
-    // Step 8: Link session consumption
-    await db.consumeLinkSession(tokenHash, now);
-
-    // Step 9: PAY.JP token 3DS verification
+    // Step 9: PAY.JP token 3DS verification (READ-only — no PAY.JP state change)
+    // fetchToken failure retains inflight; operator resolves via CLI
     let payjpTokenData: Awaited<ReturnType<typeof payjp.fetchToken>>;
     try {
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
     } catch (err) {
-      await db.clearInflightOperation(member.id);
       return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Failed to fetch PAY.JP token', operationId };
     }
 
     // REQ-BILL-009: used=false AND three_d_secure_status=verified
+    // Token validation failures retain inflight; operator resolves via CLI
     if (payjpTokenData.used) {
-      await db.clearInflightOperation(member.id);
-      return { ok: false, statusCode: 422, errorCode: 'TOKEN_ALREADY_USED', message: 'Token already used' };
+      return { ok: false, statusCode: 422, errorCode: 'TOKEN_ALREADY_USED', message: 'Token already used', operationId };
     }
 
     if (!isThreeDSecureVerified(payjpTokenData.three_d_secure_status)) {
-      await db.clearInflightOperation(member.id);
-      return { ok: false, statusCode: 422, errorCode: 'THREE_D_SECURE_REQUIRED', message: '3DS verification required' };
+      return { ok: false, statusCode: 422, errorCode: 'THREE_D_SECURE_REQUIRED', message: '3DS verification required', operationId };
     }
+
+    // Step 8: Link session consumption (after token validation, before PAY.JP writes)
+    await db.consumeLinkSession(tokenHash, now);
 
     // Step 10: Customer creation or reuse
     const metadata = buildSubscriptionMetadata(discordUserId, operationId);
@@ -136,19 +135,8 @@ export async function handleSubscribe(
           // Keep inflight — uncertain failure
           return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Uncertain failure during customer creation', operationId };
         }
-        // Try reconcile: re-fetch customer
-        try {
-          if (member.payjp_customer_id) {
-            await payjp.fetchCustomer(member.payjp_customer_id);
-            customerId = member.payjp_customer_id;
-          } else {
-            await db.clearInflightOperation(member.id);
-            return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Customer creation failed', operationId };
-          }
-        } catch {
-          // reconciliation failed — retain inflight
-          return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Reconciliation failed after customer creation failure', operationId };
-        }
+        // Definite failure with no existing customer — retain inflight for CLI resolution
+        return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Customer creation failed', operationId };
       }
       if (!customerId) {
         customerId = customer!.id;
@@ -182,7 +170,7 @@ export async function handleSubscribe(
             return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Reconciliation failed after charge failure', operationId };
           }
         } else {
-          await db.clearInflightOperation(member.id);
+          // No existing charge_id — retain inflight for CLI resolution
           return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Charge failed', operationId };
         }
       }
@@ -225,30 +213,37 @@ export async function handleSubscribe(
           return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Reconciliation failed after subscription creation failure', operationId };
         }
       } else {
-        await db.clearInflightOperation(member.id);
+        // No existing subscription_id — retain inflight for CLI resolution
         return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Subscription creation failed', operationId };
       }
     }
 
     // Step 13: Member state update
+    // PAY.JP writes are complete — DB update failure retains inflight for CLI resolution
     const subscriptionStatus = determineSubscriptionStatus(isFirstTime);
     const accessEndAt = new Date(subscription.current_period_end * 1000);
     const nextBillingAt = new Date(subscription.current_period_end * 1000);
-    const updatedMember = await db.updateMemberAfterSubscribe(member.id, {
-      payjp_initial_charge_id: initialChargeId,
-      initial_charge_paid_at: isFirstTime && initialChargeId ? now : null,
-      payjp_subscription_id: subscription.id,
-      payjp_plan_id: subscription.plan.id,
-      subscription_status: subscriptionStatus,
-      first_trial_granted_at: isFirstTime ? now : member.first_trial_granted_at,
-      access_end_at: accessEndAt,
-      next_billing_at: nextBillingAt,
-      role_state: 'granted',
-      last_synced_at: now,
-      inflight_operation_id: null,
-      inflight_operation_type: null,
-      inflight_operation_started_at: null,
-    });
+    let updatedMember: Awaited<ReturnType<typeof db.updateMemberAfterSubscribe>>;
+    try {
+      updatedMember = await db.updateMemberAfterSubscribe(member.id, {
+        payjp_initial_charge_id: initialChargeId,
+        initial_charge_paid_at: isFirstTime && initialChargeId ? now : null,
+        payjp_subscription_id: subscription.id,
+        payjp_plan_id: subscription.plan.id,
+        subscription_status: subscriptionStatus,
+        first_trial_granted_at: isFirstTime ? now : member.first_trial_granted_at,
+        access_end_at: accessEndAt,
+        next_billing_at: nextBillingAt,
+        role_state: 'granted',
+        last_synced_at: now,
+        inflight_operation_id: null,
+        inflight_operation_type: null,
+        inflight_operation_started_at: null,
+      });
+    } catch {
+      // DB failure after PAY.JP success — retain inflight for CLI reconciliation
+      return { ok: false, statusCode: 503, errorCode: 'DB_UPDATE_FAILED', message: 'DB update failed after PAY.JP subscription creation', operationId };
+    }
 
     // Step 14: Role sync (retry 3x: 0s/1s/2s wait, 1s timeout each, total ≤ 6s)
     const ROLE_SYNC_DELAYS_MS = [0, 1000, 2000];

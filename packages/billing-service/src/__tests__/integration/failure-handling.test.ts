@@ -258,7 +258,7 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-052: Definite failure before PAY.JP write
   // -------------------------------------------------------------------------
   describe('PROP-BILL-052: Definite failure before PAY.JP write', () => {
-    it('inflight_operation_* cleared on pre-write failure', async () => {
+    it('inflight retained on pre-write failure; operationId returned for CLI resolution', async () => {
       const deps = makeSubscribeDeps();
       // 3DS 検証失敗は PAY.JP write 前の definite failure
       (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -273,9 +273,10 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.statusCode).toBe(422);
+        // inflight は自動解除しない — 手動 CLI で解除する
+        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+        expect(result.operationId).toBe(OPERATION_ID);
       }
-      // 3DS 失敗後は inflight をクリア
-      expect(deps.db.clearInflightOperation).toHaveBeenCalledWith(MEMBER_ID);
     });
   });
 
@@ -283,24 +284,26 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-053a: Failure after customer creation
   // -------------------------------------------------------------------------
   describe('PROP-BILL-053a: Failure after customer creation', () => {
-    it('re-fetch customer; reconcile success → clear inflight', async () => {
+    it('definite failure with no existing customer → retain inflight for CLI', async () => {
       const deps = makeSubscribeDeps();
       let customerCreated = false;
 
+      // HTTP 4xx → definite failure → reconcile path (but no existing customer_id → fail)
+      const definiteError = Object.assign(new Error('definite customer creation error'), { status: 402 });
       (deps.payjp.createCustomer as ReturnType<typeof vi.fn>).mockImplementation(() => {
         customerCreated = true;
-        throw new Error('definite customer creation error');
+        throw definiteError;
       });
-      // payjp_customer_id がまだ null の状態では reconcile 失敗 → inflight 保持
-      // ただし updateMemberCustomerId が呼ばれる前に失敗した場合
 
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
 
       expect(customerCreated).toBe(true);
       expect(result.ok).toBe(false);
-      // createCustomer 後の definite failure → clearInflight か inflight 保持
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
+        expect(result.operationId).toBe(OPERATION_ID);
+        // inflight は自動解除しない
+        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
       }
     });
   });
@@ -309,13 +312,15 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-053b: Failure after charge
   // -------------------------------------------------------------------------
   describe('PROP-BILL-053b: Failure after charge', () => {
-    it('re-fetch charge; reconcile payjp_initial_charge_id; no duplicate charge', async () => {
+    it('definite failure with no existing charge_id → retain inflight, no duplicate charge', async () => {
       const deps = makeSubscribeDeps();
       let chargeAttempts = 0;
 
+      // HTTP 4xx → definite failure
+      const definiteError = Object.assign(new Error('definite charge error'), { status: 402 });
       (deps.payjp.createCharge as ReturnType<typeof vi.fn>).mockImplementation(() => {
         chargeAttempts++;
-        throw new Error('definite charge error');
+        throw definiteError;
       });
 
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
@@ -323,6 +328,10 @@ describe('Failure Handling — Integration', () => {
       // createCharge は 1 回のみ (リトライなし)
       expect(chargeAttempts).toBe(1);
       expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.operationId).toBe(OPERATION_ID);
+        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+      }
     });
   });
 
@@ -330,7 +339,7 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-053c: Failure after subscription creation
   // -------------------------------------------------------------------------
   describe('PROP-BILL-053c: Failure after subscription creation', () => {
-    it('re-fetch subscription; reconcile → clear inflight', async () => {
+    it('definite failure with no existing subscription → retain inflight for CLI', async () => {
       const deps = makeSubscribeDeps();
       let subAttempts = 0;
 
@@ -338,12 +347,17 @@ describe('Failure Handling — Integration', () => {
         subAttempts++;
         throw new Error('definite subscription creation error');
       });
-      // payjp_subscription_id が null の場合 → reconcile 試行なし → clearInflight
+      // payjp_subscription_id が null の場合 → reconcile 試行なし → inflight 保持
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
 
       expect(subAttempts).toBe(1);
       expect(result.ok).toBe(false);
-      expect(deps.db.clearInflightOperation).toHaveBeenCalledWith(MEMBER_ID);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.operationId).toBe(OPERATION_ID);
+        // inflight は自動解除しない
+        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+      }
     });
   });
 
@@ -351,11 +365,13 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-053d: Failure after cancel API
   // -------------------------------------------------------------------------
   describe('PROP-BILL-053d: Failure after cancel API', () => {
-    it('re-fetch subscription status; reconcile → clear inflight', async () => {
+    it('re-fetch subscription status; reconcile with canceled status → success', async () => {
       const deps = makeCancelDeps();
 
+      // HTTP 4xx → definite failure (not uncertain) → triggers reconcile path
+      const definiteError = Object.assign(new Error('definite cancel error'), { status: 400 });
       (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error('definite cancel error'),
+        definiteError,
       );
       // fetchSubscription が reconcile で成功する
       (deps.payjp.fetchSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -382,8 +398,10 @@ describe('Failure Handling — Integration', () => {
     it('PAY.JP unreachable during re-fetch → 503 + operationId, inflight retained', async () => {
       const deps = makeCancelDeps();
 
+      // HTTP 4xx → definite failure → reconcile path
+      const definiteError = Object.assign(new Error('definite cancel error'), { status: 400 });
       (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error('definite cancel error'),
+        definiteError,
       );
       // fetchSubscription (reconcile) も失敗
       (deps.payjp.fetchSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(

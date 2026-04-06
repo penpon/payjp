@@ -41,6 +41,11 @@ export async function handleCancel(
     return { ok: false, statusCode: 401, errorCode: 'CONSUMED_LINK_SESSION', message: 'Link session already used' };
   }
 
+  // Step 1c: Verify discordUserId matches link session (IDOR prevention)
+  if (linkSession.discord_user_id !== req.discordUserId) {
+    return { ok: false, statusCode: 403, errorCode: 'DISCORD_USER_ID_MISMATCH', message: 'discordUserId does not match link session' };
+  }
+
   // Step 2: Advisory lock
   const lockKey = `cancel:${req.discordUserId}`;
   const lockAcquired = await db.acquireAdvisoryLock(lockKey);
@@ -108,29 +113,40 @@ export async function handleCancel(
       if (isUncertainError(err)) {
         return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Uncertain failure during cancel', operationId };
       }
-      // Definite failure after write attempt — try reconcile
+      // Definite failure after write attempt — try reconcile by checking actual state
       try {
         const refetched = await payjp.fetchSubscription(member.payjp_subscription_id);
+        if (refetched.status !== 'canceled') {
+          // Cancel was not actually applied — retain inflight for CLI resolution
+          return { ok: false, statusCode: 503, errorCode: 'PAYJP_CANCEL_NOT_CONFIRMED', message: 'Cancel not confirmed after reconciliation', operationId };
+        }
         canceledSubscription = refetched;
-      } catch {
+      } catch (reconcileErr) {
         return { ok: false, statusCode: 503, errorCode: 'PAYJP_UNCERTAIN', message: 'Reconciliation failed after cancel failure', operationId };
       }
     }
 
     // Step 12: State update + clear inflight
+    // PAY.JP cancel is complete — DB update failure retains inflight for CLI resolution
     const canceledAt = now;
     const accessEndAt = canceledSubscription.current_period_end
       ? new Date(canceledSubscription.current_period_end * 1000)
       : member.access_end_at;
 
-    const updatedMember = await db.updateMemberAfterCancel(member.id, {
-      cancel_requested_at: canceledAt,
-      subscription_status: 'canceled',
-      access_end_at: accessEndAt,
-      inflight_operation_id: null,
-      inflight_operation_type: null,
-      inflight_operation_started_at: null,
-    });
+    let updatedMember: Awaited<ReturnType<typeof db.updateMemberAfterCancel>>;
+    try {
+      updatedMember = await db.updateMemberAfterCancel(member.id, {
+        cancel_requested_at: canceledAt,
+        subscription_status: 'canceled',
+        access_end_at: accessEndAt,
+        inflight_operation_id: null,
+        inflight_operation_type: null,
+        inflight_operation_started_at: null,
+      });
+    } catch {
+      // DB failure after PAY.JP cancel success — retain inflight for CLI reconciliation
+      return { ok: false, statusCode: 503, errorCode: 'DB_UPDATE_FAILED', message: 'DB update failed after PAY.JP cancel', operationId };
+    }
 
     return { ok: true, data: buildCancelResponse(updatedMember) };
   } finally {
