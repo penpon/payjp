@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "test": "npm -w packages/shared run test && npm -w packages/auth-service run test && npm -w packages/billing-service run test && npm -w packages/sync-service run test",
+    "test": "npm -w packages/shared run test && npm -w packages/auth-service run test && npm -w packages/billing-service run test && npm -w packages/sync-service run test && npm -w packages/server run test",
     "test:auth": "npm -w packages/auth-service run test",
     "test:billing": "npm -w packages/billing-service run test",
     "test:sync": "npm -w packages/sync-service run test"

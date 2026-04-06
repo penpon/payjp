@@ -370,6 +370,7 @@ async function handleStructuredAuthRequest(
     return {
       statusCode: 302,
       headers: {
+        ...secHeaders,
         Location: url,
         'Set-Cookie': serializeCookieAttributes(attrs, sessionToken),
       },
