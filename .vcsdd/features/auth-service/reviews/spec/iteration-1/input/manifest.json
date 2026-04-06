@@ -1,0 +1,18 @@
+{
+  "reviewType": "spec",
+  "feature": "auth-service",
+  "iteration": 1,
+  "artifactsToReview": [
+    "specs/behavioral-spec.md",
+    "specs/verification-architecture.md"
+  ],
+  "reviewDimensions": [
+    "spec_fidelity",
+    "verification_readiness"
+  ],
+  "sourceSpecs": [
+    "2weeks-spec.md",
+    "implementation-design-mvp.md",
+    "tdd-acceptance-matrix-mvp.md"
+  ]
+}

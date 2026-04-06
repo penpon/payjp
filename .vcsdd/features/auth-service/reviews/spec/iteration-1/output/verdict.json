@@ -1,0 +1,154 @@
+{
+  "reviewType": "spec",
+  "feature": "auth-service",
+  "iteration": 1,
+  "timestamp": "2026-04-06T12:00:00Z",
+  "dimensions": {
+    "spec_fidelity": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "id": "F-001",
+          "severity": "major",
+          "category": "purity_boundary",
+          "description": "consumeDiscordLinkSession listed in auth-service effectful shell (behavioral-spec.md line 29) violates the service boundary defined in the source specs. implementation-design-mvp.md line 107 explicitly states 'discord_link_sessions | auth-service（発行）/ billing-service（消費）' — auth-service ISSUES link sessions, billing-service CONSUMES them. REQ-AUTH-004 correctly states session check does NOT consume the token, yet the effectful shell includes a consumption function that no auth-service requirement uses. This is a dead function that contradicts the authoritative service boundary.",
+          "affectedArtifact": "specs/behavioral-spec.md",
+          "evidence": {
+            "filePath": "specs/behavioral-spec.md",
+            "lineRange": "29",
+            "snippet": "consumeDiscordLinkSession(db, tokenHash): Promise<LinkSessionRecord | null> — atomic DB UPDATE + SELECT in transaction"
+          },
+          "sourceReference": "implementation-design-mvp.md line 107: 'auth-service（発行）/ billing-service（消費）'",
+          "recommendation": "Remove consumeDiscordLinkSession from auth-service's effectful shell. Link session consumption belongs exclusively to billing-service. Auth-service should only define saveDiscordLinkSession."
+        },
+        {
+          "id": "F-002",
+          "severity": "minor",
+          "category": "spec_gap",
+          "description": "REQ-AUTH-011 (behavioral-spec.md line 281) adds 'http:// allowed only in development; startup warning if not https://' but this is gold-plating. The source spec 2weeks-spec.md line 471 says 'FRONTEND_BASE_URL はオリジン形式のみを許可し、pathや末尾スラッシュは含めない' with no mention of http:// development allowance or startup warning. Neither implementation-design-mvp.md nor tdd-acceptance-matrix-mvp.md mentions this relaxation.",
+          "affectedArtifact": "specs/behavioral-spec.md",
+          "evidence": {
+            "filePath": "specs/behavioral-spec.md",
+            "lineRange": "280-281",
+            "snippet": "http:// allowed only in development; startup warning if not https://"
+          },
+          "sourceReference": "2weeks-spec.md line 471: no mention of http:// development mode",
+          "recommendation": "Remove the http:// development allowance from REQ-AUTH-011. If this relaxation is needed, it should be added to the source spec (2weeks-spec.md) first as a Change Request, then propagated to the behavioral spec."
+        },
+        {
+          "id": "F-003",
+          "severity": "minor",
+          "category": "spec_gap",
+          "description": "GET /health endpoint (2weeks-spec.md line 147-148, under 6.2 Backend API item 1) is missing from the behavioral spec. The source spec defines 'GET /health → 200 (503 on dependency failure)' as a standard endpoint. While it may seem trivial, it is an explicitly specified behavior in the authoritative source. Every service presumably exposes its own health check.",
+          "affectedArtifact": "specs/behavioral-spec.md",
+          "evidence": {
+            "filePath": "specs/behavioral-spec.md",
+            "lineRange": "entire file",
+            "snippet": "No mention of GET /health anywhere in behavioral-spec.md"
+          },
+          "sourceReference": "2weeks-spec.md line 147-148: 'GET /health → 200を返す'",
+          "recommendation": "Add a REQ-AUTH for GET /health that returns 200 on normal operation and 503 when a dependency (e.g., database) is unhealthy."
+        },
+        {
+          "id": "F-004",
+          "severity": "major",
+          "category": "requirement_mismatch",
+          "description": "REQ-AUTH-011 requires OAUTH_COOKIE_SECRET as a mandatory startup env var (behavioral-spec.md line 277), but NFR-AUTH-003 (line 335) says 'OAUTH_COOKIE_SECRET used for cookie signing (HMAC) if implemented'. The behavioral spec is self-contradictory: it mandates the env var's presence at startup but conditions its use with 'if implemented.' The source spec (2weeks-spec.md line 467) lists OAUTH_COOKIE_SECRET as env var #16 without specifying whether it is strictly required at startup for auth-service specifically. The behavioral spec must either commit to requiring cookie signing (and therefore requiring the env var) or not list it as a startup-required variable.",
+          "affectedArtifact": "specs/behavioral-spec.md",
+          "evidence": {
+            "filePath": "specs/behavioral-spec.md",
+            "lineRange": "277, 335",
+            "snippet": "REQ-AUTH-011 requires OAUTH_COOKIE_SECRET present at startup; NFR-AUTH-003 says 'if implemented'"
+          },
+          "sourceReference": "2weeks-spec.md line 467: OAUTH_COOKIE_SECRET listed as env var #16, no startup validation specified",
+          "recommendation": "Either (a) commit to HMAC cookie signing using OAUTH_COOKIE_SECRET (remove 'if implemented' from NFR-AUTH-003 and keep it required at startup), or (b) remove OAUTH_COOKIE_SECRET from the REQ-AUTH-011 required env var list since the behavioral spec uses SHA-256 hash-based validation (not HMAC signing) for all cookie-linked sessions. The current hash-based design (SHA-256 of raw token, stored in DB) does not use HMAC at all, making OAUTH_COOKIE_SECRET unused by any REQ."
+        }
+      ]
+    },
+    "verification_readiness": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "id": "F-005",
+          "severity": "critical",
+          "category": "test_coverage",
+          "description": "validateLinkSessionRecord — a pure core function listed in both behavioral-spec.md (line 19) and verification-architecture.md (line 24) — has NO dedicated PROP obligation. This function validates link session token hash match, TTL expiry, and used_at status for REQ-AUTH-004 (session check) and REQ-AUTH-013 (link session TTL boundary). While PROP-AUTH-004 covers the isExpired boundary and PROP-AUTH-022 covers TTL integration, there is no Tier 1 property test verifying that validateLinkSessionRecord correctly composes all three conditions (hash match + TTL + used_at), analogous to how PROP-AUTH-002/003 exhaustively cover validateOAuthStateRecord's four conditions. This is an asymmetric gap — the OAuth state validator has thorough PROP coverage but the link session validator has none.",
+          "affectedArtifact": "specs/verification-architecture.md",
+          "evidence": {
+            "filePath": "specs/verification-architecture.md",
+            "lineRange": "24, 48-76",
+            "snippet": "validateLinkSessionRecord appears in Pure Core table but has no PROP-AUTH-XXX entry in Proof Obligations"
+          },
+          "recommendation": "Add PROP-AUTH-027 (Tier 1, required: true): 'validateLinkSessionRecord returns failure for each individual condition failure (token hash mismatch, expired, already used) and success only when all conditions hold.' This mirrors PROP-AUTH-002/003 for validateOAuthStateRecord."
+        },
+        {
+          "id": "F-006",
+          "severity": "major",
+          "category": "verification_tool_mismatch",
+          "description": "REQ-AUTH-009 (state entropy >= 128 bits from crypto.randomBytes) is mapped in the traceability matrix (line 152) to only '(Tier 0 type guarantee + code review)'. TypeScript's type system cannot verify that a runtime call to crypto.randomBytes uses a buffer of at least 16 bytes. The type of the return value is the same regardless of the byte count argument. Code review is not a reproducible automated verification. This requirement has zero automated proof obligations.",
+          "affectedArtifact": "specs/verification-architecture.md",
+          "evidence": {
+            "filePath": "specs/verification-architecture.md",
+            "lineRange": "152",
+            "snippet": "| REQ-AUTH-009 | (Tier 0 type guarantee + code review) | state entropy |"
+          },
+          "recommendation": "Add a Tier 2 integration test PROP (required: true): 'generateSecureRandomToken returns a token with at least 128 bits of entropy (>= 32 hex chars or >= 22 base64 chars)'. Alternatively, add a Tier 1 unit test that verifies the crypto.randomBytes call argument is >= 16 via a wrapper that exposes byte length."
+        },
+        {
+          "id": "F-007",
+          "severity": "major",
+          "category": "test_coverage",
+          "description": "NFR-AUTH-001 (atomicity — state verification and consumption in a single PostgreSQL transaction with SELECT FOR UPDATE) is absent from the traceability matrix. PROP-AUTH-010 covers concurrent consumption but is mapped only to REQ-AUTH-003 in the matrix (line 148). NFR-AUTH-001 is not listed as a row in the traceability table at all. While PROP-AUTH-010's test scenario implicitly validates atomicity, the traceability gap means NFR-AUTH-001 could be removed without any PROP flagging the loss.",
+          "affectedArtifact": "specs/verification-architecture.md",
+          "evidence": {
+            "filePath": "specs/verification-architecture.md",
+            "lineRange": "140-158",
+            "snippet": "NFR-AUTH-001 is not present in the Traceability Matrix"
+          },
+          "recommendation": "Add NFR-AUTH-001 to the traceability matrix with PROP-AUTH-010 as its proof obligation, confirming that the concurrent-consumption integration test covers the atomicity requirement."
+        },
+        {
+          "id": "F-008",
+          "severity": "major",
+          "category": "test_coverage",
+          "description": "NFR-AUTH-002 (performance: p99 < 200ms for start, < 2000ms for callback, < 100ms for session) has zero PROP obligations and is absent from the traceability matrix. There is no Tier 2 or Tier 3 verification plan for these thresholds. Performance requirements without verification plans are unenforceable.",
+          "affectedArtifact": "specs/verification-architecture.md",
+          "evidence": {
+            "filePath": "specs/verification-architecture.md",
+            "lineRange": "140-158",
+            "snippet": "NFR-AUTH-002 is not present in the Traceability Matrix"
+          },
+          "recommendation": "Add NFR-AUTH-002 to the traceability matrix. At minimum, add a Tier 3 manual verification entry (required: false) for performance benchmarking pre-Go-Live, or a Tier 2 integration test that asserts response times under nominal load are within the specified p99 bounds."
+        },
+        {
+          "id": "F-009",
+          "severity": "minor",
+          "category": "test_coverage",
+          "description": "NFR-AUTH-003 (secret rotation readiness, OAUTH_COOKIE_SECRET) is absent from the traceability matrix as a row. PROP-AUTH-026 (Cookie connectivity, Tier 3, required: false) is mapped to NFR-AUTH-003 in the proof obligations table (line 75), but the traceability matrix (lines 140-158) has no entry for NFR-AUTH-003. This is inconsistent — the PROP references it but the traceability matrix omits it.",
+          "affectedArtifact": "specs/verification-architecture.md",
+          "evidence": {
+            "filePath": "specs/verification-architecture.md",
+            "lineRange": "75, 140-158",
+            "snippet": "PROP-AUTH-026 references NFR-AUTH-003 but traceability matrix has no NFR-AUTH-003 row"
+          },
+          "recommendation": "Add NFR-AUTH-003 to the traceability matrix with PROP-AUTH-026 as its proof obligation."
+        },
+        {
+          "id": "F-010",
+          "severity": "major",
+          "category": "purity_boundary",
+          "description": "consumeDiscordLinkSession is listed in the verification-architecture.md effectful shell table (line 39) with test strategy 'Integration: token consumed exactly once'. However, there is no corresponding PROP-AUTH obligation for this function, and no REQ within auth-service uses it. This creates a phantom verification target — the architecture describes verifying a function that should not exist in auth-service's boundary (see F-001). If it were retained, the absence of a PROP would be a coverage gap; since it should not exist, it is dead verification architecture.",
+          "affectedArtifact": "specs/verification-architecture.md",
+          "evidence": {
+            "filePath": "specs/verification-architecture.md",
+            "lineRange": "39",
+            "snippet": "consumeDiscordLinkSession(db, tokenHash) | DB SELECT FOR UPDATE + UPDATE used_at in txn | Integration: token consumed exactly once"
+          },
+          "recommendation": "Remove consumeDiscordLinkSession from the verification architecture's effectful shell table, consistent with removing it from the behavioral spec (F-001)."
+        }
+      ]
+    }
+  },
+  "overallVerdict": "FAIL",
+  "summary": "Both dimensions FAIL. spec_fidelity has 2 major findings: (1) consumeDiscordLinkSession violates the service boundary defined in source specs — auth-service issues link sessions but billing-service consumes them, (2) OAUTH_COOKIE_SECRET is self-contradictory between REQ-AUTH-011 (required at startup) and NFR-AUTH-003 (conditional 'if implemented'). verification_readiness has 1 critical and 4 major findings: the critical issue is that validateLinkSessionRecord — a pure core function — has zero PROP obligations despite being analogous to validateOAuthStateRecord which has exhaustive coverage (PROP-AUTH-002/003). Major gaps include REQ-AUTH-009 entropy verification relying on unverifiable 'Tier 0 + code review', NFR-AUTH-001/002 missing from the traceability matrix, and phantom verification architecture for the incorrectly-scoped consumeDiscordLinkSession."
+}

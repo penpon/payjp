@@ -1,0 +1,14 @@
+{
+  "findingId": "F-011",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "minor",
+  "description": "validateFrontendBaseUrl is listed in verification-architecture.md Pure Core table (line 28) but is absent from behavioral-spec.md Pure Core section (lines 10-22). The behavioral spec's Purity Boundary Analysis enumerates 11 pure core functions, but validateFrontendBaseUrl is not among them. The verification architecture cannot verify a function the behavioral spec does not define. Both spec artifacts must agree on the pure core surface.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "28",
+    "snippet": "| `validateFrontendBaseUrl(raw)` | `string` | `ValidationResult` | Origin-only regex; no trailing slash; no path |"
+  },
+  "sourceReference": "behavioral-spec.md lines 10-22: Pure Core list does not include validateFrontendBaseUrl",
+  "recommendation": "Add validateFrontendBaseUrl(raw: string): ValidationResult to the Pure Core list in behavioral-spec.md, consistent with its presence in verification-architecture.md."
+}

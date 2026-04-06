@@ -1,0 +1,14 @@
+{
+  "findingId": "F-005",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "critical",
+  "description": "validateLinkSessionRecord — a pure core function listed in both behavioral-spec.md (line 19) and verification-architecture.md (line 24) — has NO dedicated PROP obligation. This function validates link session token hash match, TTL expiry, and used_at status for REQ-AUTH-004 and REQ-AUTH-013. While PROP-AUTH-004 covers isExpired boundary and PROP-AUTH-022 covers TTL integration, there is no Tier 1 property test verifying that validateLinkSessionRecord correctly composes all three conditions (hash match + TTL + used_at). This is an asymmetric gap: validateOAuthStateRecord has exhaustive coverage (PROP-AUTH-002/003) but validateLinkSessionRecord has none.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "24, 48-76",
+    "snippet": "validateLinkSessionRecord appears in Pure Core table but has no PROP-AUTH-XXX entry in Proof Obligations"
+  },
+  "recommendation": "Add PROP-AUTH-027 (Tier 1, required: true): 'validateLinkSessionRecord returns failure for each individual condition failure and success only when all conditions hold.' Mirror PROP-AUTH-002/003 structure.",
+  "routeToPhase": "1b"
+}

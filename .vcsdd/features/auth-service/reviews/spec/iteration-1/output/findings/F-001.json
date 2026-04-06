@@ -1,0 +1,15 @@
+{
+  "findingId": "F-001",
+  "dimension": "spec_fidelity",
+  "category": "purity_boundary",
+  "severity": "major",
+  "description": "consumeDiscordLinkSession listed in auth-service effectful shell (behavioral-spec.md line 29) violates the service boundary defined in the source specs. implementation-design-mvp.md line 107 explicitly states 'discord_link_sessions | auth-service（発行）/ billing-service（消費）' — auth-service ISSUES link sessions, billing-service CONSUMES them. REQ-AUTH-004 correctly states session check does NOT consume the token, yet the effectful shell includes a consumption function that no auth-service requirement uses.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/behavioral-spec.md",
+    "lineRange": "29",
+    "snippet": "consumeDiscordLinkSession(db, tokenHash): Promise<LinkSessionRecord | null> — atomic DB UPDATE + SELECT in transaction"
+  },
+  "sourceReference": "implementation-design-mvp.md line 107",
+  "recommendation": "Remove consumeDiscordLinkSession from auth-service's effectful shell. Link session consumption belongs exclusively to billing-service.",
+  "routeToPhase": "1a"
+}

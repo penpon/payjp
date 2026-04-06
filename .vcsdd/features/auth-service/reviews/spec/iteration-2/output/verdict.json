@@ -1,0 +1,76 @@
+{
+  "reviewType": "spec",
+  "feature": "auth-service",
+  "iteration": 2,
+  "timestamp": "2026-04-06T14:00:00Z",
+  "priorFindingsResolution": {
+    "F-001": "resolved — consumeDiscordLinkSession removed from behavioral-spec.md effectful shell (lines 24-31 now list only saveDiscordLinkSession at line 28)",
+    "F-002": "resolved — http:// development allowance and startup warning removed from REQ-AUTH-011; regex ^https?:\\/\\/[^\\/]+$ matches source spec format",
+    "F-003": "resolved — REQ-AUTH-015 (lines 320-328) added for GET /health with 200 on healthy, 503 on dependency failure",
+    "F-004": "resolved — OAUTH_COOKIE_SECRET removed from REQ-AUTH-011 required env var list (line 276); NFR-AUTH-003 (lines 344-346) now explicitly states no HMAC cookie signing and no OAUTH_COOKIE_SECRET required",
+    "F-005": "resolved — PROP-AUTH-027 (line 75, Tier 1, required: true) and PROP-AUTH-028 (line 76, Tier 1, required: true) added for validateLinkSessionRecord exhaustive case table and property test",
+    "F-006": "resolved — PROP-AUTH-029 (line 77, Tier 2, required: true) added for generateSecureRandomToken entropy verification; REQ-AUTH-009 traceability updated at line 158",
+    "F-007": "resolved — NFR-AUTH-001 added to traceability matrix at line 165 with PROP-AUTH-010",
+    "F-008": "resolved — NFR-AUTH-002 added to traceability matrix at line 166 with PROP-AUTH-030 (Tier 3, required: false)",
+    "F-009": "resolved — NFR-AUTH-003 added to traceability matrix at line 167 with PROP-AUTH-026",
+    "F-010": "resolved — consumeDiscordLinkSession removed from verification-architecture.md effectful shell table (lines 33-41 no longer include it)"
+  },
+  "dimensions": {
+    "spec_fidelity": {
+      "verdict": "PASS",
+      "findings": ["F-011", "F-012"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/behavioral-spec.md",
+          "description": "REQ-AUTH-001 through REQ-AUTH-015 cover all R1 requirements from 2weeks-spec.md §6.2 items 1-4, §8 items 1-4/21/24-25. Service boundary correctly excludes PAY.JP, role management, and link session consumption. EARS format applied to all functional requirements. Cookie attributes match §6.2 exactly."
+        },
+        {
+          "type": "file",
+          "location": "2weeks-spec.md",
+          "description": "Cross-verified lines 144-174 (auth endpoints), 391-407 (DB schema), 418-446 (security), 463-471 (env vars). All auth-service-scoped requirements are represented in behavioral-spec.md."
+        },
+        {
+          "type": "file",
+          "location": "implementation-design-mvp.md",
+          "description": "Cross-verified lines 37-46 (auth-service boundary), 74-88 (API contract), 106-107 (data model). Behavioral spec correctly follows line 107's 'auth-service (発行) / billing-service (消費)' pattern for discord_link_sessions."
+        },
+        {
+          "type": "file",
+          "location": "tdd-acceptance-matrix-mvp.md",
+          "description": "T-P0-01 check items (lines 43-68) are traceable to corresponding REQ-AUTH and PROP-AUTH entries."
+        }
+      ],
+      "notes": "Two minor findings remain: F-011 (validateFrontendBaseUrl listed in verification-architecture Pure Core but absent from behavioral-spec Pure Core) and F-012 (ambiguous Origin-absent behavior for session endpoint). Neither represents a missing or incorrect functional requirement — both are internal consistency issues that do not block implementation."
+    },
+    "verification_readiness": {
+      "verdict": "PASS",
+      "findings": ["F-013"],
+      "evidence": [
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+          "description": "30 PROP-AUTH obligations (PROP-AUTH-001 through PROP-AUTH-030) covering all 15 REQ-AUTH and all 4 NFR-AUTH requirements. Tier assignments appropriate: pure core functions at Tier 1, DB/HTTP integration at Tier 2, manual/operational at Tier 3. All security-critical PROPs have required: true."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+          "description": "Traceability matrix (lines 148-168) covers all REQ-AUTH-001 through REQ-AUTH-015 and NFR-AUTH-001 through NFR-AUTH-004. Every row has at least one PROP identifier except REQ-AUTH-015 (informal annotation only — see F-013)."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+          "description": "Purity boundary correctly drawn: 12 pure core functions (lines 15-28), 7 effectful shell functions (lines 34-41). consumeDiscordLinkSession correctly absent. validateLinkSessionRecord now has PROP-AUTH-027/028 (resolving the critical F-005)."
+        },
+        {
+          "type": "file",
+          "location": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+          "description": "PROP-AUTH-029 (line 77) resolves the entropy verification gap for REQ-AUTH-009. Tier 2 integration test verifying token length >= 32 hex chars or >= 16 raw bytes."
+        }
+      ],
+      "notes": "One minor finding: F-013 (REQ-AUTH-015 health check has no formal PROP-AUTH identifier in the traceability matrix). This does not block implementation or testing but represents a tracking gap."
+    }
+  },
+  "overallVerdict": "PASS",
+  "summary": "All 10 prior findings from iteration 1 are verified resolved. Three new minor findings identified: F-011 (validateFrontendBaseUrl inconsistency between behavioral-spec and verification-architecture Pure Core lists), F-012 (ambiguous Origin-absent behavior for GET /v1/auth/discord/session), and F-013 (REQ-AUTH-015 health check lacks formal PROP identifier in traceability matrix). No critical or major findings remain. Both spec_fidelity and verification_readiness dimensions PASS."
+}

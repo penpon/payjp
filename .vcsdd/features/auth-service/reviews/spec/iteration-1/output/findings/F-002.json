@@ -1,0 +1,15 @@
+{
+  "findingId": "F-002",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "minor",
+  "description": "REQ-AUTH-011 (behavioral-spec.md line 281) adds 'http:// allowed only in development; startup warning if not https://' — gold-plating not found in any source spec. 2weeks-spec.md line 471 specifies origin format validation without any http:// development relaxation.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/behavioral-spec.md",
+    "lineRange": "280-281",
+    "snippet": "http:// allowed only in development; startup warning if not https://"
+  },
+  "sourceReference": "2weeks-spec.md line 471",
+  "recommendation": "Remove the http:// development allowance or add a Change Request to the source spec first.",
+  "routeToPhase": "1a"
+}

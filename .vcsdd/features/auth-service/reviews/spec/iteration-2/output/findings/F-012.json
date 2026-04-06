@@ -1,0 +1,14 @@
+{
+  "findingId": "F-012",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "minor",
+  "description": "REQ-AUTH-004 line 161 states 'Requests with absent Origin header: behavior depends on deployment (same-origin browser requests will have no Origin)'. This is ambiguous and fails to specify a concrete behavior. The source spec 2weeks-spec.md line 144 says all Cookie-linked APIs (including GET /v1/auth/discord/session) use FRONTEND_BASE_URL as the only permitted Origin. T-P0-01 (tdd-acceptance-matrix-mvp.md line 50) requires 'Cookie連携API (GET /v1/auth/discord/session) の許可Originが FRONTEND_BASE_URL 固定でない' as a Red criterion. The behavioral spec should either mandate 403 for absent Origin (matching POST endpoints) or explicitly state that absent Origin is allowed for GET /v1/auth/discord/session with a source-spec justification for the asymmetry.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/behavioral-spec.md",
+    "lineRange": "161",
+    "snippet": "- Requests with absent `Origin` header: behavior depends on deployment (same-origin browser requests will have no Origin)"
+  },
+  "sourceReference": "2weeks-spec.md line 144: shared Origin policy for all Cookie-linked APIs; tdd-acceptance-matrix-mvp.md line 50: T-P0-01 Red criterion",
+  "recommendation": "Replace the ambiguous statement with a concrete decision. Given that the source spec line 144 includes GET /v1/auth/discord/session in the same Origin policy as POST endpoints, the safest choice is to mandate 403 for absent Origin. If absent Origin should be allowed for same-origin GET requests, document the rationale as a Change Request against the shared policy."
+}

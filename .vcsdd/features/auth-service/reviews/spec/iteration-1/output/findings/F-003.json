@@ -1,0 +1,15 @@
+{
+  "findingId": "F-003",
+  "dimension": "spec_fidelity",
+  "category": "spec_gap",
+  "severity": "minor",
+  "description": "GET /health endpoint (2weeks-spec.md line 147-148, under 6.2 Backend API item 1: '200を返す') is missing from the behavioral spec entirely. This is an explicitly specified behavior in the authoritative source.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/behavioral-spec.md",
+    "lineRange": "entire file",
+    "snippet": "No mention of GET /health anywhere in behavioral-spec.md"
+  },
+  "sourceReference": "2weeks-spec.md line 147-148",
+  "recommendation": "Add a REQ-AUTH for GET /health returning 200 on normal operation and 503 on dependency failure.",
+  "routeToPhase": "1a"
+}

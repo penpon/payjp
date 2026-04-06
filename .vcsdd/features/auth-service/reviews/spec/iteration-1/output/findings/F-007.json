@@ -1,0 +1,14 @@
+{
+  "findingId": "F-007",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "major",
+  "description": "NFR-AUTH-001 (atomicity — state verification and consumption in a single PostgreSQL transaction with SELECT FOR UPDATE) is absent from the traceability matrix. PROP-AUTH-010 covers concurrent consumption but is mapped only to REQ-AUTH-003, not NFR-AUTH-001.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "140-158",
+    "snippet": "NFR-AUTH-001 is not present in the Traceability Matrix"
+  },
+  "recommendation": "Add NFR-AUTH-001 to the traceability matrix with PROP-AUTH-010 as its proof obligation.",
+  "routeToPhase": "1b"
+}

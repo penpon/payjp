@@ -1,1 +1,1 @@
-sync-service
+auth-service

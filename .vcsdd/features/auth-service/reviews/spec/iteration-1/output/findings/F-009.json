@@ -1,0 +1,14 @@
+{
+  "findingId": "F-009",
+  "dimension": "verification_readiness",
+  "category": "test_coverage",
+  "severity": "minor",
+  "description": "NFR-AUTH-003 (secret rotation readiness) is absent from the traceability matrix despite PROP-AUTH-026 (line 75) referencing it. The PROP table maps PROP-AUTH-026 to NFR-AUTH-003 but the traceability matrix omits the NFR-AUTH-003 row entirely.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "75, 140-158",
+    "snippet": "PROP-AUTH-026 references NFR-AUTH-003 but traceability matrix has no NFR-AUTH-003 row"
+  },
+  "recommendation": "Add NFR-AUTH-003 to the traceability matrix with PROP-AUTH-026.",
+  "routeToPhase": "1b"
+}

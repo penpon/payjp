@@ -1,0 +1,15 @@
+{
+  "findingId": "F-004",
+  "dimension": "spec_fidelity",
+  "category": "requirement_mismatch",
+  "severity": "major",
+  "description": "REQ-AUTH-011 requires OAUTH_COOKIE_SECRET as a mandatory startup env var (line 277), but NFR-AUTH-003 (line 335) says 'OAUTH_COOKIE_SECRET used for cookie signing (HMAC) if implemented'. The spec is self-contradictory. The hash-based design (SHA-256 of raw token, stored in DB) used throughout the spec does not require HMAC signing, making OAUTH_COOKIE_SECRET unused by any REQ. The source spec lists it as env var #16 but does not specify startup validation requirements for it.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/behavioral-spec.md",
+    "lineRange": "277, 335",
+    "snippet": "REQ-AUTH-011 requires OAUTH_COOKIE_SECRET; NFR-AUTH-003 says 'if implemented'"
+  },
+  "sourceReference": "2weeks-spec.md line 467",
+  "recommendation": "Resolve the contradiction. If SHA-256 hash-based validation (not HMAC) is the design choice, remove OAUTH_COOKIE_SECRET from REQ-AUTH-011's required list and clarify NFR-AUTH-003 accordingly.",
+  "routeToPhase": "1a"
+}

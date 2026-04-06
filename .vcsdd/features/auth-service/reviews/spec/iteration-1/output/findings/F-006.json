@@ -1,0 +1,14 @@
+{
+  "findingId": "F-006",
+  "dimension": "verification_readiness",
+  "category": "verification_tool_mismatch",
+  "severity": "major",
+  "description": "REQ-AUTH-009 (state entropy >= 128 bits from crypto.randomBytes) is mapped in the traceability matrix (line 152) to only '(Tier 0 type guarantee + code review)'. TypeScript's type system cannot verify that a runtime call to crypto.randomBytes uses a buffer of at least 16 bytes — the return type is Buffer regardless of byte count. Code review is not a reproducible automated verification.",
+  "evidence": {
+    "filePath": ".vcsdd/features/auth-service/specs/verification-architecture.md",
+    "lineRange": "152",
+    "snippet": "| REQ-AUTH-009 | (Tier 0 type guarantee + code review) | state entropy |"
+  },
+  "recommendation": "Add a Tier 2 integration test PROP (required: true): 'generateSecureRandomToken returns a token with at least 128 bits of entropy (>= 32 hex chars or >= 22 base64 chars)'.",
+  "routeToPhase": "1b"
+}
