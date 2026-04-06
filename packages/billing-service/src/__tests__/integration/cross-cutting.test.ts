@@ -3,13 +3,13 @@
  *
  * PROP-BILL-054 〜 PROP-BILL-058, PROP-BILL-067
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   getCorsHeaders,
   getCorsPreflight,
   maskSensitiveLogFields,
-  validateRequiredEnvVars,
   validateFixedEnvVars,
+  validateRequiredEnvVars,
 } from '../../core/index.js';
 
 const FRONTEND_BASE_URL = 'https://frontend.example.com';
@@ -50,13 +50,13 @@ describe('Cross-Cutting Concerns — Integration', () => {
 
       const masked = maskSensitiveLogFields(sensitiveEntry);
 
-      expect(masked['cookie']).toBe('[REDACTED]');
-      expect(masked['authorization']).toBe('[REDACTED]');
-      expect(masked['token']).toBe('[REDACTED]');
-      expect(masked['card']).toBe('[REDACTED]');
+      expect(masked.cookie).toBe('[REDACTED]');
+      expect(masked.authorization).toBe('[REDACTED]');
+      expect(masked.token).toBe('[REDACTED]');
+      expect(masked.card).toBe('[REDACTED]');
       // 機密でないフィールドは保持される
-      expect(masked['operationId']).toBe('op-001');
-      expect(masked['userId']).toBe('user-123');
+      expect(masked.operationId).toBe('op-001');
+      expect(masked.userId).toBe('user-123');
     });
 
     it('operationId present in PAY.JP write/failure logs', () => {
@@ -68,8 +68,8 @@ describe('Cross-Cutting Concerns — Integration', () => {
 
       const masked = maskSensitiveLogFields(logEntry);
       // operationId は機密でないため保持
-      expect(masked['operationId']).toBe('op-001');
-      expect(masked['event']).toBe('payjp_charge_failed');
+      expect(masked.operationId).toBe('op-001');
+      expect(masked.event).toBe('payjp_charge_failed');
     });
   });
 
@@ -115,7 +115,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
       const result = validateFixedEnvVars(env);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        const invalid = result.invalidVars.find(v => v.name === 'BILLING_INTERVAL_MONTHS');
+        const invalid = result.invalidVars.find((v) => v.name === 'BILLING_INTERVAL_MONTHS');
         expect(invalid).toBeDefined();
         expect(invalid?.expected).toBe('1');
         expect(invalid?.actual).toBe('3');
@@ -132,7 +132,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
       const result = validateFixedEnvVars(env);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        const invalid = result.invalidVars.find(v => v.name === 'INITIAL_FREE_CYCLES');
+        const invalid = result.invalidVars.find((v) => v.name === 'INITIAL_FREE_CYCLES');
         expect(invalid).toBeDefined();
         expect(invalid?.expected).toBe('2');
         expect(invalid?.actual).toBe('3');
@@ -148,9 +148,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
       // ヘルスチェックは DB ping 結果に基づく。
       // DB 成功時は { status: 'ok' } を返す純粋関数で表現できる。
       function buildHealthResponse(dbHealthy: boolean): { status: string; httpCode: number } {
-        return dbHealthy
-          ? { status: 'ok', httpCode: 200 }
-          : { status: 'degraded', httpCode: 503 };
+        return dbHealthy ? { status: 'ok', httpCode: 200 } : { status: 'degraded', httpCode: 503 };
       }
 
       const response = buildHealthResponse(true);
@@ -160,9 +158,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
 
     it('returns 503 when DB unavailable', () => {
       function buildHealthResponse(dbHealthy: boolean): { status: string; httpCode: number } {
-        return dbHealthy
-          ? { status: 'ok', httpCode: 200 }
-          : { status: 'degraded', httpCode: 503 };
+        return dbHealthy ? { status: 'ok', httpCode: 200 } : { status: 'degraded', httpCode: 503 };
       }
 
       const response = buildHealthResponse(false);
@@ -194,8 +190,8 @@ describe('Cross-Cutting Concerns — Integration', () => {
       ];
 
       // payjp_events や member_impact_logs に関するメソッドがないこと
-      expect(dbClientMethods.some(m => m.toLowerCase().includes('payjp_event'))).toBe(false);
-      expect(dbClientMethods.some(m => m.toLowerCase().includes('impact_log'))).toBe(false);
+      expect(dbClientMethods.some((m) => m.toLowerCase().includes('payjp_event'))).toBe(false);
+      expect(dbClientMethods.some((m) => m.toLowerCase().includes('impact_log'))).toBe(false);
     });
 
     it('member_impact_logs row count unchanged after any billing operation', () => {
@@ -214,7 +210,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
         'releaseAdvisoryLock',
       ];
 
-      expect(dbClientMethods.some(m => m.toLowerCase().includes('impact_log'))).toBe(false);
+      expect(dbClientMethods.some((m) => m.toLowerCase().includes('impact_log'))).toBe(false);
     });
   });
 

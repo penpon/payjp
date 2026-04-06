@@ -4,29 +4,22 @@
  * PROP-AUTH-010 〜 024, 029
  * インメモリストアを用いた shell 関数の実動作を検証する。
  */
-import { describe, it, expect, beforeEach } from 'vitest';
 
+import type { LinkSessionRecord } from '@hayane/shared';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { validateLinkSessionRecord, validateStartupConfig } from '../../core/index.js';
 import {
-  generateSecureRandomToken,
+  checkHealth,
   consumeOAuthState,
-  saveOAuthState,
-  saveDiscordLinkSession,
   exchangeDiscordCode,
   fetchDiscordUserId,
-  structuredLog,
-  checkHealth,
+  generateSecureRandomToken,
   handleAuthRequest,
+  saveDiscordLinkSession,
+  saveOAuthState,
+  structuredLog,
 } from '../../shell/index.js';
-
 import { clearStores, getStoreCounts } from '../../shell/store.js';
-import {
-  validateFrontendBaseUrl,
-  buildCallbackRedirectUrl,
-  validateRequiredEnvVars,
-  validateLinkSessionRecord,
-  validateStartupConfig,
-} from '../../core/index.js';
-import type { LinkSessionRecord } from '@hayane/shared';
 
 beforeEach(() => {
   clearStores();
@@ -58,9 +51,7 @@ describe('PROP-AUTH-010: consumeOAuthState atomic — concurrent invocations ret
       consumeOAuthState(db, stateHashVal, sessionHashVal),
     ]);
 
-    const successes = [r1, r2].filter(
-      (r) => r.status === 'fulfilled' && r.value !== null,
-    );
+    const successes = [r1, r2].filter((r) => r.status === 'fulfilled' && r.value !== null);
     // 1 回目の成功でused_atが設定されるので、2回目はnullを返す
     expect(successes.length).toBe(1);
   });
@@ -141,7 +132,7 @@ describe('PROP-AUTH-012: callback 302 Location contains no token in query or fra
     // callback の正常系では 302 + Location が返る
     // ここでは Location が設定されている場合のトークン非掲載を検証
     if (response.statusCode === 302) {
-      const locationUrl = response.headers['Location'];
+      const locationUrl = response.headers.Location;
       expect(locationUrl).toBeDefined();
       // REQ-AUTH-002: Location は FRONTEND_BASE_URL そのもの（パス追加なし）
       expect(locationUrl).toBe(frontendBaseUrl);
@@ -153,7 +144,7 @@ describe('PROP-AUTH-012: callback 302 Location contains no token in query or fra
       expect(parsed.hash).toBe('');
     } else {
       // 401 の場合は Location ヘッダにトークンが含まれないことを確認
-      expect(response.headers['Location']).toBeUndefined();
+      expect(response.headers.Location).toBeUndefined();
       expect(response.statusCode).toBe(401);
     }
   });
@@ -174,11 +165,20 @@ describe('PROP-AUTH-012: callback 302 Location contains no token in query or fra
     });
 
     const response = await handleAuthRequest(
-      { endpoint: '/v1/auth/discord/callback', query: { code: 'test-code', state: stateToken }, cookies: { '__Host-oauth_session': sessionToken } },
-      { frontendBaseUrl, discordClientId: 'test-client', discordClientSecret: 'test-secret', discordRedirectUri: 'https://api.example.com/callback' },
+      {
+        endpoint: '/v1/auth/discord/callback',
+        query: { code: 'test-code', state: stateToken },
+        cookies: { '__Host-oauth_session': sessionToken },
+      },
+      {
+        frontendBaseUrl,
+        discordClientId: 'test-client',
+        discordClientSecret: 'test-secret',
+        discordRedirectUri: 'https://api.example.com/callback',
+      },
     );
     expect(response.statusCode).toBe(302);
-    const locationUrl = response.headers['Location'];
+    const locationUrl = response.headers.Location;
     expect(locationUrl).toBe(frontendBaseUrl);
     const parsed = new URL(locationUrl);
     const sensitiveParams = ['token', 'link_session', 'oauth_session', 'code', 'authorization'];
@@ -219,11 +219,7 @@ describe('PROP-AUTH-013: callback response always includes Cache-Control: no-sto
 describe('PROP-AUTH-014: session response always includes Cache-Control: no-store and Referrer-Policy: no-referrer', () => {
   it('GET /v1/auth/discord/session via handleAuthRequest: both required security headers present', async () => {
     const frontendBaseUrl = 'https://frontend.example.com';
-    const response = await handleAuthRequest(
-      '/v1/auth/discord/session',
-      { origin: frontendBaseUrl },
-      frontendBaseUrl,
-    );
+    const response = await handleAuthRequest('/v1/auth/discord/session', { origin: frontendBaseUrl }, frontendBaseUrl);
     expect(response.headers['Cache-Control']).toBe('no-store');
     expect(response.headers['Referrer-Policy']).toBe('no-referrer');
   });
@@ -246,11 +242,7 @@ describe('PROP-AUTH-015: session returns 403 when Origin does not match FRONTEND
 
   it('Origin: null → 403 via handleAuthRequest', async () => {
     const frontendBaseUrl = 'https://frontend.example.com';
-    const response = await handleAuthRequest(
-      '/v1/auth/discord/session',
-      { origin: 'null' },
-      frontendBaseUrl,
-    );
+    const response = await handleAuthRequest('/v1/auth/discord/session', { origin: 'null' }, frontendBaseUrl);
     expect(response.statusCode).toBe(403);
   });
 });
@@ -262,21 +254,13 @@ describe('PROP-AUTH-015: session returns 403 when Origin does not match FRONTEND
 describe('PROP-AUTH-016: session response includes CORS headers', () => {
   it('handleAuthRequest for session returns Access-Control-Allow-Credentials: true', async () => {
     const frontendBaseUrl = 'https://frontend.example.com';
-    const response = await handleAuthRequest(
-      '/v1/auth/discord/session',
-      { origin: frontendBaseUrl },
-      frontendBaseUrl,
-    );
+    const response = await handleAuthRequest('/v1/auth/discord/session', { origin: frontendBaseUrl }, frontendBaseUrl);
     expect(response.headers['Access-Control-Allow-Credentials']).toBe('true');
   });
 
   it('handleAuthRequest for session returns Access-Control-Allow-Origin matching FRONTEND_BASE_URL', async () => {
     const frontendBaseUrl = 'https://frontend.example.com';
-    const response = await handleAuthRequest(
-      '/v1/auth/discord/session',
-      { origin: frontendBaseUrl },
-      frontendBaseUrl,
-    );
+    const response = await handleAuthRequest('/v1/auth/discord/session', { origin: frontendBaseUrl }, frontendBaseUrl);
     expect(response.headers['Access-Control-Allow-Origin']).toBe(frontendBaseUrl);
   });
 });
@@ -326,7 +310,12 @@ describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact a
         query: { code: 'auth-code-018', state: stateToken },
         cookies: { '__Host-oauth_session': sessionToken },
       },
-      { frontendBaseUrl, discordClientId: 'test-client', discordClientSecret: 'test-secret', discordRedirectUri: 'https://api.example.com/callback' },
+      {
+        frontendBaseUrl,
+        discordClientId: 'test-client',
+        discordClientSecret: 'test-secret',
+        discordRedirectUri: 'https://api.example.com/callback',
+      },
     );
 
     expect(response.statusCode).toBe(302);
@@ -354,7 +343,7 @@ describe('PROP-AUTH-019: start Discord authorization URL has scope=identify', ()
     const frontendBaseUrl = 'https://frontend.example.com';
     const response = await handleAuthRequest('/v1/auth/discord/start', {}, frontendBaseUrl);
     expect(response.statusCode).toBe(302);
-    const locationUrl = response.headers['Location'];
+    const locationUrl = response.headers.Location;
     expect(locationUrl).toBeDefined();
     const parsed = new URL(locationUrl);
     expect(parsed.searchParams.get('scope')).toBe('identify');
@@ -618,10 +607,7 @@ describe('PROP-AUTH-029: generateSecureRandomToken has at least 128 bits of entr
   });
 
   it('two consecutive calls return different tokens', async () => {
-    const [t1, t2] = await Promise.all([
-      generateSecureRandomToken(),
-      generateSecureRandomToken(),
-    ]);
+    const [t1, t2] = await Promise.all([generateSecureRandomToken(), generateSecureRandomToken()]);
     expect(t1).not.toBe(t2);
   });
 });
@@ -642,7 +628,9 @@ describe('PROP-AUTH-036: checkHealth returns status ok when service is operation
   });
 
   it('checkHealth returns { status: "error" } when isHealthy throws', async () => {
-    const result = await checkHealth(() => { throw new Error('store unavailable'); });
+    const result = await checkHealth(() => {
+      throw new Error('store unavailable');
+    });
     expect(result.status).toBe('error');
   });
 

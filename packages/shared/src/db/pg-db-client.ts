@@ -1,41 +1,80 @@
 import type pg from 'pg';
-import type { Member, LinkSessionRecord, OAuthStateRecord } from '../types.js';
+import type { LinkSessionRecord, Member, OAuthStateRecord } from '../types.js';
 
 export interface DbClient {
   findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date): Promise<void>;
+  setInflightOperation(
+    memberId: string,
+    operationId: string,
+    operationType: 'subscribe' | 'cancel',
+    now: Date,
+  ): Promise<void>;
   clearInflightOperation(memberId: string): Promise<void>;
   updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
   updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date): Promise<void>;
-  updateMemberAfterSubscribe(memberId: string, params: {
-    payjp_initial_charge_id: string | null;
-    initial_charge_paid_at: Date | null;
-    payjp_subscription_id: string;
-    payjp_plan_id: string;
-    subscription_status: 'active' | 'trial';
-    first_trial_granted_at: Date | null;
-    access_end_at: Date;
-    next_billing_at: Date;
-    role_state: 'granted';
-    last_synced_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member>;
-  updateMemberAfterCancel(memberId: string, params: {
-    cancel_requested_at: Date;
-    subscription_status: 'canceled';
-    access_end_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member>;
+  updateMemberAfterSubscribe(
+    memberId: string,
+    params: {
+      payjp_initial_charge_id: string | null;
+      initial_charge_paid_at: Date | null;
+      payjp_subscription_id: string;
+      payjp_plan_id: string;
+      subscription_status: 'active' | 'trial';
+      first_trial_granted_at: Date | null;
+      access_end_at: Date;
+      next_billing_at: Date;
+      role_state: 'granted';
+      last_synced_at: Date;
+      inflight_operation_id: null;
+      inflight_operation_type: null;
+      inflight_operation_started_at: null;
+    },
+  ): Promise<Member>;
+  updateMemberAfterCancel(
+    memberId: string,
+    params: {
+      cancel_requested_at: Date;
+      subscription_status: 'canceled';
+      access_end_at: Date;
+      inflight_operation_id: null;
+      inflight_operation_type: null;
+      inflight_operation_started_at: null;
+    },
+  ): Promise<Member>;
   acquireAdvisoryLock(key: string): Promise<boolean>;
   releaseAdvisoryLock(key: string): Promise<void>;
+  withTransactionLock<T>(key: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
 }
+
+/** Subset of DbClient available inside a transaction (no nested transactions/locks) */
+export interface TransactionDbClient {
+  findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
+  upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
+  findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
+  consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
+  setInflightOperation(
+    memberId: string,
+    operationId: string,
+    operationType: 'subscribe' | 'cancel',
+    now: Date,
+  ): Promise<void>;
+  clearInflightOperation(memberId: string): Promise<void>;
+  updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
+  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date): Promise<void>;
+  updateMemberAfterSubscribe(
+    memberId: string,
+    params: Parameters<DbClient['updateMemberAfterSubscribe']>[1],
+  ): Promise<Member>;
+  updateMemberAfterCancel(
+    memberId: string,
+    params: Parameters<DbClient['updateMemberAfterCancel']>[1],
+  ): Promise<Member>;
+}
+
+// --- Row mapping helpers ---
 
 function toMember(row: Record<string, unknown>): Member {
   return {
@@ -57,9 +96,8 @@ function toMember(row: Record<string, unknown>): Member {
     next_billing_at: (row.next_billing_at as Date) ?? null,
     role_state: row.role_state as Member['role_state'],
     last_synced_at: row.last_synced_at as Date,
-    last_payjp_event_created_at: row.last_payjp_event_created_at != null
-      ? Number(row.last_payjp_event_created_at)
-      : null,
+    last_payjp_event_created_at:
+      row.last_payjp_event_created_at != null ? Number(row.last_payjp_event_created_at) : null,
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -87,183 +125,207 @@ function toLinkSession(row: Record<string, unknown>): LinkSessionRecord {
   };
 }
 
+// --- Shared query functions (used by both PgDbClient and PgTransactionClient) ---
+// pg.Pool and pg.PoolClient both implement .query(), so we use a common Queryable type.
+
+type Queryable = Pick<pg.Pool, 'query'>;
+
+async function queryFindMemberByDiscordUserId(q: Queryable, discordUserId: string): Promise<Member | null> {
+  const result = await q.query('SELECT * FROM members WHERE discord_user_id = $1', [discordUserId]);
+  return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
+}
+
+async function queryUpsertProvisionalMember(q: Queryable, discordUserId: string, email: string): Promise<Member> {
+  const result = await q.query(
+    `INSERT INTO members (discord_user_id, email, role_state, last_synced_at)
+     VALUES ($1, $2, 'unknown', now())
+     ON CONFLICT (discord_user_id)
+     DO UPDATE SET email = EXCLUDED.email, updated_at = now()
+     RETURNING *`,
+    [discordUserId, email],
+  );
+  return toMember(result.rows[0] as Record<string, unknown>);
+}
+
+async function queryFindLinkSession(q: Queryable, tokenHash: string): Promise<LinkSessionRecord | null> {
+  const result = await q.query('SELECT * FROM discord_link_sessions WHERE link_session_token_hash = $1', [tokenHash]);
+  return result.rows[0] ? toLinkSession(result.rows[0] as Record<string, unknown>) : null;
+}
+
+async function queryConsumeLinkSession(q: Queryable, tokenHash: string, now: Date): Promise<void> {
+  const result = await q.query(
+    `UPDATE discord_link_sessions SET used_at = $2
+     WHERE link_session_token_hash = $1
+       AND used_at IS NULL
+       AND expires_at > $2`,
+    [tokenHash, now],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error('Link session not found, already consumed, or expired');
+  }
+}
+
+async function querySetInflightOperation(
+  q: Queryable,
+  memberId: string,
+  operationId: string,
+  operationType: 'subscribe' | 'cancel',
+  now: Date,
+): Promise<void> {
+  const result = await q.query(
+    `UPDATE members
+     SET inflight_operation_id = $2,
+         inflight_operation_type = $3,
+         inflight_operation_started_at = $4,
+         updated_at = now()
+     WHERE id = $1`,
+    [memberId, operationId, operationType, now],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error(`Member not found: ${memberId}`);
+  }
+}
+
+async function queryClearInflightOperation(q: Queryable, memberId: string): Promise<void> {
+  const result = await q.query(
+    `UPDATE members
+     SET inflight_operation_id = NULL,
+         inflight_operation_type = NULL,
+         inflight_operation_started_at = NULL,
+         updated_at = now()
+     WHERE id = $1`,
+    [memberId],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error(`Member not found: ${memberId}`);
+  }
+}
+
+async function queryUpdateMemberCustomerId(q: Queryable, memberId: string, payjpCustomerId: string): Promise<void> {
+  const result = await q.query('UPDATE members SET payjp_customer_id = $2, updated_at = now() WHERE id = $1', [
+    memberId,
+    payjpCustomerId,
+  ]);
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error(`Member not found: ${memberId}`);
+  }
+}
+
+async function queryUpdateMemberChargeId(
+  q: Queryable,
+  memberId: string,
+  chargeId: string,
+  paidAt: Date,
+): Promise<void> {
+  const result = await q.query(
+    'UPDATE members SET payjp_initial_charge_id = $2, initial_charge_paid_at = $3, updated_at = now() WHERE id = $1',
+    [memberId, chargeId, paidAt],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error(`Member not found: ${memberId}`);
+  }
+}
+
+async function queryUpdateMemberAfterSubscribe(
+  q: Queryable,
+  memberId: string,
+  params: Parameters<DbClient['updateMemberAfterSubscribe']>[1],
+): Promise<Member> {
+  const result = await q.query(
+    `UPDATE members SET
+       payjp_initial_charge_id = $2,
+       initial_charge_paid_at = $3,
+       payjp_subscription_id = $4,
+       payjp_plan_id = $5,
+       subscription_status = $6,
+       first_trial_granted_at = $7,
+       access_end_at = $8,
+       next_billing_at = $9,
+       role_state = $10,
+       last_synced_at = $11,
+       inflight_operation_id = NULL,
+       inflight_operation_type = NULL,
+       inflight_operation_started_at = NULL,
+       updated_at = now()
+     WHERE id = $1
+     RETURNING *`,
+    [
+      memberId,
+      params.payjp_initial_charge_id,
+      params.initial_charge_paid_at,
+      params.payjp_subscription_id,
+      params.payjp_plan_id,
+      params.subscription_status,
+      params.first_trial_granted_at,
+      params.access_end_at,
+      params.next_billing_at,
+      params.role_state,
+      params.last_synced_at,
+    ],
+  );
+  if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
+  return toMember(result.rows[0] as Record<string, unknown>);
+}
+
+async function queryUpdateMemberAfterCancel(
+  q: Queryable,
+  memberId: string,
+  params: Parameters<DbClient['updateMemberAfterCancel']>[1],
+): Promise<Member> {
+  const result = await q.query(
+    `UPDATE members SET
+       cancel_requested_at = $2,
+       subscription_status = $3,
+       access_end_at = $4,
+       inflight_operation_id = NULL,
+       inflight_operation_type = NULL,
+       inflight_operation_started_at = NULL,
+       updated_at = now()
+     WHERE id = $1
+     RETURNING *`,
+    [memberId, params.cancel_requested_at, params.subscription_status, params.access_end_at],
+  );
+  if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
+  return toMember(result.rows[0] as Record<string, unknown>);
+}
+
+// --- PgDbClient (pool-based, with advisory lock support) ---
+
 export class PgDbClient implements DbClient {
-  // Advisory lock: session-scoped (pg_advisory_lock) requires holding the same
-  // connection between acquire and release. Only one lock per instance is supported.
+  // Legacy advisory lock: session-scoped. Prefer withTransactionLock for new code.
   private lockClient: { client: pg.PoolClient; key: string } | null = null;
 
   constructor(private pool: pg.Pool) {}
 
-  async findMemberByDiscordUserId(discordUserId: string): Promise<Member | null> {
-    const result = await this.pool.query(
-      'SELECT * FROM members WHERE discord_user_id = $1',
-      [discordUserId],
-    );
-    return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
+  findMemberByDiscordUserId(discordUserId: string) {
+    return queryFindMemberByDiscordUserId(this.pool, discordUserId);
   }
-
-  async upsertProvisionalMember(discordUserId: string, email: string): Promise<Member> {
-    const result = await this.pool.query(
-      `INSERT INTO members (discord_user_id, email, role_state, last_synced_at)
-       VALUES ($1, $2, 'unknown', now())
-       ON CONFLICT (discord_user_id)
-       DO UPDATE SET email = EXCLUDED.email, updated_at = now()
-       RETURNING *`,
-      [discordUserId, email],
-    );
-    return toMember(result.rows[0] as Record<string, unknown>);
+  upsertProvisionalMember(discordUserId: string, email: string) {
+    return queryUpsertProvisionalMember(this.pool, discordUserId, email);
   }
-
-  async findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null> {
-    const result = await this.pool.query(
-      'SELECT * FROM discord_link_sessions WHERE link_session_token_hash = $1',
-      [tokenHash],
-    );
-    return result.rows[0] ? toLinkSession(result.rows[0] as Record<string, unknown>) : null;
+  findLinkSession(tokenHash: string) {
+    return queryFindLinkSession(this.pool, tokenHash);
   }
-
-  async consumeLinkSession(tokenHash: string, now: Date): Promise<void> {
-    const result = await this.pool.query(
-      `UPDATE discord_link_sessions SET used_at = $2
-       WHERE link_session_token_hash = $1
-         AND used_at IS NULL
-         AND expires_at > $2`,
-      [tokenHash, now],
-    );
-    if ((result.rowCount ?? 0) === 0) {
-      throw new Error('Link session not found, already consumed, or expired');
-    }
+  consumeLinkSession(tokenHash: string, now: Date) {
+    return queryConsumeLinkSession(this.pool, tokenHash, now);
   }
-
-  async setInflightOperation(
-    memberId: string,
-    operationId: string,
-    operationType: 'subscribe' | 'cancel',
-    now: Date,
-  ): Promise<void> {
-    const result = await this.pool.query(
-      `UPDATE members
-       SET inflight_operation_id = $2,
-           inflight_operation_type = $3,
-           inflight_operation_started_at = $4,
-           updated_at = now()
-       WHERE id = $1`,
-      [memberId, operationId, operationType, now],
-    );
-    if ((result.rowCount ?? 0) === 0) {
-      throw new Error(`Member not found: ${memberId}`);
-    }
+  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
+    return querySetInflightOperation(this.pool, memberId, operationId, operationType, now);
   }
-
-  async clearInflightOperation(memberId: string): Promise<void> {
-    const result = await this.pool.query(
-      `UPDATE members
-       SET inflight_operation_id = NULL,
-           inflight_operation_type = NULL,
-           inflight_operation_started_at = NULL,
-           updated_at = now()
-       WHERE id = $1`,
-      [memberId],
-    );
-    if ((result.rowCount ?? 0) === 0) {
-      throw new Error(`Member not found: ${memberId}`);
-    }
+  clearInflightOperation(memberId: string) {
+    return queryClearInflightOperation(this.pool, memberId);
   }
-
-  async updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void> {
-    const result = await this.pool.query(
-      'UPDATE members SET payjp_customer_id = $2, updated_at = now() WHERE id = $1',
-      [memberId, payjpCustomerId],
-    );
-    if ((result.rowCount ?? 0) === 0) {
-      throw new Error(`Member not found: ${memberId}`);
-    }
+  updateMemberCustomerId(memberId: string, payjpCustomerId: string) {
+    return queryUpdateMemberCustomerId(this.pool, memberId, payjpCustomerId);
   }
-
-  async updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date): Promise<void> {
-    const result = await this.pool.query(
-      'UPDATE members SET payjp_initial_charge_id = $2, initial_charge_paid_at = $3, updated_at = now() WHERE id = $1',
-      [memberId, chargeId, paidAt],
-    );
-    if ((result.rowCount ?? 0) === 0) {
-      throw new Error(`Member not found: ${memberId}`);
-    }
+  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date) {
+    return queryUpdateMemberChargeId(this.pool, memberId, chargeId, paidAt);
   }
-
-  async updateMemberAfterSubscribe(memberId: string, params: {
-    payjp_initial_charge_id: string | null;
-    initial_charge_paid_at: Date | null;
-    payjp_subscription_id: string;
-    payjp_plan_id: string;
-    subscription_status: 'active' | 'trial';
-    first_trial_granted_at: Date | null;
-    access_end_at: Date;
-    next_billing_at: Date;
-    role_state: 'granted';
-    last_synced_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member> {
-    const result = await this.pool.query(
-      `UPDATE members SET
-         payjp_initial_charge_id = $2,
-         initial_charge_paid_at = $3,
-         payjp_subscription_id = $4,
-         payjp_plan_id = $5,
-         subscription_status = $6,
-         first_trial_granted_at = $7,
-         access_end_at = $8,
-         next_billing_at = $9,
-         role_state = $10,
-         last_synced_at = $11,
-         inflight_operation_id = NULL,
-         inflight_operation_type = NULL,
-         inflight_operation_started_at = NULL,
-         updated_at = now()
-       WHERE id = $1
-       RETURNING *`,
-      [
-        memberId,
-        params.payjp_initial_charge_id,
-        params.initial_charge_paid_at,
-        params.payjp_subscription_id,
-        params.payjp_plan_id,
-        params.subscription_status,
-        params.first_trial_granted_at,
-        params.access_end_at,
-        params.next_billing_at,
-        params.role_state,
-        params.last_synced_at,
-      ],
-    );
-    if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
-    return toMember(result.rows[0] as Record<string, unknown>);
+  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]) {
+    return queryUpdateMemberAfterSubscribe(this.pool, memberId, params);
   }
-
-  async updateMemberAfterCancel(memberId: string, params: {
-    cancel_requested_at: Date;
-    subscription_status: 'canceled';
-    access_end_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member> {
-    const result = await this.pool.query(
-      `UPDATE members SET
-         cancel_requested_at = $2,
-         subscription_status = $3,
-         access_end_at = $4,
-         inflight_operation_id = NULL,
-         inflight_operation_type = NULL,
-         inflight_operation_started_at = NULL,
-         updated_at = now()
-       WHERE id = $1
-       RETURNING *`,
-      [memberId, params.cancel_requested_at, params.subscription_status, params.access_end_at],
-    );
-    if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
-    return toMember(result.rows[0] as Record<string, unknown>);
+  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) {
+    return queryUpdateMemberAfterCancel(this.pool, memberId, params);
   }
 
   async acquireAdvisoryLock(key: string): Promise<boolean> {
@@ -304,6 +366,35 @@ export class PgDbClient implements DbClient {
     }
   }
 
+  async withTransactionLock<T>(key: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
+      const txDb = new PgTransactionClient(client);
+      const result = await fn(txDb);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            message: 'ROLLBACK failed after transaction error',
+            rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
+            originalError: err instanceof Error ? (err as Error).message : String(err),
+            lockKey: key,
+          }),
+        );
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   // --- oauth_states ---
 
   async insertOAuthState(record: {
@@ -321,11 +412,7 @@ export class PgDbClient implements DbClient {
   }
 
   // Atomic consume: WHERE conditions prevent TOCTOU races
-  async consumeOAuthState(
-    stateHash: string,
-    sessionHash: string,
-    now: Date,
-  ): Promise<OAuthStateRecord | null> {
+  async consumeOAuthState(stateHash: string, sessionHash: string, now: Date): Promise<OAuthStateRecord | null> {
     const result = await this.pool.query(
       `UPDATE oauth_states SET used_at = $3
        WHERE state_hash = $1
@@ -410,14 +497,16 @@ export class PgDbClient implements DbClient {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async findUnresolvedImpactLogs(memberId: string): Promise<Array<{
-    id: string;
-    member_id: string;
-    issue_code: string;
-    detail: unknown;
-    operation_id: string | null;
-    created_at: Date;
-  }>> {
+  async findUnresolvedImpactLogs(memberId: string): Promise<
+    Array<{
+      id: string;
+      member_id: string;
+      issue_code: string;
+      detail: unknown;
+      operation_id: string | null;
+      created_at: Date;
+    }>
+  > {
     const result = await this.pool.query(
       `SELECT id, member_id, issue_code, detail, operation_id, created_at
        FROM member_impact_logs
@@ -435,5 +524,42 @@ export class PgDbClient implements DbClient {
         created_at: r.created_at as Date,
       };
     });
+  }
+}
+
+// --- PgTransactionClient (delegates to shared query functions) ---
+
+class PgTransactionClient implements TransactionDbClient {
+  constructor(private client: pg.PoolClient) {}
+
+  findMemberByDiscordUserId(discordUserId: string) {
+    return queryFindMemberByDiscordUserId(this.client, discordUserId);
+  }
+  upsertProvisionalMember(discordUserId: string, email: string) {
+    return queryUpsertProvisionalMember(this.client, discordUserId, email);
+  }
+  findLinkSession(tokenHash: string) {
+    return queryFindLinkSession(this.client, tokenHash);
+  }
+  consumeLinkSession(tokenHash: string, now: Date) {
+    return queryConsumeLinkSession(this.client, tokenHash, now);
+  }
+  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
+    return querySetInflightOperation(this.client, memberId, operationId, operationType, now);
+  }
+  clearInflightOperation(memberId: string) {
+    return queryClearInflightOperation(this.client, memberId);
+  }
+  updateMemberCustomerId(memberId: string, payjpCustomerId: string) {
+    return queryUpdateMemberCustomerId(this.client, memberId, payjpCustomerId);
+  }
+  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date) {
+    return queryUpdateMemberChargeId(this.client, memberId, chargeId, paidAt);
+  }
+  updateMemberAfterSubscribe(memberId: string, params: Parameters<DbClient['updateMemberAfterSubscribe']>[1]) {
+    return queryUpdateMemberAfterSubscribe(this.client, memberId, params);
+  }
+  updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) {
+    return queryUpdateMemberAfterCancel(this.client, memberId, params);
   }
 }

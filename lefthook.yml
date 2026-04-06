@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{ts,json,jsonc}"
+      run: node_modules/.bin/biome check --write {staged_files} && git add {staged_files}
+    typecheck:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc --noEmit -p packages/shared/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/auth-service/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/billing-service/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/sync-service/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/server/tsconfig.json
+    test:
+      run: npm test

@@ -3,20 +3,17 @@
  */
 import { createHash } from 'node:crypto';
 import type {
-  ValidationResult,
-  Member,
-  SubscriptionResponse,
   CancelResponse,
   FixedEnvVarValidationResult,
+  Member,
+  SubscriptionResponse,
+  ValidationResult,
 } from '@hayane/shared';
 
 export type { EnvVarValidationResult } from './env.js';
 
 // PROP-BILL-001: REQ-BILL-003
-export function validatePlanId(
-  planId: string,
-  allowedPlanIds: string[],
-): boolean {
+export function validatePlanId(planId: string, allowedPlanIds: string[]): boolean {
   return planId !== '' && allowedPlanIds.includes(planId);
 }
 
@@ -26,11 +23,7 @@ export function isFirstTimeUser(firstTrialGrantedAt: Date | null): boolean {
 }
 
 // PROP-BILL-003: REQ-BILL-007
-export function hasActiveSubscription(
-  status: string | null,
-  accessEndAt: Date | null,
-  now: Date,
-): boolean {
+export function hasActiveSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
   if (status === 'active' || status === 'trial') return true;
   if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
   return false;
@@ -47,10 +40,7 @@ export function isThreeDSecureVerified(threeDSecureStatus: string | null): boole
 }
 
 // PROP-BILL-006: REQ-BILL-020
-export function calculateCancelAcceptanceStart(
-  accessEndAt: Date,
-  jstOffsetMinutes: number = 540,
-): Date {
+export function calculateCancelAcceptanceStart(accessEndAt: Date, jstOffsetMinutes: number = 540): Date {
   // Convert accessEndAt to JST
   const jstMs = accessEndAt.getTime() + jstOffsetMinutes * 60 * 1000;
   const jst = new Date(jstMs);
@@ -111,8 +101,7 @@ export function buildSubscriptionResponse(member: Member): SubscriptionResponse 
     memberId: member.id,
     subscriptionStatus: member.subscription_status!,
     planId: member.payjp_plan_id!,
-    trialApplied: member.first_trial_granted_at !== null &&
-      member.subscription_status === 'trial',
+    trialApplied: member.first_trial_granted_at !== null && member.subscription_status === 'trial',
     accessEndAt: formatRfc3339Utc(member.access_end_at!),
   };
 }
@@ -129,7 +118,7 @@ export function buildCancelResponse(member: Member): CancelResponse {
 
 // PROP-BILL-012: REQ-BILL-016, REQ-BILL-025
 export function formatRfc3339Utc(date: Date): string {
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return 'Invalid DateZ';
   }
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -159,9 +148,7 @@ export function isSameOrigin(requestOrigin: string, allowedOrigin: string): bool
 // PROP-BILL-014: REQ-BILL-030
 const SENSITIVE_FIELD_PATTERN = /^(cookie|authorization|set-cookie|token|card)$/i;
 
-export function maskSensitiveLogFields(
-  logEntry: Record<string, unknown>,
-): Record<string, unknown> {
+export function maskSensitiveLogFields(logEntry: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(logEntry)) {
     masked[key] = SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : value;
@@ -196,9 +183,7 @@ const REQUIRED_ENV_VAR_NAMES = [
 export function validateRequiredEnvVars(
   env: Record<string, string | undefined>,
 ): import('./env.js').EnvVarValidationResult {
-  const missingVars = REQUIRED_ENV_VAR_NAMES.filter(
-    (name) => !env[name] || env[name] === '',
-  );
+  const missingVars = REQUIRED_ENV_VAR_NAMES.filter((name) => !env[name] || env[name] === '');
   if (missingVars.length > 0) return { ok: false, missingVars: [...missingVars] };
   return { ok: true };
 }
@@ -210,12 +195,10 @@ const FIXED_ENV_VARS: Array<{ name: string; expected: string }> = [
   { name: 'CANCEL_NOTICE_CYCLES', expected: '1' },
 ];
 
-export function validateFixedEnvVars(
-  env: Record<string, string | undefined>,
-): FixedEnvVarValidationResult {
-  const invalidVars = FIXED_ENV_VARS
-    .filter(({ name, expected }) => env[name] !== expected)
-    .map(({ name, expected }) => ({ name, expected, actual: env[name] }));
+export function validateFixedEnvVars(env: Record<string, string | undefined>): FixedEnvVarValidationResult {
+  const invalidVars = FIXED_ENV_VARS.filter(({ name, expected }) => env[name] !== expected).map(
+    ({ name, expected }) => ({ name, expected, actual: env[name] }),
+  );
   if (invalidVars.length > 0) return { ok: false, invalidVars };
   return { ok: true };
 }

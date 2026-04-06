@@ -6,16 +6,11 @@
  * handleSubscribe() に対してモック依存をインジェクトし、
  * オーケストレーションの振る舞いを検証する。
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import type { LinkSessionRecord, Member } from '@hayane/shared';
+import { describe, expect, it, vi } from 'vitest';
 import { handleSubscribe } from '../../shell/subscribe.js';
-import type {
-  BillingDeps,
-  DbClient,
-  PayjpClient,
-  DiscordClient,
-  BillingConfig,
-} from '../../shell/types.js';
-import type { Member, LinkSessionRecord } from '@hayane/shared';
+import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
 // -------------------------------------------------------------------------
 // テストフィクスチャ
@@ -153,6 +148,7 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     updateMemberAfterCancel: vi.fn().mockResolvedValue(undefined as never),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+    withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
   };
 
   const payjp: PayjpClient = {
@@ -307,8 +303,8 @@ describe('POST /v1/subscriptions — Integration', () => {
       ]);
 
       // 一方が成功し他方が 503
-      const successCount = [result1, result2].filter(r => r.ok).length;
-      const failCount = [result1, result2].filter(r => !r.ok).length;
+      const successCount = [result1, result2].filter((r) => r.ok).length;
+      const failCount = [result1, result2].filter((r) => !r.ok).length;
       expect(successCount).toBe(1);
       expect(failCount).toBe(1);
     });
@@ -444,27 +440,28 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-029: 3DS status validation + token used check
   // -------------------------------------------------------------------------
   describe('PROP-BILL-029: 3DS status validation', () => {
-    it.each(['attempted', 'failed', 'error', 'unverified', null])(
-      'rejects with 422 for three_d_secure_status=%s',
-      async (status) => {
-        const deps = makeSuccessfulDeps();
-        (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue(
-          makePayjpToken({ three_d_secure_status: status }),
-        );
-        const result = await handleSubscribe(makeSubscribeRequest(), deps);
-        expect(result.ok).toBe(false);
-        if (!result.ok) {
-          expect(result.statusCode).toBe(422);
-          expect(result.errorCode).toBe('THREE_D_SECURE_REQUIRED');
-        }
-      },
-    );
+    it.each([
+      'attempted',
+      'failed',
+      'error',
+      'unverified',
+      null,
+    ])('rejects with 422 for three_d_secure_status=%s', async (status) => {
+      const deps = makeSuccessfulDeps();
+      (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+        makePayjpToken({ three_d_secure_status: status }),
+      );
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(422);
+        expect(result.errorCode).toBe('THREE_D_SECURE_REQUIRED');
+      }
+    });
 
     it('rejects with 422 when token used=true (CRIT-003)', async () => {
       const deps = makeSuccessfulDeps();
-      (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue(
-        makePayjpToken({ used: true }),
-      );
+      (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue(makePayjpToken({ used: true }));
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -516,9 +513,7 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(consumed).toBe(true);
 
       // 2回目: consumed session を返す
-      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
-        makeLinkSession({ used_at: NOW }),
-      );
+      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(makeLinkSession({ used_at: NOW }));
       const result2 = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result2.ok).toBe(false);
       if (!result2.ok) {
@@ -534,11 +529,9 @@ describe('POST /v1/subscriptions — Integration', () => {
     it('persisted immediately after customer creation, survives subsequent failure', async () => {
       const deps = makeSuccessfulDeps();
       // 顧客作成後に subscription creation を失敗させる
-      (deps.payjp.createSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error('definite failure'),
-      );
+      (deps.payjp.createSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('definite failure'));
 
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      const _result = await handleSubscribe(makeSubscribeRequest(), deps);
       // updateMemberCustomerId が呼ばれたことを確認
       expect(deps.db.updateMemberCustomerId).toHaveBeenCalledWith(MEMBER_ID, PAYJP_CUSTOMER_ID);
     });
@@ -573,9 +566,11 @@ describe('POST /v1/subscriptions — Integration', () => {
         first_trial_granted_at: new Date('2024-01-01T00:00:00Z'),
       });
       // updateMemberAfterSubscribe: 'active' ステータスを返す
-      const updatedMember = makeUpdatedMemberAfterSubscribe(makeMember({
-        first_trial_granted_at: new Date('2024-01-01T00:00:00Z'),
-      }));
+      const updatedMember = makeUpdatedMemberAfterSubscribe(
+        makeMember({
+          first_trial_granted_at: new Date('2024-01-01T00:00:00Z'),
+        }),
+      );
       updatedMember.subscription_status = 'active';
       updatedMember.payjp_initial_charge_id = null;
       (deps.db.updateMemberAfterSubscribe as ReturnType<typeof vi.fn>).mockResolvedValue(updatedMember);
@@ -668,9 +663,7 @@ describe('POST /v1/subscriptions — Integration', () => {
       // プラン ID が渡されており、PAY.JP API が呼ばれたことを確認
       // 実際の interval は PAY.JP 側のプラン設定に依存するが、
       // createSubscription の呼び出し時に plan フィールドが month プランであること
-      expect(deps.payjp.createSubscription).toHaveBeenCalledWith(
-        expect.objectContaining({ plan: PLAN_ID }),
-      );
+      expect(deps.payjp.createSubscription).toHaveBeenCalledWith(expect.objectContaining({ plan: PLAN_ID }));
       // レスポンスのサブスクリプションオブジェクトの plan.interval が 'month'
       const sub = makePayjpSubscription();
       expect(sub.plan.interval).toBe('month');
@@ -682,16 +675,23 @@ describe('POST /v1/subscriptions — Integration', () => {
   // -------------------------------------------------------------------------
   describe('PROP-BILL-039: Role sync retry', () => {
     it('retries up to 3 times on Discord 429/5xx', async () => {
-      const deps = makeSuccessfulDeps();
-      let attempts = 0;
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        attempts++;
-        if (attempts < 3) throw new Error('Discord 429');
-        return Promise.resolve();
-      });
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(attempts).toBe(3);
-      expect(result.ok).toBe(true);
+      vi.useFakeTimers();
+      try {
+        const deps = makeSuccessfulDeps();
+        let attempts = 0;
+        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+          attempts++;
+          if (attempts < 3) throw new Error('Discord 429');
+          return Promise.resolve();
+        });
+        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
+        expect(attempts).toBe(3);
+        expect(result.ok).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -700,13 +700,20 @@ describe('POST /v1/subscriptions — Integration', () => {
   // -------------------------------------------------------------------------
   describe('PROP-BILL-040: Role sync final failure', () => {
     it('503 + operationId, inflight_operation_* retained', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Discord unavailable'));
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(503);
-        expect(result.operationId).toBe(OPERATION_ID);
+      vi.useFakeTimers();
+      try {
+        const deps = makeSuccessfulDeps();
+        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Discord unavailable'));
+        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.statusCode).toBe(503);
+          expect(result.operationId).toBe(OPERATION_ID);
+        }
+      } finally {
+        vi.useRealTimers();
       }
     });
   });
@@ -855,9 +862,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   describe('PROP-BILL-066: PAY.JP write no-retry', () => {
     it('injected failure → exactly 1 call attempt, no retry', async () => {
       const deps = makeSuccessfulDeps();
-      (deps.payjp.createCharge as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error('definite PAY.JP error'),
-      );
+      (deps.payjp.createCharge as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('definite PAY.JP error'));
       await handleSubscribe(makeSubscribeRequest(), deps);
       // createCharge は 1 回だけ呼ばれる (リトライなし)
       expect(deps.payjp.createCharge).toHaveBeenCalledTimes(1);

@@ -92,15 +92,11 @@ const ALLOWED_EVENT_TYPES = new Set([
   'subscription.resumed',
 ]);
 
-const KNOWN_STATUSES: Set<string> = new Set([
-  'active', 'trial', 'canceled', 'paused', 'deleted',
-]);
+const KNOWN_STATUSES: Set<string> = new Set(['active', 'trial', 'canceled', 'paused', 'deleted']);
 
 const GRANT_STATUSES: Set<string> = new Set(['active', 'trial', 'canceled']);
 
-const STATUS_NO_DATA_STATUS_REQUIRED = new Set([
-  'subscription.created', 'subscription.deleted',
-]);
+const STATUS_NO_DATA_STATUS_REQUIRED = new Set(['subscription.created', 'subscription.deleted']);
 
 const SENSITIVE_FIELD_PATTERN = /^(cookie|authorization|set-cookie|token|card)$/i;
 
@@ -176,10 +172,7 @@ export function isSubscriptionCreatedEvent(eventType: string): boolean {
 }
 
 // REQ-SYNC-002/003/004: PROP-SYNC-015
-export function determineIgnoreReason(
-  event: WebhookEvent,
-  expectedLivemode: boolean,
-): string | null {
+export function determineIgnoreReason(event: WebhookEvent, expectedLivemode: boolean): string | null {
   if (event.livemode !== undefined && isLivemodeMismatch(event.livemode, expectedLivemode)) {
     return 'livemode_mismatch';
   }
@@ -216,9 +209,7 @@ export function isStatusUnknown(status: string | null): boolean {
 }
 
 // REQ-SYNC-015: PROP-SYNC-011
-export function maskSensitiveLogFields(
-  entry: Record<string, unknown>,
-): Record<string, unknown> {
+export function maskSensitiveLogFields(entry: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     masked[key] = SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : value;
@@ -306,19 +297,12 @@ export function isAccessEndExpired(accessEndAt: Date | null, now: Date): boolean
 }
 
 // REQ-SYNC-019: PROP-SYNC-010
-export function calculateLastEventTimestamp(
-  existing: number | null,
-  resyncStartUnix: number,
-): number {
+export function calculateLastEventTimestamp(existing: number | null, resyncStartUnix: number): number {
   return Math.max(existing ?? 0, resyncStartUnix);
 }
 
 // REQ-SYNC-024: PROP-SYNC-020
-export function isInflightOperationStale(
-  startedAt: Date | null,
-  now: Date,
-  thresholdMinutes: number,
-): boolean {
+export function isInflightOperationStale(startedAt: Date | null, now: Date, thresholdMinutes: number): boolean {
   if (startedAt === null) return false;
   const diffMs = now.getTime() - startedAt.getTime();
   return diffMs > thresholdMinutes * 60 * 1000;
@@ -340,10 +324,7 @@ export function canResolveInflightOperation(
 }
 
 // REQ-SYNC-019: PROP-SYNC-012
-export function buildChargeSearchParams(
-  customerIdPayjp: string,
-  inflightStartedAtUnix: number,
-): ChargeSearchParams {
+export function buildChargeSearchParams(customerIdPayjp: string, inflightStartedAtUnix: number): ChargeSearchParams {
   return {
     customer: customerIdPayjp,
     since: inflightStartedAtUnix - 3600,
@@ -389,9 +370,7 @@ export function evaluateSubscriptionSearchResult(
 }
 
 // REQ-SYNC-028
-export function validateWebhookRequiredEnvVars(
-  env: Record<string, string | undefined>,
-): EnvVarValidationResult {
+export function validateWebhookRequiredEnvVars(env: Record<string, string | undefined>): EnvVarValidationResult {
   const missing = REQUIRED_ENV_VARS.filter((name) => !env[name] || env[name] === '');
   if (missing.length > 0) return { ok: false, missingVars: [...missing] };
   return { ok: true };

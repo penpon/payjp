@@ -2,9 +2,9 @@
  * sync-service Integration Tests — Resync & CLI Flow
  * Phase 2b (Green): Tests against real CLI with mock deps
  */
-import { describe, it, expect, vi } from 'vitest';
-import { runResyncCli } from '../../shell/cli.js';
+import { describe, expect, it, vi } from 'vitest';
 import type { CliDeps } from '../../shell/cli.js';
+import { runResyncCli } from '../../shell/cli.js';
 import type { DbPool } from '../../shell/types.js';
 
 function createMockDeps(overrides: Partial<CliDeps> = {}): CliDeps {
@@ -95,7 +95,7 @@ describe('INT-SYNC-013: CLI subscribe recovery: charge search + create', () => {
   it('no existing charge → creates 1 charge', async () => {
     const deps = createMockDeps({
       db: {
-        query: vi.fn(async (text: string, params?: unknown[]) => {
+        query: vi.fn(async (text: string, _params?: unknown[]) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_SUBSCRIBE], rowCount: 1 };
           }
@@ -104,7 +104,7 @@ describe('INT-SYNC-013: CLI subscribe recovery: charge search + create', () => {
       } as DbPool,
     });
 
-    const result = await runResyncCli(['--operation-id', 'op_1'], deps);
+    const _result = await runResyncCli(['--operation-id', 'op_1'], deps);
     expect(deps.createPayjpCharge).toHaveBeenCalled();
   });
 });
@@ -127,7 +127,7 @@ describe('INT-SYNC-014: CLI subscribe recovery: existing charge found', () => {
       })),
     });
 
-    const result = await runResyncCli(['--operation-id', 'op_1'], deps);
+    const _result = await runResyncCli(['--operation-id', 'op_1'], deps);
     expect(deps.createPayjpCharge).not.toHaveBeenCalled();
   });
 });
@@ -194,7 +194,7 @@ describe('INT-SYNC-017: CLI cancel recovery: subscription search + cancel', () =
       getPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'active' })),
     });
 
-    const result = await runResyncCli(['--operation-id', 'op_1'], deps);
+    const _result = await runResyncCli(['--operation-id', 'op_1'], deps);
     expect(deps.cancelPayjpSubscription).toHaveBeenCalledWith('sub_1');
   });
 });
@@ -213,17 +213,19 @@ describe('INT-SYNC-018: CLI cancel recovery: metadata fallback with period_end',
         }),
       } as DbPool,
       listPayjpSubscriptions: vi.fn(async () => ({
-        data: [{
-          id: 'sub_found',
-          status: 'active',
-          current_period_end: Math.floor(new Date('2026-07-06T12:00:00Z').getTime() / 1000),
-        }],
+        data: [
+          {
+            id: 'sub_found',
+            status: 'active',
+            current_period_end: Math.floor(new Date('2026-07-06T12:00:00Z').getTime() / 1000),
+          },
+        ],
         has_more: false,
       })),
       getPayjpSubscription: vi.fn(async () => ({ id: 'sub_found', status: 'active' })),
     });
 
-    const result = await runResyncCli(['--operation-id', 'op_1'], deps);
+    const _result = await runResyncCli(['--operation-id', 'op_1'], deps);
     expect(deps.cancelPayjpSubscription).toHaveBeenCalledWith('sub_found');
   });
 });
@@ -261,8 +263,20 @@ describe('INT-SYNC-019: CLI --discord-user-id: full reconciliation', () => {
 describe('INT-SYNC-020: CLI --all: iterate all + verify 0 inflight residual', () => {
   it('iterates all members', async () => {
     const members = [
-      { id: 'mem_1', discord_user_id: 'user_1', subscription_status: 'active', payjp_subscription_id: 'sub_1', access_end_at: new Date('2026-07-06T12:00:00Z') },
-      { id: 'mem_2', discord_user_id: 'user_2', subscription_status: 'canceled', payjp_subscription_id: 'sub_2', access_end_at: new Date('2026-03-06T12:00:00Z') },
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'active',
+        payjp_subscription_id: 'sub_1',
+        access_end_at: new Date('2026-07-06T12:00:00Z'),
+      },
+      {
+        id: 'mem_2',
+        discord_user_id: 'user_2',
+        subscription_status: 'canceled',
+        payjp_subscription_id: 'sub_2',
+        access_end_at: new Date('2026-03-06T12:00:00Z'),
+      },
     ];
     const deps = createMockDeps({
       db: {
@@ -286,7 +300,7 @@ describe('INT-SYNC-023: CLI last_payjp_event_created_at update after recovery', 
   it('max(existing, resyncStartUnix) after recovery', async () => {
     const deps = createMockDeps({
       db: {
-        query: vi.fn(async (text: string, params?: unknown[]) => {
+        query: vi.fn(async (text: string, _params?: unknown[]) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_CANCEL], rowCount: 1 };
           }
@@ -297,8 +311,8 @@ describe('INT-SYNC-023: CLI last_payjp_event_created_at update after recovery', 
     });
 
     await runResyncCli(['--operation-id', 'op_1'], deps);
-    const updateCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => (c[0] as string).includes('last_payjp_event_created_at')
+    const updateCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+      (c[0] as string).includes('last_payjp_event_created_at'),
     );
     expect(updateCalls.length).toBeGreaterThan(0);
   });
@@ -319,8 +333,8 @@ describe('INT-SYNC-024: member_impact_logs: insert on failure, resolve on recove
     });
 
     await runResyncCli(['--operation-id', 'op_1'], deps);
-    const insertCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => (c[0] as string).includes('INSERT INTO member_impact_logs')
+    const insertCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+      (c[0] as string).includes('INSERT INTO member_impact_logs'),
     );
     expect(insertCalls.length).toBeGreaterThan(0);
   });
@@ -329,13 +343,15 @@ describe('INT-SYNC-024: member_impact_logs: insert on failure, resolve on recove
 // INT-SYNC-010: Daily resync access_end_at expired
 describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
   it('expired access_end_at → role revoke', async () => {
-    const members = [{
-      id: 'mem_1',
-      discord_user_id: 'user_1',
-      subscription_status: 'canceled',
-      payjp_subscription_id: 'sub_1',
-      access_end_at: new Date('2026-04-05T12:00:00Z'), // past
-    }];
+    const members = [
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'canceled',
+        payjp_subscription_id: 'sub_1',
+        access_end_at: new Date('2026-04-05T12:00:00Z'), // past
+      },
+    ];
     const deps = createMockDeps({
       db: {
         query: vi.fn(async (text: string) => {
@@ -347,7 +363,7 @@ describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
       } as DbPool,
     });
 
-    const result = await runResyncCli(['--all'], deps);
+    const _result = await runResyncCli(['--all'], deps);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
   });
 });
@@ -355,13 +371,15 @@ describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
 // INT-SYNC-011: Daily resync subscription 404
 describe('INT-SYNC-011: Daily resync: subscription 404', () => {
   it('PAY.JP 404 → treated as deleted + role revoke', async () => {
-    const members = [{
-      id: 'mem_1',
-      discord_user_id: 'user_1',
-      subscription_status: 'active',
-      payjp_subscription_id: 'sub_1',
-      access_end_at: new Date('2026-07-06T12:00:00Z'),
-    }];
+    const members = [
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'active',
+        payjp_subscription_id: 'sub_1',
+        access_end_at: new Date('2026-07-06T12:00:00Z'),
+      },
+    ];
     const deps = createMockDeps({
       db: {
         query: vi.fn(async (text: string) => {
@@ -374,10 +392,10 @@ describe('INT-SYNC-011: Daily resync: subscription 404', () => {
       getPayjpSubscription: vi.fn(async () => null), // 404
     });
 
-    const result = await runResyncCli(['--all'], deps);
+    const _result = await runResyncCli(['--all'], deps);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
-    const updateCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => (c[0] as string).includes("'deleted'")
+    const updateCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+      (c[0] as string).includes("'deleted'"),
     );
     expect(updateCalls.length).toBeGreaterThan(0);
   });
@@ -386,15 +404,17 @@ describe('INT-SYNC-011: Daily resync: subscription 404', () => {
 // INT-SYNC-012: Daily resync does NOT clear inflight
 describe('INT-SYNC-012: Daily resync: does NOT clear inflight', () => {
   it('inflight_operation_* preserved during daily resync (--all)', async () => {
-    const members = [{
-      id: 'mem_1',
-      discord_user_id: 'user_1',
-      subscription_status: 'active',
-      payjp_subscription_id: 'sub_1',
-      inflight_operation_id: 'op_1',
-      inflight_operation_type: 'subscribe',
-      access_end_at: new Date('2026-07-06T12:00:00Z'),
-    }];
+    const members = [
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'active',
+        payjp_subscription_id: 'sub_1',
+        inflight_operation_id: 'op_1',
+        inflight_operation_type: 'subscribe',
+        access_end_at: new Date('2026-07-06T12:00:00Z'),
+      },
+    ];
     const deps = createMockDeps({
       db: {
         query: vi.fn(async (text: string) => {
@@ -407,8 +427,8 @@ describe('INT-SYNC-012: Daily resync: does NOT clear inflight', () => {
     });
 
     await runResyncCli(['--all'], deps);
-    const clearCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => (c[0] as string).includes('inflight_operation_id = NULL')
+    const clearCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+      (c[0] as string).includes('inflight_operation_id = NULL'),
     );
     expect(clearCalls).toHaveLength(0);
   });
@@ -417,7 +437,7 @@ describe('INT-SYNC-012: Daily resync: does NOT clear inflight', () => {
 // INT-SYNC-029: CLI subscribe offset>900 fail-close
 describe('INT-SYNC-029: CLI subscribe: offset>900 with has_more → fail-close', () => {
   it('offset>900 → fail-close', async () => {
-    let callCount = 0;
+    let _callCount = 0;
     const deps = createMockDeps({
       db: {
         query: vi.fn(async (text: string) => {
@@ -428,7 +448,7 @@ describe('INT-SYNC-029: CLI subscribe: offset>900 with has_more → fail-close',
         }),
       } as DbPool,
       listPayjpCharges: vi.fn(async () => {
-        callCount++;
+        _callCount++;
         return { data: [], has_more: true }; // Always has_more
       }),
     });
@@ -554,7 +574,7 @@ describe('INT-SYNC-034: Inflight 6h escalation', () => {
     await runResyncCli(['--operation-id', 'op_1'], deps);
     const logCalls = (deps.log as ReturnType<typeof vi.fn>).mock.calls;
     const escalationLog = logCalls.find(
-      (c: unknown[]) => (c[0] as Record<string, unknown>).issue === 'escalation_6h_inflight'
+      (c: unknown[]) => (c[0] as Record<string, unknown>).issue === 'escalation_6h_inflight',
     );
     expect(escalationLog).toBeDefined();
   });
@@ -590,10 +610,22 @@ describe('INT-SYNC-035: Env var validation', () => {
 describe('INT-SYNC-037: Daily resync: individual member error → continue', () => {
   it('single member error → continue + log + impact record', async () => {
     const members = [
-      { id: 'mem_1', discord_user_id: 'user_1', subscription_status: 'active', payjp_subscription_id: 'sub_1', access_end_at: new Date('2026-07-06T12:00:00Z') },
-      { id: 'mem_2', discord_user_id: 'user_2', subscription_status: 'active', payjp_subscription_id: 'sub_2', access_end_at: new Date('2026-07-06T12:00:00Z') },
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'active',
+        payjp_subscription_id: 'sub_1',
+        access_end_at: new Date('2026-07-06T12:00:00Z'),
+      },
+      {
+        id: 'mem_2',
+        discord_user_id: 'user_2',
+        subscription_status: 'active',
+        payjp_subscription_id: 'sub_2',
+        access_end_at: new Date('2026-07-06T12:00:00Z'),
+      },
     ];
-    let callIdx = 0;
+    const _callIdx = 0;
     const deps = createMockDeps({
       db: {
         query: vi.fn(async (text: string) => {

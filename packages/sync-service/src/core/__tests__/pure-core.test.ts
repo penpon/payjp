@@ -2,29 +2,30 @@
  * sync-service Pure Core — Property-Based Tests (PROP-SYNC-001 to PROP-SYNC-020)
  * Phase 2a (Red): All tests should FAIL against stubs
  */
-import { describe, it, expect } from 'vitest';
+
 import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 import {
-  validateWebhookToken,
+  buildChargeSearchParams,
+  calculateLastEventTimestamp,
+  canResolveInflightOperation,
+  determineCliExitCode,
+  determineIgnoreReason,
+  evaluateChargeSearchResult,
+  evaluateSubscriptionSearchResult,
+  formatRfc3339Utc,
+  isAccessEndExpired,
   isAllowedEventType,
   isEventStale,
-  mapSubscriptionStatus,
-  shouldGrantRole,
-  validateCliArgs,
-  determineCliExitCode,
-  evaluateChargeSearchResult,
-  isAccessEndExpired,
-  calculateLastEventTimestamp,
-  maskSensitiveLogFields,
-  buildChargeSearchParams,
-  validateRequiredFields,
-  formatRfc3339Utc,
-  determineIgnoreReason,
-  canResolveInflightOperation,
-  shouldSyncRole,
-  isStatusUnknown,
-  evaluateSubscriptionSearchResult,
   isInflightOperationStale,
+  isStatusUnknown,
+  mapSubscriptionStatus,
+  maskSensitiveLogFields,
+  shouldGrantRole,
+  shouldSyncRole,
+  validateCliArgs,
+  validateRequiredFields,
+  validateWebhookToken,
 } from '../index.js';
 
 // PROP-SYNC-001: validateWebhookToken
@@ -39,14 +40,10 @@ describe('PROP-SYNC-001: validateWebhookToken', () => {
 
   it('different strings → false', () => {
     fc.assert(
-      fc.property(
-        fc.string({ minLength: 1 }),
-        fc.string({ minLength: 1 }),
-        (a, b) => {
-          fc.pre(a !== b);
-          expect(validateWebhookToken(a, b)).toBe(false);
-        },
-      ),
+      fc.property(fc.string({ minLength: 1 }), fc.string({ minLength: 1 }), (a, b) => {
+        fc.pre(a !== b);
+        expect(validateWebhookToken(a, b)).toBe(false);
+      }),
     );
   });
 
@@ -285,17 +282,13 @@ describe('PROP-SYNC-009: isAccessEndExpired', () => {
 describe('PROP-SYNC-010: calculateLastEventTimestamp', () => {
   it('result ≥ both inputs', () => {
     fc.assert(
-      fc.property(
-        fc.option(fc.integer(), { nil: null }),
-        fc.integer(),
-        (existing, resync) => {
-          const result = calculateLastEventTimestamp(existing, resync);
-          expect(result).toBeGreaterThanOrEqual(resync);
-          if (existing !== null) {
-            expect(result).toBeGreaterThanOrEqual(existing);
-          }
-        },
-      ),
+      fc.property(fc.option(fc.integer(), { nil: null }), fc.integer(), (existing, resync) => {
+        const result = calculateLastEventTimestamp(existing, resync);
+        expect(result).toBeGreaterThanOrEqual(resync);
+        if (existing !== null) {
+          expect(result).toBeGreaterThanOrEqual(existing);
+        }
+      }),
     );
   });
 
@@ -391,13 +384,10 @@ describe('PROP-SYNC-013: validateRequiredFields', () => {
 describe('PROP-SYNC-014: formatRfc3339Utc', () => {
   it('output matches RFC 3339 UTC pattern', () => {
     fc.assert(
-      fc.property(
-        fc.date({ min: new Date('2000-01-01'), max: new Date('2099-12-31'), noInvalidDate: true }),
-        (d) => {
-          const result = formatRfc3339Utc(d);
-          expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-        },
-      ),
+      fc.property(fc.date({ min: new Date('2000-01-01'), max: new Date('2099-12-31'), noInvalidDate: true }), (d) => {
+        const result = formatRfc3339Utc(d);
+        expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+      }),
     );
   });
 });
@@ -451,27 +441,19 @@ describe('PROP-SYNC-015: determineIgnoreReason', () => {
 // PROP-SYNC-016: canResolveInflightOperation
 describe('PROP-SYNC-016: canResolveInflightOperation', () => {
   it('all valid → true', () => {
-    expect(
-      canResolveInflightOperation('active', 'sub_1', 'sub_1', 'cust_1'),
-    ).toBe(true);
+    expect(canResolveInflightOperation('active', 'sub_1', 'sub_1', 'cust_1')).toBe(true);
   });
 
   it('null customerID → false', () => {
-    expect(
-      canResolveInflightOperation('active', 'sub_1', 'sub_1', null),
-    ).toBe(false);
+    expect(canResolveInflightOperation('active', 'sub_1', 'sub_1', null)).toBe(false);
   });
 
   it('null status → false', () => {
-    expect(
-      canResolveInflightOperation(null, 'sub_1', 'sub_1', 'cust_1'),
-    ).toBe(false);
+    expect(canResolveInflightOperation(null, 'sub_1', 'sub_1', 'cust_1')).toBe(false);
   });
 
   it('mismatched subscription IDs → false', () => {
-    expect(
-      canResolveInflightOperation('active', 'sub_1', 'sub_2', 'cust_1'),
-    ).toBe(false);
+    expect(canResolveInflightOperation('active', 'sub_1', 'sub_2', 'cust_1')).toBe(false);
   });
 });
 
@@ -479,12 +461,9 @@ describe('PROP-SYNC-016: canResolveInflightOperation', () => {
 describe('PROP-SYNC-017: shouldSyncRole', () => {
   it('same status → false', () => {
     fc.assert(
-      fc.property(
-        fc.constantFrom('active', 'trial', 'canceled', 'paused', 'deleted', null),
-        (s) => {
-          expect(shouldSyncRole(s, s)).toBe(false);
-        },
-      ),
+      fc.property(fc.constantFrom('active', 'trial', 'canceled', 'paused', 'deleted', null), (s) => {
+        expect(shouldSyncRole(s, s)).toBe(false);
+      }),
     );
   });
 
@@ -526,12 +505,8 @@ describe('PROP-SYNC-019: evaluateSubscriptionSearchResult', () => {
   });
 
   it('1 candidate with metadata match → single-match', () => {
-    const candidates = [
-      { id: 'sub_1', status: 'active', metadata: { discord_user_id: 'user_1' } },
-    ];
-    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe(
-      'single-match',
-    );
+    const candidates = [{ id: 'sub_1', status: 'active', metadata: { discord_user_id: 'user_1' } }];
+    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe('single-match');
   });
 
   it('2+ candidates → fail-close', () => {
@@ -539,36 +514,22 @@ describe('PROP-SYNC-019: evaluateSubscriptionSearchResult', () => {
       { id: 'sub_1', status: 'active', metadata: { discord_user_id: 'user_1' } },
       { id: 'sub_2', status: 'trial', metadata: { discord_user_id: 'user_1' } },
     ];
-    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe(
-      'fail-close',
-    );
+    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe('fail-close');
   });
 
   it('1 candidate without metadata but period_end matches → single-match', () => {
-    const candidates = [
-      { id: 'sub_1', status: 'active', current_period_end: 1000 },
-    ];
-    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe(
-      'single-match',
-    );
+    const candidates = [{ id: 'sub_1', status: 'active', current_period_end: 1000 }];
+    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe('single-match');
   });
 
   it('1 candidate without metadata and period_end mismatch → fail-close', () => {
-    const candidates = [
-      { id: 'sub_1', status: 'active', current_period_end: 9999 },
-    ];
-    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe(
-      'fail-close',
-    );
+    const candidates = [{ id: 'sub_1', status: 'active', current_period_end: 9999 }];
+    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', 1000)).toBe('fail-close');
   });
 
   it('null accessEndAtUnix → fail-close', () => {
-    const candidates = [
-      { id: 'sub_1', status: 'active' },
-    ];
-    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', null)).toBe(
-      'fail-close',
-    );
+    const candidates = [{ id: 'sub_1', status: 'active' }];
+    expect(evaluateSubscriptionSearchResult(candidates, 'user_1', null)).toBe('fail-close');
   });
 });
 

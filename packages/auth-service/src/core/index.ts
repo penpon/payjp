@@ -1,18 +1,14 @@
 import type {
-  OAuthStateRecord,
-  LinkSessionRecord,
-  ValidationResult,
-  CookieName,
   CookieAttributes,
+  CookieName,
+  LinkSessionRecord,
+  OAuthStateRecord,
+  ValidationResult,
 } from '@hayane/shared';
 
 // PROP-AUTH-001 対象: buildDiscordAuthorizationUrl
 // REQ-AUTH-001, REQ-AUTH-007: scope=identify 固定
-export function buildDiscordAuthorizationUrl(
-  clientId: string,
-  redirectUri: string,
-  state: string,
-): string {
+export function buildDiscordAuthorizationUrl(clientId: string, redirectUri: string, state: string): string {
   const url = new URL('https://discord.com/oauth2/authorize');
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri);
@@ -58,11 +54,7 @@ export function validateOAuthStateRecord(
 
 // PROP-AUTH-027, PROP-AUTH-028 対象: validateLinkSessionRecord
 // REQ-AUTH-004, REQ-AUTH-013: 3条件すべて成立時のみ ok: true
-export function validateLinkSessionRecord(
-  record: LinkSessionRecord,
-  tokenHash: string,
-  now: Date,
-): ValidationResult {
+export function validateLinkSessionRecord(record: LinkSessionRecord, tokenHash: string, now: Date): ValidationResult {
   if (record.link_session_token_hash !== tokenHash) {
     return { ok: false, reason: 'link_session_token_hash mismatch' };
   }
@@ -77,10 +69,7 @@ export function validateLinkSessionRecord(
 
 // PROP-AUTH-006, PROP-AUTH-007 対象: buildCookieAttributes
 // REQ-AUTH-005: __Host-Cookie の固定属性
-export function buildCookieAttributes(
-  name: CookieName,
-  maxAge: number,
-): CookieAttributes {
+export function buildCookieAttributes(name: CookieName, maxAge: number): CookieAttributes {
   return {
     name,
     secure: true,
@@ -95,9 +84,7 @@ export function buildCookieAttributes(
 // REQ-AUTH-010: 機密キーのマスキング
 const SENSITIVE_FIELD_PATTERN = /^(cookie|authorization|set-cookie|code|token)$/i;
 
-export function maskSensitiveLogFields(
-  logEntry: Record<string, unknown>,
-): Record<string, unknown> {
+export function maskSensitiveLogFields(logEntry: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(logEntry)) {
     masked[key] = SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : value;
@@ -111,10 +98,7 @@ export function maskSensitiveLogFields(
 // - デフォルトポート認識: https:443, http:80 は省略と等価
 // - Origin: null は拒否
 // - requestOrigin の末尾スラッシュは拒否
-export function isSameOrigin(
-  requestOrigin: string,
-  allowedOrigin: string,
-): boolean {
+export function isSameOrigin(requestOrigin: string, allowedOrigin: string): boolean {
   if (requestOrigin === 'null') {
     return false;
   }
@@ -186,16 +170,10 @@ const REQUIRED_ENV_VAR_NAMES = [
   'DATABASE_URL',
 ] as const;
 
-export type EnvVarValidationResult =
-  | { ok: true }
-  | { ok: false; missingVars: string[] };
+export type EnvVarValidationResult = { ok: true } | { ok: false; missingVars: string[] };
 
-export function validateRequiredEnvVars(
-  env: Record<string, string | undefined>,
-): EnvVarValidationResult {
-  const missingVars = REQUIRED_ENV_VAR_NAMES.filter(
-    (name) => !env[name] || env[name] === '',
-  );
+export function validateRequiredEnvVars(env: Record<string, string | undefined>): EnvVarValidationResult {
+  const missingVars = REQUIRED_ENV_VAR_NAMES.filter((name) => !env[name] || env[name] === '');
   if (missingVars.length > 0) {
     return { ok: false, missingVars };
   }
@@ -204,10 +182,7 @@ export function validateRequiredEnvVars(
 
 // PROP-AUTH-006, PROP-AUTH-007 補完: serializeCookieAttributes
 // CookieAttributes を Set-Cookie ヘッダ文字列にシリアライズする
-export function serializeCookieAttributes(
-  attrs: CookieAttributes,
-  value: string,
-): string {
+export function serializeCookieAttributes(attrs: CookieAttributes, value: string): string {
   const parts: string[] = [`${attrs.name}=${value}`];
   if (attrs.maxAge !== undefined) parts.push(`Max-Age=${attrs.maxAge}`);
   if (attrs.path) parts.push(`Path=${attrs.path}`);
@@ -239,7 +214,7 @@ export function validateStartupConfig(
   if (!envResult.ok) {
     return { ok: false, errors: envResult.missingVars.map((v) => `Missing: ${v}`) };
   }
-  const urlResult = validateFrontendBaseUrl(env['FRONTEND_BASE_URL']!);
+  const urlResult = validateFrontendBaseUrl(env.FRONTEND_BASE_URL!);
   if (!urlResult.ok) {
     return { ok: false, errors: [urlResult.reason] };
   }
