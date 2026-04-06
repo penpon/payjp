@@ -55,16 +55,18 @@ HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは Git
 | `/feature-dev` | 設計判断が必要な新機能（7フェーズ構造化開発） | #1 DBアダプタ, #5-#6 frontend |
 | `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #2-#4 Fastifyルート, #7 退会UI, #9 E2E |
 
-#### レビューフェーズ — 実装完了後に必ず4スキルを順次実行
+#### レビューフェーズ — 実装完了後に必ず順次実行
 
-1. `/code-review` — コード品質・バグ・ロジックエラーの検出
-2. `/code-simplifier` — コード簡素化・可読性向上
-3. `/pr-review-toolkit` — 包括レビュー（型設計・テスト網羅・コメント精度・サイレント障害）
-4. `/security-guidance` — セキュリティ監査（OWASP / 認証・認可 / 入力検証）
+1. `/code-review` — コード品質・バグ・ロジックエラーの検出（スキル）
+2. `/pr-review-toolkit:review-pr` — 包括レビュー：型設計・テスト網羅・コメント精度・サイレント障害（スキル）
+3. `code-simplifier` — コード簡素化・可読性向上（Agent サブエージェント `pr-review-toolkit:code-simplifier`）
 
-#### PR作成フェーズ
+※ `security-guidance` はフックとして自動実行（Edit/Write時に発火）、手動呼び出し不要
 
-- レビュー指摘の修正完了後に `/commit-push-pr` を実行
+#### コミット・PRフェーズ — レビュー指摘の修正完了後
+
+- `/commit-commands:commit` — git commit を作成（pre-commitフックでbiome等が自動実行）
+- PR作成時は `/commit-commands:commit-push-pr` を実行
 - コミットメッセージに `Fixes #N` を含めてIssue自動クローズ
 
 ## ツール使い分け
@@ -77,7 +79,7 @@ HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは Git
 ## 品質ゲート（必須）
 
 - VCSDD対象（ビジネスロジック変更時）: `/vcsdd-adversary` PASS 必須
-- Issue対象（統合レイヤー）: `/code-review` → `/code-simplifier` → `/pr-review-toolkit` → `/security-guidance`（4スキル必須）
+- Issue対象（統合レイヤー）: `/code-review` → `/pr-review-toolkit:review-pr` → `pr-review-toolkit:code-simplifier`（3ステップ必須、`security-guidance` はフック自動実行）
 - Go-Live 判定: T-P0-01〜T-P0-07 全 PASS 必須
 
 ## 実装上の固定ルール
