@@ -4,7 +4,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Table 1: members — 会員・購読状態の正 (billing-service / sync-service 管理)
-CREATE TABLE members (
+CREATE TABLE IF NOT EXISTS members (
   id                              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   discord_user_id                 TEXT NOT NULL UNIQUE,
   email                           TEXT NOT NULL,
@@ -28,25 +28,26 @@ CREATE TABLE members (
   updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX members_payjp_subscription_id_idx ON members (payjp_subscription_id) WHERE payjp_subscription_id IS NOT NULL;
-CREATE INDEX members_subscription_status_idx ON members (subscription_status);
+CREATE INDEX IF NOT EXISTS members_payjp_subscription_id_idx ON members (payjp_subscription_id) WHERE payjp_subscription_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS members_subscription_status_idx ON members (subscription_status);
 
 -- Table 2: payjp_events — Webhook受信履歴と処理結果 (sync-service 管理)
-CREATE TABLE payjp_events (
+CREATE TABLE IF NOT EXISTS payjp_events (
   id                TEXT PRIMARY KEY,   -- payjp_event_id (冪等キー)
   event_type        TEXT NOT NULL,
   payload           JSONB NOT NULL,
   processing_result TEXT NOT NULL CHECK (processing_result IN ('processed', 'ignored', 'failed')),
+  data_metadata_operation_id TEXT,
   member_id         UUID REFERENCES members(id),
   received_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   processed_at      TIMESTAMPTZ
 );
 
-CREATE INDEX payjp_events_received_at_idx ON payjp_events (received_at);
-CREATE INDEX payjp_events_member_id_idx ON payjp_events (member_id) WHERE member_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS payjp_events_received_at_idx ON payjp_events (received_at);
+CREATE INDEX IF NOT EXISTS payjp_events_member_id_idx ON payjp_events (member_id) WHERE member_id IS NOT NULL;
 
 -- Table 3: oauth_states — OAuth state ワンタイム検証 (auth-service 管理)
-CREATE TABLE oauth_states (
+CREATE TABLE IF NOT EXISTS oauth_states (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   state_hash          TEXT NOT NULL UNIQUE,
   oauth_session_hash  TEXT NOT NULL,
@@ -55,10 +56,10 @@ CREATE TABLE oauth_states (
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX oauth_states_expires_at_idx ON oauth_states (expires_at);
+CREATE INDEX IF NOT EXISTS oauth_states_expires_at_idx ON oauth_states (expires_at);
 
 -- Table 4: discord_link_sessions — 課金前連携セッション (auth-service 発行 / billing-service 消費)
-CREATE TABLE discord_link_sessions (
+CREATE TABLE IF NOT EXISTS discord_link_sessions (
   id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   link_session_token_hash   TEXT NOT NULL UNIQUE,
   discord_user_id           TEXT NOT NULL,
@@ -67,10 +68,10 @@ CREATE TABLE discord_link_sessions (
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX discord_link_sessions_expires_at_idx ON discord_link_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS discord_link_sessions_expires_at_idx ON discord_link_sessions (expires_at);
 
 -- Table 5: member_impact_logs — 会員影響の未解決/解消追跡 (sync-service / resync CLI 管理)
-CREATE TABLE member_impact_logs (
+CREATE TABLE IF NOT EXISTS member_impact_logs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id       UUID NOT NULL REFERENCES members(id),
   issue_code      TEXT NOT NULL,
@@ -80,8 +81,8 @@ CREATE TABLE member_impact_logs (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX member_impact_logs_member_id_idx ON member_impact_logs (member_id);
-CREATE INDEX member_impact_logs_resolved_at_idx ON member_impact_logs (resolved_at) WHERE resolved_at IS NULL;
-CREATE UNIQUE INDEX member_impact_logs_member_issue_unresolved_idx
+CREATE INDEX IF NOT EXISTS member_impact_logs_member_id_idx ON member_impact_logs (member_id);
+CREATE INDEX IF NOT EXISTS member_impact_logs_resolved_at_idx ON member_impact_logs (resolved_at) WHERE resolved_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS member_impact_logs_member_issue_unresolved_idx
   ON member_impact_logs (member_id, issue_code)
   WHERE resolved_at IS NULL;

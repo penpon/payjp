@@ -5,7 +5,7 @@
  * pure core 関数は src/core/ に実装済み。
  * shell 層はこれらの依存型を受け取りオーケストレーションを実施する。
  */
-import type { Member, LinkSessionRecord } from '@hayane/shared';
+import type { Member, LinkSessionRecord, DbClient } from '@hayane/shared';
 
 // PAY.JP レスポンス型
 
@@ -79,41 +79,7 @@ export interface DiscordClient {
   assignRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
 }
 
-export interface DbClient {
-  findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
-  upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
-  findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
-  consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date): Promise<void>;
-  clearInflightOperation(memberId: string): Promise<void>;
-  updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
-  updateMemberChargeId(memberId: string, chargeId: string, paidAt: Date): Promise<void>;
-  updateMemberAfterSubscribe(memberId: string, params: {
-    payjp_initial_charge_id: string | null;
-    initial_charge_paid_at: Date | null;
-    payjp_subscription_id: string;
-    payjp_plan_id: string;
-    subscription_status: 'active' | 'trial';
-    first_trial_granted_at: Date | null;
-    access_end_at: Date;
-    next_billing_at: Date;
-    role_state: 'granted';
-    last_synced_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member>;
-  updateMemberAfterCancel(memberId: string, params: {
-    cancel_requested_at: Date;
-    subscription_status: 'canceled';
-    access_end_at: Date;
-    inflight_operation_id: null;
-    inflight_operation_type: null;
-    inflight_operation_started_at: null;
-  }): Promise<Member>;
-  acquireAdvisoryLock(key: string): Promise<boolean>;
-  releaseAdvisoryLock(key: string): Promise<void>;
-}
+export type { DbClient };
 
 export interface BillingConfig {
   frontendBaseUrl: string;

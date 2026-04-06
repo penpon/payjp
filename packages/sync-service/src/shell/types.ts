@@ -1,7 +1,7 @@
 /**
  * sync-service Shell Types
  */
-import type { SubscriptionStatus, Member, LogEntry } from '@hayane/shared';
+import type { SubscriptionStatus, Member, LogEntry, DbPool } from '@hayane/shared';
 
 export interface PayjpEventInsert {
   id: string;
@@ -62,9 +62,7 @@ export interface WebhookHandlerDeps {
   log: (entry: LogEntry) => void;
 }
 
-export interface DbPool {
-  query: (text: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>;
-}
+export type { DbPool };
 
 export interface WebhookRequest {
   headers: Record<string, string | undefined>;
