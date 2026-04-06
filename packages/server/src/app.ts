@@ -1,6 +1,6 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
 
 export interface AppConfig {
@@ -29,7 +29,7 @@ export function buildApp(config: AppConfig) {
     done(null, payload);
   });
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode ?? 500;
     if (statusCode >= 500) {
       console.error(

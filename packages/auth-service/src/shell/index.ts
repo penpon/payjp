@@ -156,17 +156,18 @@ export async function handleAuthRequest(
   config: {
     frontendBaseUrl: string;
     discordClientId: string;
+    discordClientSecret: string;
     discordRedirectUri: string;
   },
 ): Promise<AuthResponse>;
 
 // 後方互換性のためのオーバーロード（既存テストが3引数形式を使用）
 // FIND-006: startエンドポイントはハードコードなしで config から clientId/redirectUri を参照
-export function handleAuthRequest(
+export async function handleAuthRequest(
   endpoint: string,
   headers: Record<string, string>,
   frontendBaseUrl: string,
-): { statusCode: number; headers: Record<string, string>; body?: unknown };
+): Promise<{ statusCode: number; headers: Record<string, string>; body?: unknown }>;
 
 export async function handleAuthRequest(
   requestOrEndpoint: AuthRequest | string,

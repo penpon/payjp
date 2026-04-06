@@ -107,6 +107,7 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     updateMemberAfterCancel: vi.fn().mockResolvedValue(undefined as never),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+    withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
   };
 
   const payjp: PayjpClient = {
@@ -166,6 +167,7 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     }),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+    withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
   };
 
   const payjp: PayjpClient = {
