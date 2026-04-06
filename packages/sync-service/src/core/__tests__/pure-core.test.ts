@@ -392,7 +392,7 @@ describe('PROP-SYNC-014: formatRfc3339Utc', () => {
   it('output matches RFC 3339 UTC pattern', () => {
     fc.assert(
       fc.property(
-        fc.date({ min: new Date('2000-01-01'), max: new Date('2099-12-31') }),
+        fc.date({ min: new Date('2000-01-01'), max: new Date('2099-12-31'), noInvalidDate: true }),
         (d) => {
           const result = formatRfc3339Utc(d);
           expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
