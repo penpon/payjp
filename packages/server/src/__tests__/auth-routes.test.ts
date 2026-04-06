@@ -1,4 +1,4 @@
-import { clearStores } from '@hayane/auth-service';
+import { clearStores } from '@hayane/auth-service/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 
