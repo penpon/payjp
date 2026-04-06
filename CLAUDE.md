@@ -31,11 +31,41 @@ feature/           # git worktree 用（削除禁止）
 .vcsdd/            # VCSDDパイプライン状態（削除禁止）
 ```
 
-## 開発ワークフロー（VCSDD 主軸）
+## 開発ワークフロー
 
-- サービス単位でフィーチャー管理（auth / billing / sync）
+### ビジネスロジック層（完了）— VCSDD
+
+3サービスの Pure Core + Shell は VCSDD パイプラインで完成済み。
+ビジネスロジックの追加・変更が発生した場合は引き続き VCSDD を使用する。
+
 - フェーズ順: `/vcsdd-spec` → `/vcsdd-spec-review` → `/vcsdd-tdd` → `/vcsdd-impl` → `/vcsdd-adversary` → `/vcsdd-harden` → `/vcsdd-converge`
 - コミット: `/vcsdd-commit`（フェーズ完了時）
+
+### 統合レイヤー（進行中）— Issue駆動 + TDD
+
+HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは GitHub Issue 単位で開発する。
+
+- Milestone: `MVP Go-Live`（2026-04-20）
+- Issue一覧: #1〜#10（依存関係は各Issueのbodyに記載）
+
+#### 実装フェーズ — タスク特性に応じてツールを選択
+
+| ツール | 用途 | 適するIssue |
+|---|---|---|
+| `/feature-dev` | 設計判断が必要な新機能（7フェーズ構造化開発） | #1 DBアダプタ, #5-#6 frontend |
+| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #2-#4 Fastifyルート, #7 退会UI, #9 E2E |
+
+#### レビューフェーズ — 実装完了後に必ず4スキルを順次実行
+
+1. `/code-review` — コード品質・バグ・ロジックエラーの検出
+2. `/code-simplifier` — コード簡素化・可読性向上
+3. `/pr-review-toolkit` — 包括レビュー（型設計・テスト網羅・コメント精度・サイレント障害）
+4. `/security-guidance` — セキュリティ監査（OWASP / 認証・認可 / 入力検証）
+
+#### PR作成フェーズ
+
+- レビュー指摘の修正完了後に `/commit-push-pr` を実行
+- コミットメッセージに `Fixes #N` を含めてIssue自動クローズ
 
 ## ツール使い分け
 
@@ -46,8 +76,8 @@ feature/           # git worktree 用（削除禁止）
 
 ## 品質ゲート（必須）
 
-- コミット前: `/quality-check`
-- PR 作成前: `/vcsdd-adversary` PASS 必須
+- VCSDD対象（ビジネスロジック変更時）: `/vcsdd-adversary` PASS 必須
+- Issue対象（統合レイヤー）: `/code-review` → `/code-simplifier` → `/pr-review-toolkit` → `/security-guidance`（4スキル必須）
 - Go-Live 判定: T-P0-01〜T-P0-07 全 PASS 必須
 
 ## 実装上の固定ルール
