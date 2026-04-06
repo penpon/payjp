@@ -58,6 +58,7 @@ function sendAuthResponse(
   result: { statusCode: number; headers: Record<string, string>; body?: unknown },
 ) {
   for (const [key, value] of Object.entries(result.headers)) {
+    // Fastify app-level hooks own these headers so auth-service output cannot conflict.
     if (MANAGED_HEADERS.has(key.toLowerCase())) continue;
     reply.header(key, value);
   }

@@ -31,6 +31,7 @@ export function buildApp(config: AppConfig) {
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode ?? 500;
+    const safeMessage = error.message.replace(UUID_PATTERN, '[REDACTED]');
     if (statusCode >= 500) {
       console.error(
         JSON.stringify({
@@ -38,13 +39,12 @@ export function buildApp(config: AppConfig) {
           statusCode,
           method: request.method,
           url: request.url,
-          error: error.message,
+          error: safeMessage,
           timestamp: new Date().toISOString(),
         }),
       );
       reply.status(statusCode).send({ error: 'Internal Server Error' });
     } else {
-      const safeMessage = error.message.replace(UUID_PATTERN, '[REDACTED]');
       reply.status(statusCode).send({ error: safeMessage });
     }
   });
