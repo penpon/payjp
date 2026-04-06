@@ -292,9 +292,10 @@ async function queryUpdateMemberAfterCancel(
 // --- PgDbClient (pool-based, with advisory lock support) ---
 
 export class PgDbClient implements DbClient {
-  // Session-scoped advisory lock. Used by subscribe/cancel for cross-API-call locking.
+  // Session-scoped advisory locks keyed by discord user id.
+  // Used by subscribe/cancel for cross-API-call locking.
   // withTransactionLock is available for transaction-scoped locking (e.g. webhook).
-  private lockClient: { client: pg.PoolClient; key: string } | null = null;
+  private lockClients = new Map<string, pg.PoolClient>();
 
   constructor(private pool: pg.Pool) {}
 
@@ -330,8 +331,8 @@ export class PgDbClient implements DbClient {
   }
 
   async acquireAdvisoryLock(discordUserId: string): Promise<boolean> {
-    if (this.lockClient !== null) {
-      throw new Error('Advisory lock already held. Release before acquiring again.');
+    if (this.lockClients.has(discordUserId)) {
+      return false;
     }
     const client = await this.pool.connect();
     try {
@@ -339,7 +340,7 @@ export class PgDbClient implements DbClient {
         discordUserId,
       ]);
       if (result.rows[0].pg_try_advisory_lock) {
-        this.lockClient = { client, key: discordUserId };
+        this.lockClients.set(discordUserId, client);
         return true;
       }
       client.release();
@@ -351,14 +352,15 @@ export class PgDbClient implements DbClient {
   }
 
   async releaseAdvisoryLock(discordUserId: string): Promise<void> {
-    if (!this.lockClient) {
+    const client = this.lockClients.get(discordUserId);
+    if (!client) {
+      if (this.lockClients.size > 0) {
+        const heldKeys = Array.from(this.lockClients.keys()).join(', ');
+        throw new Error(`Lock key mismatch: holding "${heldKeys}", tried to release "${discordUserId}"`);
+      }
       throw new Error('No advisory lock is currently held');
     }
-    if (this.lockClient.key !== discordUserId) {
-      throw new Error(`Lock key mismatch: holding "${this.lockClient.key}", tried to release "${discordUserId}"`);
-    }
-    const { client } = this.lockClient;
-    this.lockClient = null;
+    this.lockClients.delete(discordUserId);
     try {
       await client.query('SELECT pg_advisory_unlock($1::bigint)', [discordUserId]);
     } finally {

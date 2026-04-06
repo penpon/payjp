@@ -221,6 +221,17 @@ describe('PgDbClient - advisory lock', () => {
     await db.releaseAdvisoryLock(LOCK_ID_1);
   });
 
+  it('same client can hold different advisory locks at once', async () => {
+    const acquired1 = await db.acquireAdvisoryLock(LOCK_ID_1);
+    expect(acquired1).toBe(true);
+
+    const acquired2 = await db.acquireAdvisoryLock(LOCK_ID_2);
+    expect(acquired2).toBe(true);
+
+    await db.releaseAdvisoryLock(LOCK_ID_2);
+    await db.releaseAdvisoryLock(LOCK_ID_1);
+  });
+
   it('releaseAdvisoryLock throws on key mismatch', async () => {
     await db.acquireAdvisoryLock(LOCK_ID_1);
     await expect(db.releaseAdvisoryLock(LOCK_ID_2)).rejects.toThrow('Lock key mismatch');
