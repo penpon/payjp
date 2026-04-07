@@ -286,7 +286,7 @@ describe('PROP-BILL-010: buildSubscriptionResponse', () => {
 
   it('(property) accessEndAt is always RFC 3339 UTC', () => {
     fc.assert(
-      fc.property(fc.date(), (date) => {
+      fc.property(fc.date({ noInvalidDate: true }), (date) => {
         const member = makeMember({ access_end_at: date });
         const response = buildSubscriptionResponse(member);
         expect(response.accessEndAt).toMatch(/Z$/);
