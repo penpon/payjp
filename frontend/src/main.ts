@@ -174,14 +174,8 @@ function startBillingFlow(app: HTMLElement): void {
         return;
       }
 
-      update({
-        step: 'submitting',
-        email: data.email,
-        cardholderName: data.cardholderName,
-        selectedPlanId: data.planId,
-      });
-
-      // 1. Create PAY.JP token with 3DS
+      // Keep the card iframe mounted until tokenization completes.
+      // Re-rendering to `submitting` destroys the mounted PAY.JP element.
       const tokenResult = await payjpAdapter.createToken(currentCardElement, {
         name: data.cardholderName,
         email: data.email,
@@ -190,10 +184,20 @@ function startBillingFlow(app: HTMLElement): void {
       if (tokenResult.error || !tokenResult.tokenId) {
         update({
           step: 'form',
+          selectedPlanId: data.planId,
+          email: data.email,
+          cardholderName: data.cardholderName,
           error: { kind: 'three_ds_failed', message: tokenResult.error ?? '3Dセキュア認証に失敗しました。' },
         });
         return;
       }
+
+      update({
+        step: 'submitting',
+        email: data.email,
+        cardholderName: data.cardholderName,
+        selectedPlanId: data.planId,
+      });
 
       // 2. POST /v1/subscriptions
       try {
