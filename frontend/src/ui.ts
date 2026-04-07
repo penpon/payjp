@@ -1,5 +1,6 @@
 import type { BillingCallbacks } from './billing-ui.js';
 import { renderBilling, renderSubscribed } from './billing-ui.js';
+import { el } from './dom.js';
 import type { AppState, BillingFormState, PayjpAdapter, PlanDef, SubscriptionInfo } from './types.js';
 
 function createDiscordLogoSvg(): SVGSVGElement {
@@ -16,25 +17,6 @@ function createDiscordLogoSvg(): SVGSVGElement {
   );
   svg.appendChild(path);
   return svg;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs?: Record<string, string>,
-  children?: (Node | string)[],
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  if (attrs) {
-    for (const [key, value] of Object.entries(attrs)) {
-      element.setAttribute(key, value);
-    }
-  }
-  if (children) {
-    for (const child of children) {
-      element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
-    }
-  }
-  return element;
 }
 
 function createDiscordButton(onConnect: () => void): HTMLButtonElement {

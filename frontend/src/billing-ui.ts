@@ -1,3 +1,4 @@
+import { el } from './dom.js';
 import type {
   BillingError,
   BillingFormState,
@@ -7,27 +8,6 @@ import type {
   SubscribeResponse,
   SubscriptionInfo,
 } from './types.js';
-
-// --- el() helper (shared with ui.ts pattern) ---
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs?: Record<string, string>,
-  children?: (Node | string)[],
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  if (attrs) {
-    for (const [key, value] of Object.entries(attrs)) {
-      element.setAttribute(key, value);
-    }
-  }
-  if (children) {
-    for (const child of children) {
-      element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
-    }
-  }
-  return element;
-}
 
 // --- Callbacks interface ---
 
@@ -402,10 +382,7 @@ function createCopyButton(text: string): HTMLButtonElement {
 }
 
 function formatDate(isoString: string): string {
-  try {
-    const date = new Date(isoString);
-    return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
-  } catch {
-    return isoString;
-  }
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return isoString;
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }

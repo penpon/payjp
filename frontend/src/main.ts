@@ -141,6 +141,7 @@ function startBillingFlow(app: HTMLElement): void {
   };
 
   let currentCardElement: import('./types.js').PayjpCardElement | null = null;
+  let isSubmitting = false;
 
   function update(patch: Partial<BillingFormState>): void {
     billingState = { ...billingState, ...patch };
@@ -174,14 +175,33 @@ function startBillingFlow(app: HTMLElement): void {
         return;
       }
 
-      // Keep the card iframe mounted until tokenization completes.
-      // Re-rendering to `submitting` destroys the mounted PAY.JP element.
+      // Double-submit guard (3DS popup can stay open for minutes)
+      if (isSubmitting) return;
+      isSubmitting = true;
+
+      // Save form data WITHOUT re-rendering (preserves PAY.JP card iframe)
+      billingState = {
+        ...billingState,
+        email: data.email,
+        cardholderName: data.cardholderName,
+        selectedPlanId: data.planId,
+      };
+
+      // Disable submit button inline instead of destroying DOM
+      const submitBtn = app.querySelector('.submit-button') as HTMLButtonElement | null;
+      if (submitBtn) {
+        submitBtn.setAttribute('disabled', 'true');
+        submitBtn.textContent = '処理中...';
+      }
+
+      // 1. Create PAY.JP token with 3DS (card iframe must remain mounted)
       const tokenResult = await payjpAdapter.createToken(currentCardElement, {
         name: data.cardholderName,
         email: data.email,
       });
 
       if (tokenResult.error || !tokenResult.tokenId) {
+        isSubmitting = false;
         update({
           step: 'form',
           selectedPlanId: data.planId,
@@ -192,12 +212,8 @@ function startBillingFlow(app: HTMLElement): void {
         return;
       }
 
-      update({
-        step: 'submitting',
-        email: data.email,
-        cardholderName: data.cardholderName,
-        selectedPlanId: data.planId,
-      });
+      // Now safe to destroy DOM — card data is captured in token
+      update({ step: 'submitting' });
 
       // 2. POST /v1/subscriptions
       try {
@@ -214,8 +230,10 @@ function startBillingFlow(app: HTMLElement): void {
           /* ignore storage errors */
         }
 
+        isSubmitting = false;
         update({ step: 'success', result });
       } catch (err) {
+        isSubmitting = false;
         update({ step: 'error', error: mapSubscribeError(err) });
       }
     },
