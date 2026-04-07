@@ -428,6 +428,44 @@ describe('billing-ui', () => {
   });
 
   describe('renderSubscribed', () => {
+    it('should show cancel section with cancel button when onStartCancel provided and status is active', () => {
+      const onStartCancel = vi.fn();
+      renderSubscribed(
+        container,
+        { status: 'active', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        onStartCancel,
+      );
+
+      expect(container.querySelector('.cancel-section')).not.toBeNull();
+      const btn = container.querySelector('.cancel-button') as HTMLButtonElement;
+      expect(btn).not.toBeNull();
+      btn.click();
+      expect(onStartCancel).toHaveBeenCalledOnce();
+    });
+
+    it('should not show cancel section when onStartCancel is not provided', () => {
+      renderSubscribed(
+        container,
+        { status: 'active', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+      );
+
+      expect(container.querySelector('.cancel-section')).toBeNull();
+      expect(container.querySelector('.cancel-button')).toBeNull();
+    });
+
+    it('should not show cancel button when status is canceled', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        vi.fn(),
+      );
+
+      expect(container.querySelector('.cancel-button')).toBeNull();
+    });
+
     it('should show subscription status for active user', () => {
       renderSubscribed(
         container,

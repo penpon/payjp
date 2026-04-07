@@ -1,4 +1,4 @@
-import type { SessionResponse, SubscribeResponse, SubscriptionInfo } from './types.js';
+import type { CancelResponse, SessionResponse, SubscribeResponse, SubscriptionInfo } from './types.js';
 
 // --- Session ---
 
@@ -91,6 +91,24 @@ function isSubscriptionStatusResponse(data: unknown): data is { subscription: Su
   return typeof sub.status === 'string' && isNullableString(sub.planId) && isNullableString(sub.accessEndAt);
 }
 
+// --- Shared error body parsing ---
+
+interface ParsedErrorBody {
+  errorCode: string;
+  operationId: string | undefined;
+  message: string | undefined;
+}
+
+async function parseErrorBody(res: Response): Promise<ParsedErrorBody> {
+  const raw: unknown = await res.json().catch(() => ({}));
+  const obj = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  return {
+    errorCode: typeof obj.errorCode === 'string' ? obj.errorCode : 'UNKNOWN',
+    operationId: typeof obj.operationId === 'string' ? obj.operationId : undefined,
+    message: typeof obj.message === 'string' ? obj.message : undefined,
+  };
+}
+
 // --- Subscribe ---
 
 export class SubscribeError extends Error {
@@ -133,19 +151,64 @@ export async function createSubscription(body: {
   });
 
   if (!res.ok) {
-    const errorBody: unknown = await res.json().catch(() => ({}));
-    const obj = typeof errorBody === 'object' && errorBody !== null ? (errorBody as Record<string, unknown>) : {};
+    const body = await parseErrorBody(res);
     throw new SubscribeError(
       res.status,
-      typeof obj.errorCode === 'string' ? obj.errorCode : 'UNKNOWN',
-      typeof obj.operationId === 'string' ? obj.operationId : undefined,
-      typeof obj.message === 'string' ? obj.message : `Subscribe failed: ${res.status}`,
+      body.errorCode,
+      body.operationId,
+      body.message ?? `Subscribe failed: ${res.status}`,
     );
   }
 
   const data: unknown = await res.json();
   if (!isSubscribeResponse(data)) {
     throw new Error('Invalid subscribe response');
+  }
+  return data;
+}
+
+// --- Cancel ---
+
+export class CancelError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly errorCode: string,
+    public readonly operationId: string | undefined,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'CancelError';
+  }
+}
+
+function isCancelResponse(data: unknown): data is CancelResponse {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    obj.ok === true &&
+    typeof obj.memberId === 'string' &&
+    typeof obj.cancelEffectiveAt === 'string' &&
+    typeof obj.roleRemovalAt === 'string'
+  );
+}
+
+export async function cancelSubscription(): Promise<CancelResponse> {
+  const res = await fetch('/v1/subscriptions/cancel', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!res.ok) {
+    const body = await parseErrorBody(res);
+    throw new CancelError(res.status, body.errorCode, body.operationId, body.message ?? `Cancel failed: ${res.status}`);
+  }
+
+  const data: unknown = await res.json();
+  if (!isCancelResponse(data)) {
+    throw new Error('Invalid cancel response');
   }
   return data;
 }

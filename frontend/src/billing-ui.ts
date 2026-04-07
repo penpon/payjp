@@ -1,4 +1,5 @@
 import { el } from './dom.js';
+import { formatDate } from './format.js';
 import type {
   BillingError,
   BillingFormState,
@@ -8,6 +9,7 @@ import type {
   SubscribeResponse,
   SubscriptionInfo,
 } from './types.js';
+import { createCopyButton } from './widgets.js';
 
 // --- Callbacks interface ---
 
@@ -75,20 +77,19 @@ export function renderBilling(
 // --- Subscribed state (for returning users) ---
 
 /** Appends subscribed summary into `container`. Caller should clear the container first (e.g. `replaceChildren()`). */
-export function renderSubscribed(container: HTMLElement, subscription: SubscriptionInfo, plans: PlanDef[]): void {
+export function renderSubscribed(
+  container: HTMLElement,
+  subscription: SubscriptionInfo,
+  plans: PlanDef[],
+  onStartCancel?: () => void,
+): void {
   const plan = plans.find((p) => p.id === subscription.planId);
   const planName = plan?.name ?? subscription.planId ?? '不明';
 
-  const statusLabel =
-    subscription.status === 'active'
-      ? '有効'
-      : subscription.status === 'trial'
-        ? 'トライアル'
-        : subscription.status === 'canceled'
-          ? '解約予定'
-          : subscription.status;
+  const STATUS_LABELS: Record<string, string> = { active: '有効', trial: 'トライアル', canceled: '解約予定' };
+  const statusLabel = STATUS_LABELS[subscription.status] ?? subscription.status;
 
-  const card = el('div', { class: 'card' }, [
+  const cardChildren: (Node | string)[] = [
     el('h1', { class: 'heading' }, ['購読状況']),
     el('div', { class: 'subscribed-status' }, [
       el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
@@ -98,9 +99,25 @@ export function renderSubscribed(container: HTMLElement, subscription: Subscript
     ...(subscription.accessEndAt
       ? [el('p', { class: 'subscribed-detail' }, [`次回更新日: ${formatDate(subscription.accessEndAt)}`])]
       : []),
-  ]);
+  ];
 
-  container.appendChild(card);
+  if (onStartCancel && subscription.status !== 'canceled') {
+    const cancelBtn = el('button', { type: 'button', class: 'cancel-button' }, ['退会する']);
+    cancelBtn.addEventListener('click', onStartCancel);
+
+    cardChildren.push(
+      el('hr', { class: 'cancel-separator' }),
+      el('div', { class: 'cancel-section' }, [
+        el('h2', { class: 'cancel-section-title' }, ['退会']),
+        el('p', { class: 'cancel-section-desc' }, [
+          '退会後も現在の期間終了日までサービスをご利用いただけます。退会申請はDiscordでの認証が必要です。',
+        ]),
+        cancelBtn,
+      ]),
+    );
+  }
+
+  container.appendChild(el('div', { class: 'card' }, cardChildren));
 }
 
 // --- Form step ---
@@ -435,56 +452,4 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
   }
 
   return el('div', { class: 'card' }, children);
-}
-
-// --- Helpers ---
-
-function createCopyButton(text: string): HTMLButtonElement {
-  const btn = el('button', { type: 'button', class: 'copy-button', 'aria-label': 'コピー' }, ['コピー']);
-  btn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      btn.textContent = 'コピー済み';
-      setTimeout(() => {
-        btn.textContent = 'コピー';
-      }, 2000);
-    } catch (err) {
-      console.warn('[billing] Clipboard API unavailable, falling back to text selection:', err);
-      const codeEl = btn.previousElementSibling;
-      if (codeEl) {
-        const range = document.createRange();
-        range.selectNodeContents(codeEl);
-        window.getSelection()?.removeAllRanges();
-        window.getSelection()?.addRange(range);
-        btn.textContent = '選択済み（手動コピーを）';
-        setTimeout(() => {
-          btn.textContent = 'コピー';
-        }, 3000);
-      } else {
-        btn.textContent = 'コピー失敗';
-        setTimeout(() => {
-          btn.textContent = 'コピー';
-        }, 2000);
-      }
-    }
-  });
-  return btn;
-}
-
-const JST_DATE_FORMATTER = new Intl.DateTimeFormat('ja-JP', {
-  timeZone: 'Asia/Tokyo',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return isoString;
-  const parts = JST_DATE_FORMATTER.formatToParts(date);
-  const y = parts.find((p) => p.type === 'year')?.value;
-  const m = parts.find((p) => p.type === 'month')?.value;
-  const d = parts.find((p) => p.type === 'day')?.value;
-  if (!y || !m || !d) return isoString;
-  return `${y}/${m}/${d}`;
 }

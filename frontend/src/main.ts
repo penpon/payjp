@@ -1,4 +1,5 @@
 import {
+  cancelSubscription,
   checkSession,
   createSubscription,
   fetchSubscriptionStatus,
@@ -7,9 +8,13 @@ import {
   startOAuth,
 } from './api.js';
 import type { BillingCallbacks } from './billing-ui.js';
+import { showCancelConfirmModal } from './cancel-ui.js';
+import { mapCancelError } from './map-cancel-error.js';
 import { mapSubscribeError } from './map-subscribe-error.js';
 import type { BillingFormState, PayjpAdapter, PlanDef } from './types.js';
 import { renderState } from './ui.js';
+
+const CANCEL_PENDING_KEY = 'cancelPending';
 
 // --- Plan definitions (hardcoded for MVP) ---
 
@@ -233,6 +238,23 @@ function startBillingFlow(app: HTMLElement): void {
   render();
 }
 
+// --- Cancel flow ---
+
+function startCancelFlow(app: HTMLElement): void {
+  let dismiss: (() => void) | null = null;
+  dismiss = showCancelConfirmModal(app, {
+    onConfirm: () => {
+      dismiss?.();
+      sessionStorage.setItem(CANCEL_PENDING_KEY, '1');
+      startOAuth();
+    },
+    onDismiss: () => {
+      dismiss?.();
+      dismiss = null;
+    },
+  });
+}
+
 // --- Init ---
 
 async function init(): Promise<void> {
@@ -248,6 +270,21 @@ async function init(): Promise<void> {
   try {
     const session = await checkSession();
     if (session.linked) {
+      // Check for pending cancel after OAuth redirect
+      const cancelPending = sessionStorage.getItem(CANCEL_PENDING_KEY);
+      if (cancelPending) {
+        sessionStorage.removeItem(CANCEL_PENDING_KEY);
+        renderState(app, 'loading', startOAuth);
+        try {
+          const result = await cancelSubscription();
+          renderState(app, 'cancel_complete', startOAuth, { cancelComplete: { result } });
+        } catch (err) {
+          console.error('[cancel] cancelSubscription failed:', err);
+          renderState(app, 'cancel_error', startOAuth, { cancelError: mapCancelError(err) });
+        }
+        return;
+      }
+
       let subscription: Awaited<ReturnType<typeof fetchSubscriptionStatus>>;
       try {
         subscription = await fetchSubscriptionStatus();
@@ -264,7 +301,11 @@ async function init(): Promise<void> {
 
       if (subscription) {
         renderState(app, 'linked', startOAuth, {
-          subscribed: { subscription, plans: PLANS },
+          subscribed: {
+            subscription,
+            plans: PLANS,
+            onStartCancel: () => startCancelFlow(app),
+          },
         });
         return;
       }

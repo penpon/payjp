@@ -1,6 +1,6 @@
 // --- App state machine ---
 
-export type AppState = 'loading' | 'not_linked' | 'linked' | 'error' | 'billing';
+export type AppState = 'loading' | 'not_linked' | 'linked' | 'error' | 'billing' | 'cancel_complete' | 'cancel_error';
 
 export interface SessionResponse {
   linked: boolean;
@@ -58,6 +58,23 @@ export interface SubscriptionInfo {
   status: string;
   planId: string | null;
   accessEndAt: string | null;
+}
+
+// --- Cancel types ---
+
+export interface CancelResponse {
+  ok: true;
+  memberId: string;
+  cancelEffectiveAt: string;
+  roleRemovalAt: string;
+}
+
+export type CancelErrorKind = 'not_in_period' | 'no_subscription' | 'session_expired' | 'inflight' | 'server_error';
+
+export interface CancelUIError {
+  kind: CancelErrorKind;
+  message: string;
+  operationId?: string;
 }
 
 // --- PAY.JP.js v2 types ---
