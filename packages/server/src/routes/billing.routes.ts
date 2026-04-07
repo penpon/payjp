@@ -80,58 +80,62 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     },
   );
 
-  app.get('/v1/subscriptions/status', async (request, reply) => {
-    const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
-    if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
-      return sendBillingResponse(reply, {
-        ok: false,
-        statusCode: 403,
-        errorCode: 'FORBIDDEN_ORIGIN',
-        message: 'Origin not allowed',
-      });
-    }
-
-    const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
-    if (!linkSessionToken) {
-      return reply.status(200).send({ subscription: null });
-    }
-
-    try {
-      const now = billingDeps.clock();
-      const tokenHash = linkSessionTokenHash(linkSessionToken);
-      const linkSession = await billingDeps.db.findLinkSession(tokenHash);
-      if (!linkSession) {
-        return reply.status(200).send({ subscription: null });
+  app.get(
+    '/v1/subscriptions/status',
+    { config: { rateLimit: { max: 15, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+      if (!origin || !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Origin not allowed',
+        });
       }
-      if (linkSession.expires_at < now) {
-        return reply.status(200).send({ subscription: null });
-      }
-      if (linkSession.used_at !== null) {
+
+      const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
+      if (!linkSessionToken) {
         return reply.status(200).send({ subscription: null });
       }
 
-      const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
-      if (!member?.subscription_status || member.subscription_status === 'deleted') {
-        return reply.status(200).send({ subscription: null });
-      }
+      try {
+        const now = billingDeps.clock();
+        const tokenHash = linkSessionTokenHash(linkSessionToken);
+        const linkSession = await billingDeps.db.findLinkSession(tokenHash);
+        if (!linkSession) {
+          return reply.status(200).send({ subscription: null });
+        }
+        if (linkSession.expires_at < now) {
+          return reply.status(200).send({ subscription: null });
+        }
+        if (linkSession.used_at !== null) {
+          return reply.status(200).send({ subscription: null });
+        }
 
-      return reply.status(200).send({
-        subscription: {
-          status: member.subscription_status,
-          planId: member.payjp_plan_id,
-          accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
-        },
-      });
-    } catch (err) {
-      request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscription status lookup failed');
-      return sendBillingResponse(reply, {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'STATUS_UNAVAILABLE',
-        message: 'Could not load subscription status',
-      });
-    }
-  });
+        const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
+        if (!member?.subscription_status || member.subscription_status === 'deleted') {
+          return reply.status(200).send({ subscription: null });
+        }
+
+        return reply.status(200).send({
+          subscription: {
+            status: member.subscription_status,
+            planId: member.payjp_plan_id,
+            accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
+          },
+        });
+      } catch (err) {
+        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscription status lookup failed');
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'STATUS_UNAVAILABLE',
+          message: 'Could not load subscription status',
+        });
+      }
+    },
+  );
 
   app.post(
     '/v1/subscriptions/cancel',

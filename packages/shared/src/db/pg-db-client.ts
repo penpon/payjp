@@ -74,11 +74,16 @@ export interface TransactionDbClient {
 
 // --- Row mapping helpers ---
 
+function assertString(v: unknown, field: string): string {
+  if (typeof v !== 'string') throw new Error(`DB field "${field}" expected string, got ${typeof v}`);
+  return v;
+}
+
 function toMember(row: Record<string, unknown>): Member {
   return {
-    id: row.id as string,
-    discord_user_id: row.discord_user_id as string,
-    email: row.email as string,
+    id: assertString(row.id, 'id'),
+    discord_user_id: assertString(row.discord_user_id, 'discord_user_id'),
+    email: assertString(row.email, 'email'),
     payjp_customer_id: (row.payjp_customer_id as string) ?? null,
     payjp_subscription_id: (row.payjp_subscription_id as string) ?? null,
     payjp_initial_charge_id: (row.payjp_initial_charge_id as string) ?? null,
@@ -177,11 +182,11 @@ async function querySetInflightOperation(
          inflight_operation_type = $3,
          inflight_operation_started_at = $4,
          updated_at = now()
-     WHERE id = $1`,
+     WHERE id = $1 AND inflight_operation_id IS NULL`,
     [memberId, operationId, operationType, now],
   );
   if ((result.rowCount ?? 0) === 0) {
-    throw new Error(`Member not found: ${memberId}`);
+    throw new Error(`Member not found or inflight operation already set: ${memberId}`);
   }
 }
 
@@ -385,7 +390,7 @@ export class PgDbClient implements DbClient {
             level: 'error',
             message: 'ROLLBACK failed after transaction error',
             rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
-            originalError: err instanceof Error ? (err as Error).message : String(err),
+            originalError: err instanceof Error ? err.message : String(err),
             lockKey: discordUserId,
           }),
         );

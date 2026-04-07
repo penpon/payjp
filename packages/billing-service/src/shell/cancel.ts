@@ -16,6 +16,10 @@ import {
 import { isUncertainError } from './errors.js';
 import type { BillingDeps, CancelRequest, CancelResult } from './types.js';
 
+function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
+  console[level](JSON.stringify({ level, service: 'billing-cancel', message, ...ctx }));
+}
+
 export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promise<CancelResult> {
   const { db, payjp, config, clock, generateOperationId } = deps;
   const now = clock();
@@ -159,8 +163,9 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         inflight_operation_type: null,
         inflight_operation_started_at: null,
       });
-    } catch {
+    } catch (err) {
       // DB failure after PAY.JP cancel success — retain inflight for CLI reconciliation
+      slog('error', 'DB update failed after PAY.JP cancel', { discordUserId, operationId, error: String(err) });
       return {
         ok: false,
         statusCode: 503,
@@ -174,8 +179,8 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
   } finally {
     try {
       await db.releaseAdvisoryLock(discordUserId);
-    } catch {
-      // Lock release failure must not mask the billing response
+    } catch (err) {
+      slog('error', 'Advisory lock release failed', { discordUserId, error: String(err) });
     }
   }
 }

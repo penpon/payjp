@@ -96,30 +96,36 @@ export function buildSubscriptionMetadata(
 
 // PROP-BILL-010: REQ-BILL-016
 export function buildSubscriptionResponse(member: Member): SubscriptionResponse {
+  if (!member.subscription_status || !member.payjp_plan_id || !member.access_end_at) {
+    throw new Error('buildSubscriptionResponse: required fields are null');
+  }
   return {
     ok: true,
     memberId: member.id,
-    subscriptionStatus: member.subscription_status!,
-    planId: member.payjp_plan_id!,
+    subscriptionStatus: member.subscription_status,
+    planId: member.payjp_plan_id,
     trialApplied: member.first_trial_granted_at !== null && member.subscription_status === 'trial',
-    accessEndAt: formatRfc3339Utc(member.access_end_at!),
+    accessEndAt: formatRfc3339Utc(member.access_end_at),
   };
 }
 
 // PROP-BILL-011: REQ-BILL-025
 export function buildCancelResponse(member: Member): CancelResponse {
+  if (!member.cancel_requested_at || !member.access_end_at) {
+    throw new Error('buildCancelResponse: required fields are null');
+  }
   return {
     ok: true,
     memberId: member.id,
-    cancelEffectiveAt: formatRfc3339Utc(member.cancel_requested_at!),
-    roleRemovalAt: formatRfc3339Utc(member.access_end_at!),
+    cancelEffectiveAt: formatRfc3339Utc(member.cancel_requested_at),
+    roleRemovalAt: formatRfc3339Utc(member.access_end_at),
   };
 }
 
 // PROP-BILL-012: REQ-BILL-016, REQ-BILL-025
 export function formatRfc3339Utc(date: Date): string {
   if (Number.isNaN(date.getTime())) {
-    return 'Invalid DateZ';
+    throw new Error('formatRfc3339Utc: received invalid Date');
   }
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }

@@ -62,7 +62,10 @@ export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null
       return {};
     });
     const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-    throw new SubscriptionStatusError(res.status, (obj.message as string) ?? '購読状況を確認できませんでした。');
+    throw new SubscriptionStatusError(
+      res.status,
+      typeof obj.message === 'string' ? obj.message : '購読状況を確認できませんでした。',
+    );
   }
   if (!res.ok) {
     const body: unknown = await res.json().catch((parseErr) => {
@@ -72,7 +75,7 @@ export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null
     const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
     throw new SubscriptionStatusError(
       res.status,
-      (obj.message as string) ?? `Subscription status check failed: ${res.status}`,
+      typeof obj.message === 'string' ? obj.message : `Subscription status check failed: ${res.status}`,
     );
   }
   const data: unknown = await res.json();
@@ -137,9 +140,9 @@ export async function createSubscription(body: {
     const obj = typeof errorBody === 'object' && errorBody !== null ? (errorBody as Record<string, unknown>) : {};
     throw new SubscribeError(
       res.status,
-      (obj.errorCode as string) ?? 'UNKNOWN',
-      obj.operationId as string | undefined,
-      (obj.message as string) ?? `Subscribe failed: ${res.status}`,
+      typeof obj.errorCode === 'string' ? obj.errorCode : 'UNKNOWN',
+      typeof obj.operationId === 'string' ? obj.operationId : undefined,
+      typeof obj.message === 'string' ? obj.message : `Subscribe failed: ${res.status}`,
     );
   }
 

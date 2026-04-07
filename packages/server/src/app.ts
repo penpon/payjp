@@ -38,6 +38,7 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
     reply.header('X-Frame-Options', 'DENY');
     reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
     reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     done(null, payload);
   });
 
@@ -57,7 +58,9 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
       );
       reply.status(statusCode).send({ error: 'Internal Server Error' });
     } else {
-      reply.status(statusCode).send({ error: safeMessage });
+      const KNOWN_4XX = ['Bad Request', 'Unauthorized', 'Forbidden', 'Not Found', 'Too Many Requests'];
+      const clientMessage = KNOWN_4XX.includes(safeMessage) ? safeMessage : 'Bad Request';
+      reply.status(statusCode).send({ error: clientMessage });
     }
   });
 
