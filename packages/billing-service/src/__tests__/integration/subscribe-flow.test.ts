@@ -44,6 +44,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -124,6 +125,7 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: NOW,
   };
 }
 
@@ -177,14 +179,14 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
   };
 }
 
-function makeSubscribeRequest(overrides: Record<string, string> = {}) {
+function makeSubscribeRequest(overrides: Record<string, unknown> = {}) {
   return {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
-    discordUserId: DISCORD_USER_ID,
     email: EMAIL,
     payjpToken: PAYJP_TOKEN_ID,
     planId: PLAN_ID,
+    privacyConsented: true,
     ...overrides,
   };
 }
@@ -266,13 +268,13 @@ describe('POST /v1/subscriptions — Integration', () => {
       }
     });
 
-    it('rejects with 403 when discordUserId does not match link session (IDOR)', async () => {
+    it('rejects with 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
       const deps = makeSuccessfulDeps();
-      const result = await handleSubscribe(makeSubscribeRequest({ discordUserId: 'wrong-discord-user' }), deps);
+      const result = await handleSubscribe(makeSubscribeRequest({ privacyConsented: false }), deps);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.statusCode).toBe(403);
-        expect(result.errorCode).toBe('DISCORD_USER_ID_MISMATCH');
+        expect(result.statusCode).toBe(422);
+        expect(result.errorCode).toBe('CONSENT_REQUIRED');
       }
       expect(deps.db.acquireAdvisoryLock).not.toHaveBeenCalled();
     });
@@ -710,7 +712,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-040: Role sync final failure
   // -------------------------------------------------------------------------
   describe('PROP-BILL-040: Role sync final failure', () => {
-    it('503 + operationId, inflight_operation_* retained', async () => {
+    it('503 + operationId, inflight re-set after role sync failure (P-09)', async () => {
       vi.useFakeTimers();
       try {
         const deps = makeSuccessfulDeps();
@@ -723,6 +725,10 @@ describe('POST /v1/subscriptions — Integration', () => {
           expect(result.statusCode).toBe(503);
           expect(result.operationId).toBe(OPERATION_ID);
         }
+        // P-09: ロール失敗時はinflightを再セット（updateMemberAfterSubscribeでクリアされた後に再セット）
+        expect(deps.db.setInflightOperation).toHaveBeenCalledTimes(2);
+        // P-09: 成功パスではclearInflightOperationが呼ばれないこと（失敗パスのため）
+        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
@@ -748,6 +754,23 @@ describe('POST /v1/subscriptions — Integration', () => {
           accessEndAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/),
         });
       }
+    });
+
+    it('P-09: clearInflightOperation called after role sync success', async () => {
+      const deps = makeSuccessfulDeps();
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(true);
+      // P-09: ロール同期成功後にinflightをクリアする
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('F-10: privacy_consented_at passed to updateMemberAfterSubscribe', async () => {
+      const deps = makeSuccessfulDeps();
+      await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(deps.db.updateMemberAfterSubscribe).toHaveBeenCalledWith(
+        MEMBER_ID,
+        expect.objectContaining({ privacy_consented_at: NOW }),
+      );
     });
   });
 

@@ -22,6 +22,12 @@ import type { BillingDeps, SubscribeRequest, SubscribeResult } from './types.js'
 
 const ROLE_SYNC_MAX_RETRIES = 3;
 
+function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
+  console[level](JSON.stringify({ level, service: 'billing-subscribe', message, ...ctx }));
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps): Promise<SubscribeResult> {
   const { db, payjp, discord, config, clock, generateOperationId } = deps;
   const now = clock();
@@ -43,19 +49,21 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     return { ok: false, statusCode: 401, errorCode: 'CONSUMED_LINK_SESSION', message: 'Link session already used' };
   }
 
+  // discordUserId はリンクセッションから取得（P-03: ボディからは受け取らない）
   const discordUserId = linkSession.discord_user_id;
-
-  if (linkSession.discord_user_id !== req.discordUserId) {
-    return {
-      ok: false,
-      statusCode: 403,
-      errorCode: 'DISCORD_USER_ID_MISMATCH',
-      message: 'discordUserId does not match link session',
-    };
-  }
 
   if (!validatePlanId(req.planId, config.allowedPlanIds)) {
     return { ok: false, statusCode: 422, errorCode: 'INVALID_PLAN_ID', message: 'planId not in allowlist' };
+  }
+
+  // F-11: サーバーサイドemail形式バリデーション
+  if (!req.email || !EMAIL_RE.test(req.email)) {
+    return { ok: false, statusCode: 422, errorCode: 'INVALID_EMAIL', message: 'Invalid email format' };
+  }
+
+  // F-10: privacyConsented バリデーション
+  if (!req.privacyConsented) {
+    return { ok: false, statusCode: 422, errorCode: 'CONSENT_REQUIRED', message: 'Privacy consent is required' };
   }
 
   // Step 2: Advisory lock (spec §5.1 step 2)
@@ -115,7 +123,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     try {
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
     } catch (err) {
-      console.error('[subscribe] PAY.JP token fetch failed:', err);
+      slog('error', 'PAY.JP token fetch failed', { discordUserId, operationId, error: String(err) });
       return {
         ok: false,
         statusCode: 503,
@@ -164,6 +172,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       } catch (err) {
         if (isUncertainError(err)) {
           // Keep inflight — uncertain failure
+          slog('error', 'PAY.JP createCustomer uncertain failure', { discordUserId, operationId, error: String(err) });
           return {
             ok: false,
             statusCode: 503,
@@ -172,7 +181,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             operationId,
           };
         }
-        // Definite failure with no existing customer — retain inflight for CLI resolution
+        // F-02: 4xx確定失敗 + 既存顧客なし → inflightクリアして503
+        slog('error', 'PAY.JP createCustomer definite failure', { discordUserId, operationId, error: String(err) });
+        await db.clearInflightOperation(member.id);
         return {
           ok: false,
           statusCode: 503,
@@ -202,6 +213,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         });
       } catch (err) {
         if (isUncertainError(err)) {
+          slog('error', 'PAY.JP createCharge uncertain failure', { discordUserId, operationId, error: String(err) });
           return {
             ok: false,
             statusCode: 503,
@@ -216,7 +228,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             const existingCharge = await payjp.fetchCharge(member.payjp_initial_charge_id);
             initialChargeId = existingCharge.id;
           } catch (reconcileErr) {
-            console.error('[subscribe] Charge reconciliation failed:', { originalErr: err, reconcileErr });
+            slog('error', 'Charge reconciliation failed', {
+              discordUserId,
+              operationId,
+              reconcileErr: String(reconcileErr),
+              originalErr: String(err),
+            });
             return {
               ok: false,
               statusCode: 503,
@@ -226,7 +243,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             };
           }
         } else {
-          // No existing charge_id — retain inflight for CLI resolution
+          // F-02: 4xx確定失敗 + 既存charge_idなし → inflightクリアして503
+          slog('error', 'PAY.JP createCharge definite failure', { discordUserId, operationId, error: String(err) });
+          await db.clearInflightOperation(member.id);
           return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Charge failed', operationId };
         }
       }
@@ -251,6 +270,11 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       subscription = await payjp.createSubscription(subscriptionParams);
     } catch (err) {
       if (isUncertainError(err)) {
+        slog('error', 'PAY.JP createSubscription uncertain failure', {
+          discordUserId,
+          operationId,
+          error: String(err),
+        });
         return {
           ok: false,
           statusCode: 503,
@@ -265,7 +289,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
           const existingSub = await payjp.fetchSubscription(member.payjp_subscription_id);
           subscription = existingSub;
         } catch (reconcileErr) {
-          console.error('[subscribe] Subscription reconciliation failed:', { originalErr: err, reconcileErr });
+          slog('error', 'Subscription reconciliation failed', {
+            discordUserId,
+            operationId,
+            reconcileErr: String(reconcileErr),
+            originalErr: String(err),
+          });
           return {
             ok: false,
             statusCode: 503,
@@ -275,7 +304,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
           };
         }
       } else {
-        // No existing subscription_id — retain inflight for CLI resolution
+        // F-02: 4xx確定失敗 + 既存sub_idなし → inflightクリアして503
+        slog('error', 'PAY.JP createSubscription definite failure', { discordUserId, operationId, error: String(err) });
+        await db.clearInflightOperation(member.id);
         return {
           ok: false,
           statusCode: 503,
@@ -304,13 +335,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         next_billing_at: nextBillingAt,
         role_state: 'granted',
         last_synced_at: now,
-        inflight_operation_id: null,
-        inflight_operation_type: null,
-        inflight_operation_started_at: null,
+        privacy_consented_at: now,
       });
     } catch (err) {
       // DB failure after PAY.JP success — retain inflight for CLI reconciliation
-      console.error('[subscribe] DB update failed after PAY.JP subscription creation:', err);
+      slog('error', 'DB update failed after PAY.JP subscription creation', {
+        discordUserId,
+        operationId,
+        error: String(err),
+      });
       return {
         ok: false,
         statusCode: 503,
@@ -336,18 +369,30 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         lastRoleSyncError = err;
         const status = (err as { status?: number }).status;
         if (status !== undefined && status >= 400 && status < 500) {
-          console.error(`[subscribe] Discord role assignment failed with non-retryable status ${status}:`, err);
+          slog('error', `Discord role assignment failed with non-retryable status ${status}`, {
+            discordUserId,
+            operationId,
+            error: String(err),
+          });
           break;
         }
-        console.warn(`[subscribe] Discord role assignment attempt ${attempt + 1} failed, retrying:`, err);
+        slog('warn', `Discord role assignment attempt ${attempt + 1} failed, retrying`, {
+          discordUserId,
+          operationId,
+          error: String(err),
+        });
       }
     }
     if (!roleAssigned && lastRoleSyncError !== undefined) {
-      console.error('[subscribe] Discord role assignment failed after all retries:', lastRoleSyncError);
+      slog('error', 'Discord role assignment failed after all retries', {
+        discordUserId,
+        operationId,
+        error: String(lastRoleSyncError),
+      });
     }
 
     if (!roleAssigned) {
-      // 503 + operationId, inflight retained (re-set since updateMemberAfterSubscribe cleared it)
+      // P-09: inflightはupdateMemberAfterSubscribeで既にクリア済みなので、ロール失敗時は再セット
       await db.setInflightOperation(member.id, operationId, 'subscribe', now);
       return {
         ok: false,
@@ -358,13 +403,22 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
+    // P-09: ロール同期成功後にinflightをクリア
+    await db.clearInflightOperation(updatedMember.id);
+
+    slog('info', 'subscribe completed', {
+      discordUserId,
+      operationId,
+      planId: req.planId,
+      subscriptionId: subscription.id,
+    });
     return { ok: true, data: buildSubscriptionResponse(updatedMember) };
   } finally {
     try {
       await db.releaseAdvisoryLock(discordUserId);
     } catch (err) {
       // Lock release failure must not mask the billing response
-      console.error('[subscribe] Advisory lock release failed:', err);
+      slog('error', 'Advisory lock release failed', { discordUserId, error: String(err) });
     }
   }
 }

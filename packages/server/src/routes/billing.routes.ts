@@ -18,12 +18,12 @@ const CLEAR_LINK_SESSION_COOKIE = {
 };
 
 function extractRequestContext(request: FastifyRequest): {
-  body: Record<string, string> | null;
+  body: Record<string, unknown> | null;
   origin: string;
   linkSessionToken: string;
 } {
   return {
-    body: request.body as Record<string, string> | null,
+    body: request.body as Record<string, unknown> | null,
     origin: typeof request.headers.origin === 'string' ? request.headers.origin : '',
     linkSessionToken: request.cookies['__Host-link_session'] ?? '',
   };
@@ -32,34 +32,52 @@ function extractRequestContext(request: FastifyRequest): {
 export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
   const { billingDeps } = opts;
 
-  app.post('/v1/subscriptions', async (request, reply) => {
-    const { body, origin, linkSessionToken } = extractRequestContext(request);
+  app.post(
+    '/v1/subscriptions',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['planId', 'email', 'payjpToken', 'privacyConsented'],
+          properties: {
+            planId: { type: 'string' },
+            email: { type: 'string' },
+            payjpToken: { type: 'string' },
+            privacyConsented: { type: 'boolean' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { body, origin, linkSessionToken } = extractRequestContext(request);
 
-    const req: SubscribeRequest = {
-      origin,
-      linkSessionToken,
-      discordUserId: body?.discordUserId ?? '',
-      email: body?.email ?? '',
-      payjpToken: body?.payjpToken ?? '',
-      planId: body?.planId ?? '',
-    };
+      const req: SubscribeRequest = {
+        origin,
+        linkSessionToken,
+        email: typeof body?.email === 'string' ? body.email : '',
+        payjpToken: typeof body?.payjpToken === 'string' ? body.payjpToken : '',
+        planId: typeof body?.planId === 'string' ? body.planId : '',
+        privacyConsented: body?.privacyConsented === true,
+      };
 
-    try {
-      const result = await handleSubscribe(req, billingDeps);
-      if (result.ok) {
-        reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+      try {
+        const result = await handleSubscribe(req, billingDeps);
+        if (result.ok) {
+          reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+        }
+        return sendBillingResponse(reply, result);
+      } catch (err) {
+        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscribe handler threw unexpectedly');
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
+        });
       }
-      return sendBillingResponse(reply, result);
-    } catch (err) {
-      request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscribe handler threw unexpectedly');
-      return sendBillingResponse(reply, {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
-      });
-    }
-  });
+    },
+  );
 
   app.get('/v1/subscriptions/status', async (request, reply) => {
     const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
@@ -115,12 +133,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
   });
 
   app.post('/v1/subscriptions/cancel', async (request, reply) => {
-    const { body, origin, linkSessionToken } = extractRequestContext(request);
+    const { origin, linkSessionToken } = extractRequestContext(request);
 
     const req: CancelRequest = {
       origin,
       linkSessionToken,
-      discordUserId: body?.discordUserId ?? '',
     };
 
     try {

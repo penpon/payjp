@@ -39,25 +39,18 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return { ok: false, statusCode: 401, errorCode: 'CONSUMED_LINK_SESSION', message: 'Link session already used' };
   }
 
-  // Step 1c: Verify discordUserId matches link session (IDOR prevention)
-  if (linkSession.discord_user_id !== req.discordUserId) {
-    return {
-      ok: false,
-      statusCode: 403,
-      errorCode: 'DISCORD_USER_ID_MISMATCH',
-      message: 'discordUserId does not match link session',
-    };
-  }
+  // P-03: discordUserIdはリンクセッションから取得（ボディからは受け取らない）
+  const discordUserId = linkSession.discord_user_id;
 
   // Step 2: Advisory lock (spec §5.2 step 2)
-  const lockAcquired = await db.acquireAdvisoryLock(req.discordUserId);
+  const lockAcquired = await db.acquireAdvisoryLock(discordUserId);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
 
   try {
     // Step 3: Existing subscription check
-    const member = await db.findMemberByDiscordUserId(req.discordUserId);
+    const member = await db.findMemberByDiscordUserId(discordUserId);
     if (!member || !hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
@@ -180,7 +173,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return { ok: true, data: buildCancelResponse(updatedMember) };
   } finally {
     try {
-      await db.releaseAdvisoryLock(req.discordUserId);
+      await db.releaseAdvisoryLock(discordUserId);
     } catch {
       // Lock release failure must not mask the billing response
     }

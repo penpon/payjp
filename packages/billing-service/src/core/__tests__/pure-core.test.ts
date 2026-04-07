@@ -50,6 +50,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: new Date('2026-05-01T00:00:00Z'),
     next_billing_at: new Date('2026-05-01T00:00:00Z'),
     role_state: 'granted',

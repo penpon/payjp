@@ -99,6 +99,12 @@ function createPayjpAdapter(): PayjpAdapter | null {
 // --- Error mapping ---
 
 function mapSubscribeError(err: unknown): BillingError {
+  if (err instanceof DOMException && err.name === 'TimeoutError') {
+    return {
+      kind: 'server_error',
+      message: 'リクエストがタイムアウトしました。処理が完了している可能性があります。サポートにお問い合わせください。',
+    };
+  }
   if (!(err instanceof SubscribeError)) {
     return { kind: 'server_error', message: '予期しないエラーが発生しました。' };
   }
@@ -253,7 +259,7 @@ function startBillingFlow(app: HTMLElement, discordUserId: string): void {
           planId: data.planId,
           email: data.email,
           payjpToken: tokenResult.tokenId,
-          discordUserId,
+          privacyConsented: data.privacyConsented,
         });
 
         update({ step: 'success', result });

@@ -155,9 +155,7 @@ describe('PgDbClient - updateMemberAfterSubscribe', () => {
       next_billing_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       role_state: 'granted',
       last_synced_at: now,
-      inflight_operation_id: null,
-      inflight_operation_type: null,
-      inflight_operation_started_at: null,
+      privacy_consented_at: now,
     });
 
     expect(updated.subscription_status).toBe('active');

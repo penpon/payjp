@@ -100,16 +100,15 @@ export interface BillingDeps {
 export interface SubscribeRequest {
   origin: string;
   linkSessionToken: string;
-  discordUserId: string;
   email: string;
   payjpToken: string;
   planId: string;
+  privacyConsented: boolean;
 }
 
 export interface CancelRequest {
   origin: string;
   linkSessionToken: string;
-  discordUserId: string;
 }
 
 // レスポンス型

@@ -122,13 +122,14 @@ export async function createSubscription(body: {
   planId: string;
   email: string;
   payjpToken: string;
-  discordUserId: string;
+  privacyConsented: boolean;
 }): Promise<SubscribeResponse> {
   const res = await fetch('/v1/subscriptions', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!res.ok) {

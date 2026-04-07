@@ -47,6 +47,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -110,6 +111,7 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: NOW,
   };
 }
 
@@ -174,23 +176,21 @@ function createApp(deps?: BillingDeps) {
 
 function subscribePayload() {
   return {
-    discordUserId: DISCORD_USER_ID,
     email: EMAIL,
     payjpToken: PAYJP_TOKEN_ID,
     planId: PLAN_ID,
+    privacyConsented: true,
   };
 }
 
 function cancelPayload() {
-  return {
-    discordUserId: DISCORD_USER_ID,
-  };
+  return {};
 }
 
 /** Common inject options for billing endpoints */
 function injectOpts(
   url: string,
-  payload: Record<string, string>,
+  payload: Record<string, unknown>,
   overrides: { origin?: string; withCookie?: boolean } = {},
 ) {
   const { origin = FRONTEND_BASE_URL, withCookie = true } = overrides;
@@ -249,14 +249,12 @@ describe('POST /v1/subscriptions', () => {
     expect(res.json().errorCode).toBe('INVALID_PLAN_ID');
   });
 
-  it('returns 403 when discordUserId does not match link session', async () => {
+  it('returns 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
     const app = createApp();
-    const res = await app.inject(
-      injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), discordUserId: 'wrong-discord-user' }),
-    );
+    const res = await app.inject(injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), privacyConsented: false }));
 
-    expect(res.statusCode).toBe(403);
-    expect(res.json().errorCode).toBe('DISCORD_USER_ID_MISMATCH');
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errorCode).toBe('CONSENT_REQUIRED');
   });
 
   it('returns 422 for non-verified 3DS token', async () => {
@@ -612,14 +610,6 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(503);
     expect(res.json().operationId).toBe(OPERATION_ID);
-  });
-
-  it('returns 403 when discordUserId does not match link session (IDOR)', async () => {
-    const app = createApp(makeCancelDeps());
-    const res = await app.inject(injectOpts(CANCEL_URL, { discordUserId: 'different-user-id' }));
-
-    expect(res.statusCode).toBe(403);
-    expect(res.json().errorCode).toBe('DISCORD_USER_ID_MISMATCH');
   });
 
   it('returns 401 when link session is expired', async () => {

@@ -28,9 +28,7 @@ export interface DbClient {
       next_billing_at: Date;
       role_state: 'granted';
       last_synced_at: Date;
-      inflight_operation_id: null;
-      inflight_operation_type: null;
-      inflight_operation_started_at: null;
+      privacy_consented_at: Date;
     },
   ): Promise<Member>;
   updateMemberAfterCancel(
@@ -92,6 +90,7 @@ function toMember(row: Record<string, unknown>): Member {
     inflight_operation_id: (row.inflight_operation_id as string) ?? null,
     inflight_operation_type: (row.inflight_operation_type as Member['inflight_operation_type']) ?? null,
     inflight_operation_started_at: (row.inflight_operation_started_at as Date) ?? null,
+    privacy_consented_at: (row.privacy_consented_at as Date) ?? null,
     access_end_at: (row.access_end_at as Date) ?? null,
     next_billing_at: (row.next_billing_at as Date) ?? null,
     role_state: row.role_state as Member['role_state'],
@@ -243,9 +242,7 @@ async function queryUpdateMemberAfterSubscribe(
        next_billing_at = $9,
        role_state = $10,
        last_synced_at = $11,
-       inflight_operation_id = NULL,
-       inflight_operation_type = NULL,
-       inflight_operation_started_at = NULL,
+       privacy_consented_at = $12,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,
@@ -261,6 +258,7 @@ async function queryUpdateMemberAfterSubscribe(
       params.next_billing_at,
       params.role_state,
       params.last_synced_at,
+      params.privacy_consented_at,
     ],
   );
   if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);

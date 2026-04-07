@@ -32,20 +32,23 @@ describe('billing api', () => {
         planId: 'plan_starter',
         email: 'test@example.com',
         payjpToken: 'tok_test',
-        discordUserId: 'discord-123',
+        privacyConsented: true,
       });
 
-      expect(globalThis.fetch).toHaveBeenCalledWith('/v1/subscriptions', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId: 'plan_starter',
-          email: 'test@example.com',
-          payjpToken: 'tok_test',
-          discordUserId: 'discord-123',
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/v1/subscriptions',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planId: 'plan_starter',
+            email: 'test@example.com',
+            payjpToken: 'tok_test',
+            privacyConsented: true,
+          }),
         }),
-      });
+      );
       expect(result.ok).toBe(true);
       expect(result.planId).toBe('plan_starter');
     });
@@ -61,7 +64,7 @@ describe('billing api', () => {
         planId: 'p',
         email: 'e',
         payjpToken: 't',
-        discordUserId: 'd',
+        privacyConsented: true,
       }).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(SubscribeError);
       expect((err as SubscribeError).status).toBe(401);
@@ -85,7 +88,7 @@ describe('billing api', () => {
         planId: 'p',
         email: 'e',
         payjpToken: 't',
-        discordUserId: 'd',
+        privacyConsented: true,
       }).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(SubscribeError);
       expect((err as SubscribeError).operationId).toBe('op-123');
@@ -108,7 +111,7 @@ describe('billing api', () => {
         planId: 'p',
         email: 'e',
         payjpToken: 't',
-        discordUserId: 'd',
+        privacyConsented: true,
       }).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(SubscribeError);
       expect((err as SubscribeError).errorCode).toBe('THREE_D_SECURE_REQUIRED');
@@ -120,7 +123,7 @@ describe('billing api', () => {
       );
 
       await expect(
-        createSubscription({ planId: 'p', email: 'e', payjpToken: 't', discordUserId: 'd' }),
+        createSubscription({ planId: 'p', email: 'e', payjpToken: 't', privacyConsented: true }),
       ).rejects.toThrow('Invalid subscribe response');
     });
   });
