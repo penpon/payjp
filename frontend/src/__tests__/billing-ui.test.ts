@@ -220,6 +220,26 @@ describe('billing-ui', () => {
 
       expect(container.textContent).toContain('自動再試行は行われません');
     });
+
+    it('should not show retry when inflight without operationId', () => {
+      const callbacks = createMockCallbacks();
+      renderBilling(
+        container,
+        defaultFormState({
+          step: 'error',
+          error: { kind: 'inflight', message: '処理中の操作があります。' },
+        }),
+        callbacks,
+        null,
+        PLANS,
+      );
+
+      expect(container.querySelector('.submit-button')).toBeNull();
+      expect(container.textContent).toContain('自動再試行は行われません');
+      expect(container.textContent).toContain('サポートまでお問い合わせください');
+      expect(container.querySelector('.operation-id-box')).toBeNull();
+      expect(container.querySelector('.copy-button')).toBeNull();
+    });
   });
 
   describe('error step - session_expired', () => {

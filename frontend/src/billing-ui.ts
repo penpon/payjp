@@ -328,17 +328,20 @@ function renderSuccess(result: SubscribeResponse, plans: PlanDef[], callbacks: B
 function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivElement {
   const children: (Node | string)[] = [el('h1', { class: 'heading' }, ['エラーが発生しました'])];
 
-  if (error.kind === 'inflight' && error.operationId) {
-    children.push(
-      el('div', { class: 'error-banner', role: 'alert' }, [
-        '処理中の操作があります。以下のIDをサポートにお知らせください。',
-      ]),
-      el('div', { class: 'operation-id-box' }, [
-        el('code', { class: 'operation-id-value' }, [error.operationId]),
-        createCopyButton(error.operationId),
-      ]),
-      el('p', { class: 'body-text' }, ['自動再試行は行われません。サポートにて状況を確認いたします。']),
-    );
+  if (error.kind === 'inflight') {
+    const bannerText = error.operationId
+      ? '処理中の操作があります。以下のIDをサポートにお知らせください。'
+      : '処理中の操作があります。サポートまでお問い合わせください。';
+    children.push(el('div', { class: 'error-banner', role: 'alert' }, [bannerText]));
+    if (error.operationId) {
+      children.push(
+        el('div', { class: 'operation-id-box' }, [
+          el('code', { class: 'operation-id-value' }, [error.operationId]),
+          createCopyButton(error.operationId),
+        ]),
+      );
+    }
+    children.push(el('p', { class: 'body-text' }, ['自動再試行は行われません。サポートにて状況を確認いたします。']));
   } else if (error.kind === 'session_expired') {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
     const reAuthBtn = el('button', { type: 'button', class: 'discord-button' }, ['再度Discordで連携する']);
