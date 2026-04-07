@@ -222,6 +222,10 @@ function startBillingFlow(app: HTMLElement): void {
     },
 
     onBackToTop: () => {
+      void init();
+    },
+
+    onReAuth: () => {
       startOAuth();
     },
   };

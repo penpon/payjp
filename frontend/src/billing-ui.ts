@@ -19,7 +19,10 @@ export interface BillingCallbacks {
     privacyConsented: boolean;
   }) => void | Promise<void>;
   onRetry: () => void;
+  /** Return to app home (re-run session / subscription checks). Not for OAuth. */
   onBackToTop: () => void;
+  /** Start Discord OAuth (e.g. session expired). */
+  onReAuth: () => void;
   onCardElementReady?: (element: PayjpCardElement) => void;
 }
 
@@ -393,7 +396,7 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
   } else if (error.kind === 'session_expired') {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
     const reAuthBtn = el('button', { type: 'button', class: 'discord-button' }, ['再度Discordで連携する']);
-    reAuthBtn.addEventListener('click', callbacks.onBackToTop);
+    reAuthBtn.addEventListener('click', callbacks.onReAuth);
     children.push(reAuthBtn);
   } else if (error.kind === 'forbidden_origin') {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));

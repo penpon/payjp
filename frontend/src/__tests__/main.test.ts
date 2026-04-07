@@ -84,7 +84,7 @@ describe('main init()', () => {
   });
 
   it('should show subscribed state when user has active subscription', async () => {
-    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(fetchSubscriptionStatus).mockResolvedValue({
       status: 'active',
       planId: 'plan_business',
@@ -98,7 +98,7 @@ describe('main init()', () => {
   });
 
   it('should show error when subscription status endpoint is unavailable', async () => {
-    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(fetchSubscriptionStatus).mockRejectedValue(new SubscriptionStatusError(503, 'down'));
 
     await runInit();

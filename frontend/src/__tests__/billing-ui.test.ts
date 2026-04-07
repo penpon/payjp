@@ -14,6 +14,7 @@ function createMockCallbacks(): BillingCallbacks {
     onSubmit: vi.fn(),
     onRetry: vi.fn(),
     onBackToTop: vi.fn(),
+    onReAuth: vi.fn(),
   };
 }
 
@@ -400,7 +401,7 @@ describe('billing-ui', () => {
       const btn = container.querySelector('.discord-button') as HTMLButtonElement;
       expect(btn).not.toBeNull();
       btn.click();
-      expect(callbacks.onBackToTop).toHaveBeenCalledOnce();
+      expect(callbacks.onReAuth).toHaveBeenCalledOnce();
     });
   });
 
