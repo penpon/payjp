@@ -158,7 +158,7 @@ function mapSubscribeError(err: unknown): BillingError {
 
 // --- Billing flow ---
 
-function startBillingFlow(app: HTMLElement, discordUserId: string): void {
+function startBillingFlow(app: HTMLElement): void {
   const payjpAdapter = createPayjpAdapter();
   if (!payjpAdapter) {
     renderState(app, 'error', startOAuth, {
@@ -329,7 +329,7 @@ async function init(): Promise<void> {
 
       const discordUserId = session.discordUserId!; // Narrowed by guard above
       renderState(app, 'linked', startOAuth, {
-        onStartBilling: () => startBillingFlow(app, discordUserId),
+        onStartBilling: () => startBillingFlow(app),
       });
     } else {
       renderState(app, 'not_linked', startOAuth);
