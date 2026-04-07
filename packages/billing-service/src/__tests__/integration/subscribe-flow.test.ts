@@ -768,6 +768,20 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.errorCode).toBe('DISCORD_ROLE_SYNC_FAILED');
+        expect(result.message).toBe('Discord role assignment failed with a non-retryable error');
+      }
+    });
+
+    it('does not retry when assignRole rejects with 4xx on statusCode (no top-level status)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        throw Object.assign(new Error('Missing Access'), { statusCode: 403 });
+      });
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(deps.discord.assignRole).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.message).toBe('Discord role assignment failed with a non-retryable error');
       }
     });
   });
@@ -788,6 +802,7 @@ describe('POST /v1/subscriptions — Integration', () => {
         if (!result.ok) {
           expect(result.statusCode).toBe(503);
           expect(result.operationId).toBe(OPERATION_ID);
+          expect(result.message).toBe('Failed to assign Discord role after 3 failed attempts');
         }
         // step 7 のみ（updateMemberAfterSubscribe は inflight をクリアしない）
         expect(deps.db.setInflightOperation).toHaveBeenCalledTimes(1);

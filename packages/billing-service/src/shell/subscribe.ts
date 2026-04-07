@@ -22,6 +22,24 @@ import type { BillingDeps, SubscribeRequest, SubscribeResult } from './types.js'
 
 const ROLE_SYNC_MAX_RETRIES = 3;
 
+/** HTTP ステータスを Discord / fetch / ラッパー由来のエラーから抽出する */
+function extractHttpStatus(err: unknown): number | undefined {
+  if (err === null || err === undefined || typeof err !== 'object') return undefined;
+  const e = err as Record<string, unknown>;
+  const raw = e.status ?? e.statusCode;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string' && /^\d{3}$/.test(raw)) return Number.parseInt(raw, 10);
+  const response = e.response;
+  if (response !== null && response !== undefined && typeof response === 'object') {
+    const r = response as Record<string, unknown>;
+    const rs = r.status;
+    if (typeof rs === 'number' && Number.isFinite(rs)) return rs;
+  }
+  const cause = e.cause;
+  if (cause !== undefined) return extractHttpStatus(cause);
+  return undefined;
+}
+
 function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
   console[level](JSON.stringify({ level, service: 'billing-subscribe', message, ...ctx }));
 }
@@ -446,6 +464,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     const ROLE_SYNC_DELAYS_MS = [0, 1000, 2000];
     let roleAssigned = false;
     let lastRoleSyncError: unknown;
+    let roleSyncAttempts = 0;
+    /** True when we stopped after a 4xx other than 429 (no point retrying). */
+    let roleSyncStoppedNonRetryable4xx = false;
     for (let attempt = 0; attempt < ROLE_SYNC_MAX_RETRIES; attempt++) {
       if (ROLE_SYNC_DELAYS_MS[attempt] > 0) {
         await new Promise((r) => setTimeout(r, ROLE_SYNC_DELAYS_MS[attempt]));
@@ -456,10 +477,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         break;
       } catch (err) {
         lastRoleSyncError = err;
-        const status = (err as { status?: number }).status;
+        roleSyncAttempts = attempt + 1;
+        const status = extractHttpStatus(err);
         // 429 はレート制限 — バックオフ付きリトライの対象。それ以外の 4xx は再試行しない。
         const isNonRetryable4xx = status !== undefined && status >= 400 && status < 500 && status !== 429;
         if (isNonRetryable4xx) {
+          roleSyncStoppedNonRetryable4xx = true;
           slog('error', `Discord role assignment failed with non-retryable status ${status}`, {
             discordUserId,
             operationId,
@@ -475,21 +498,30 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
     if (!roleAssigned && lastRoleSyncError !== undefined) {
-      slog('error', 'Discord role assignment failed after all retries', {
-        discordUserId,
-        operationId,
-        error: String(lastRoleSyncError),
-      });
+      slog(
+        'error',
+        roleSyncStoppedNonRetryable4xx
+          ? 'Discord role assignment failed with non-retryable status (not retried)'
+          : 'Discord role assignment failed after all retries',
+        {
+          discordUserId,
+          operationId,
+          error: String(lastRoleSyncError),
+        },
+      );
     }
 
     if (!roleAssigned) {
       // Step 7 で設定した inflight は維持される（updateMemberAfterSubscribe は inflight 列を更新しない）。
       // 運用は operationId と CLI で対応する。
+      const message = roleSyncStoppedNonRetryable4xx
+        ? 'Discord role assignment failed with a non-retryable error'
+        : `Failed to assign Discord role after ${roleSyncAttempts} failed ${roleSyncAttempts === 1 ? 'attempt' : 'attempts'}`;
       return {
         ok: false,
         statusCode: 503,
         errorCode: 'DISCORD_ROLE_SYNC_FAILED',
-        message: 'Failed to assign Discord role after 3 retries',
+        message,
         operationId,
       };
     }
