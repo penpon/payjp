@@ -165,12 +165,16 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
   // Uses withTransaction to guarantee all queries run on the same connection (BEGIN/COMMIT/ROLLBACK)
   const lockKey = member.discord_user_id as string;
 
-  interface TxResult {
-    type: 'stale' | 'unknown_status' | 'processed';
-    lockedMember: Record<string, unknown>;
-    statusChanged?: boolean;
-    action?: 'grant' | 'revoke';
-  }
+  type TxResult =
+    | { type: 'member_not_found' }
+    | { type: 'stale'; lockedMember: Record<string, unknown> }
+    | { type: 'unknown_status'; lockedMember: Record<string, unknown> }
+    | {
+        type: 'processed';
+        lockedMember: Record<string, unknown>;
+        statusChanged: boolean;
+        action?: 'grant' | 'revoke';
+      };
 
   let txResult: TxResult;
   try {
@@ -187,7 +191,20 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
       // Re-fetch member inside transaction to get consistent state under lock
       const memberRes = await query('SELECT * FROM members WHERE id = $1', [member.id]);
-      const lockedMember = (memberRes.rows[0] as Record<string, unknown>) ?? member;
+      const lockedRow = memberRes.rows[0] as Record<string, unknown> | undefined;
+      if (!lockedRow) {
+        // Member removed after pre-transaction resolution (e.g. deleted) — do not use stale `member`
+        await insertPayjpEvent(txDb, {
+          id: event.id!,
+          event_type: event.type!,
+          payload: event,
+          processing_result: 'failed',
+          fail_reason: 'member_not_found',
+          data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
+        });
+        return { type: 'member_not_found' as const };
+      }
+      const lockedMember = lockedRow;
 
       // REQ-SYNC-007: Stale event check
       const lastEventCreated = lockedMember.last_payjp_event_created_at as number | null;

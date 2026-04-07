@@ -8,6 +8,8 @@ function createMockDb(
     existingEvent?: Record<string, unknown> | null;
     member?: Record<string, unknown> | null;
     memberBySub?: Record<string, unknown> | null;
+    /** Row returned by `SELECT * FROM members WHERE id = $1` inside the transaction (omit to mirror `member`) */
+    memberRefetchInTx?: Record<string, unknown> | null;
     throwOnQuery?: boolean;
   } = {},
 ): DbPool {
@@ -28,7 +30,8 @@ function createMockDb(
       return { rows: [], rowCount: 1 };
     }
     if (text.includes('FROM members WHERE id')) {
-      return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
+      const row = options.memberRefetchInTx !== undefined ? options.memberRefetchInTx : options.member;
+      return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
     }
     if (text.includes('FROM members WHERE discord_user_id')) {
       return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
@@ -106,6 +109,26 @@ describe('INT-SYNC-001: Webhook happy path', () => {
     expect(res.status).toBe(200);
     expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant');
+  });
+});
+
+// Member deleted between resolution and transactional re-fetch (TOCTOU)
+describe('INT-SYNC-037: Member missing on re-fetch inside transaction', () => {
+  it('0 rows from SELECT WHERE id under lock → failed member_not_found, no role sync', async () => {
+    const db = createMockDb({ member: MEMBER, memberRefetchInTx: null });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent(),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    expect(deps.syncRole).not.toHaveBeenCalled();
+    const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
+    expect(inserted.some((e) => e.processing_result === 'failed')).toBe(true);
   });
 });
 
