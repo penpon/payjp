@@ -151,12 +151,12 @@ export async function createSubscription(body: {
   });
 
   if (!res.ok) {
-    const body = await parseErrorBody(res);
+    const parsedError = await parseErrorBody(res);
     throw new SubscribeError(
       res.status,
-      body.errorCode,
-      body.operationId,
-      body.message ?? `Subscribe failed: ${res.status}`,
+      parsedError.errorCode,
+      parsedError.operationId,
+      parsedError.message ?? `Subscribe failed: ${res.status}`,
     );
   }
 
@@ -202,8 +202,13 @@ export async function cancelSubscription(): Promise<CancelResponse> {
   });
 
   if (!res.ok) {
-    const body = await parseErrorBody(res);
-    throw new CancelError(res.status, body.errorCode, body.operationId, body.message ?? `Cancel failed: ${res.status}`);
+    const parsedError = await parseErrorBody(res);
+    throw new CancelError(
+      res.status,
+      parsedError.errorCode,
+      parsedError.operationId,
+      parsedError.message ?? `Cancel failed: ${res.status}`,
+    );
   }
 
   const data: unknown = await res.json();
