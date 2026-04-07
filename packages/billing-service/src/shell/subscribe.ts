@@ -394,8 +394,8 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     }
 
     if (!roleAssigned) {
-      // P-09: inflightはupdateMemberAfterSubscribeで既にクリア済みなので、ロール失敗時は再セット
-      await db.setInflightOperation(member.id, operationId, 'subscribe', now);
+      // Step 7 で設定した inflight は維持される（updateMemberAfterSubscribe は inflight 列を更新しない）。
+      // 運用は operationId と CLI で対応する。
       return {
         ok: false,
         statusCode: 503,
@@ -405,8 +405,18 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // P-09: ロール同期成功後にinflightをクリア
-    await db.clearInflightOperation(updatedMember.id);
+    // P-09: ロール同期成功後に inflight をクリア。決済・Discord は完了済みのため、
+    // ここでの DB 失敗はユーザーに 503 を返さずログのみ（従来は UPDATE 内で原子的にクリアしていた）。
+    try {
+      await db.clearInflightOperation(updatedMember.id);
+    } catch (err) {
+      slog('error', 'clearInflightOperation failed after successful subscribe and role sync', {
+        discordUserId,
+        operationId,
+        memberId: updatedMember.id,
+        error: String(err),
+      });
+    }
 
     slog('info', 'subscribe completed', {
       discordUserId,

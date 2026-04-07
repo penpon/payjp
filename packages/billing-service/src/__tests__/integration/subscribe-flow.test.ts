@@ -122,9 +122,10 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     access_end_at: new Date(makePayjpSubscription().current_period_end * 1000),
     next_billing_at: new Date(makePayjpSubscription().current_period_end * 1000),
     role_state: 'granted',
-    inflight_operation_id: null,
-    inflight_operation_type: null,
-    inflight_operation_started_at: null,
+    // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、step 7 の値がそのまま残る
+    inflight_operation_id: OPERATION_ID,
+    inflight_operation_type: 'subscribe',
+    inflight_operation_started_at: NOW,
     privacy_consented_at: NOW,
   };
 }
@@ -747,7 +748,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-040: Role sync final failure
   // -------------------------------------------------------------------------
   describe('PROP-BILL-040: Role sync final failure', () => {
-    it('503 + operationId, inflight re-set after role sync failure (P-09)', async () => {
+    it('503 + operationId, inflight retained from step 7 on role sync failure (P-09)', async () => {
       vi.useFakeTimers();
       try {
         const deps = makeSuccessfulDeps();
@@ -760,9 +761,8 @@ describe('POST /v1/subscriptions — Integration', () => {
           expect(result.statusCode).toBe(503);
           expect(result.operationId).toBe(OPERATION_ID);
         }
-        // P-09: ロール失敗時はinflightを再セット（updateMemberAfterSubscribeでクリアされた後に再セット）
-        expect(deps.db.setInflightOperation).toHaveBeenCalledTimes(2);
-        // P-09: 成功パスではclearInflightOperationが呼ばれないこと（失敗パスのため）
+        // step 7 のみ（updateMemberAfterSubscribe は inflight をクリアしない）
+        expect(deps.db.setInflightOperation).toHaveBeenCalledTimes(1);
         expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
@@ -795,7 +795,14 @@ describe('POST /v1/subscriptions — Integration', () => {
       const deps = makeSuccessfulDeps();
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
-      // P-09: ロール同期成功後にinflightをクリアする
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('P-09: returns success when clearInflightOperation fails after subscribe and role sync', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(true);
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
 
