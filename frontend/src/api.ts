@@ -13,7 +13,13 @@ export class SessionCheckError extends Error {
 }
 
 function isSessionResponse(data: unknown): data is SessionResponse {
-  return typeof data === 'object' && data !== null && typeof (data as Record<string, unknown>).linked === 'boolean';
+  if (typeof data !== 'object' || data === null) return false;
+  const o = data as Record<string, unknown>;
+  if (typeof o.linked !== 'boolean') return false;
+  if (o.linked === true) {
+    return typeof o.discordUserId === 'string' && o.discordUserId.length > 0;
+  }
+  return true;
 }
 
 export async function checkSession(): Promise<SessionResponse> {
@@ -98,6 +104,7 @@ export async function createSubscription(body: {
   planId: string;
   email: string;
   payjpToken: string;
+  discordUserId: string;
 }): Promise<SubscribeResponse> {
   const res = await fetch('/v1/subscriptions', {
     method: 'POST',

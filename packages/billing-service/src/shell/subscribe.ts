@@ -45,6 +45,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
   const discordUserId = linkSession.discord_user_id;
 
+  if (linkSession.discord_user_id !== req.discordUserId) {
+    return {
+      ok: false,
+      statusCode: 403,
+      errorCode: 'DISCORD_USER_ID_MISMATCH',
+      message: 'discordUserId does not match link session',
+    };
+  }
+
   if (!validatePlanId(req.planId, config.allowedPlanIds)) {
     return { ok: false, statusCode: 422, errorCode: 'INVALID_PLAN_ID', message: 'planId not in allowlist' };
   }

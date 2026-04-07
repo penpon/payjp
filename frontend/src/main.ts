@@ -114,8 +114,20 @@ function mapSubscribeError(err: unknown): BillingError {
       };
     case 'DISCORD_NOT_MEMBER':
       return { kind: 'discord_not_member', message: 'Discordサーバーに参加してからお試しください。' };
+    case 'DISCORD_USER_ID_MISMATCH':
+      return {
+        kind: 'server_error',
+        message: 'セッションと一致しません。ページを再読み込みしてから再度お試しください。',
+      };
     case 'TOKEN_ALREADY_USED':
     case 'THREE_D_SECURE_REQUIRED':
+      if (err.operationId) {
+        return {
+          kind: 'three_ds_failed',
+          message: '3Dセキュア認証または決済トークンの検証に失敗しました。',
+          operationId: err.operationId,
+        };
+      }
       return { kind: 'three_ds_failed', message: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
     case 'INFLIGHT_OPERATION':
       return { kind: 'inflight', message: '処理中の操作があります。', operationId: err.operationId };
@@ -132,7 +144,7 @@ function mapSubscribeError(err: unknown): BillingError {
 
 // --- Billing flow ---
 
-function startBillingFlow(app: HTMLElement): void {
+function startBillingFlow(app: HTMLElement, discordUserId: string): void {
   const payjpAdapter = createPayjpAdapter();
   if (!payjpAdapter) {
     renderState(app, 'error', startOAuth, {
@@ -232,6 +244,7 @@ function startBillingFlow(app: HTMLElement): void {
           planId: data.planId,
           email: data.email,
           payjpToken: tokenResult.tokenId,
+          discordUserId,
         });
 
         update({ step: 'success', result });
@@ -287,8 +300,15 @@ async function init(): Promise<void> {
         return;
       }
 
+      if (!session.discordUserId) {
+        renderState(app, 'error', startOAuth, {
+          errorMessage: 'セッション情報が不完全です。再度Discordで連携してください。',
+        });
+        return;
+      }
+
       renderState(app, 'linked', startOAuth, {
-        onStartBilling: () => startBillingFlow(app),
+        onStartBilling: () => startBillingFlow(app, session.discordUserId),
       });
     } else {
       renderState(app, 'not_linked', startOAuth);

@@ -343,7 +343,7 @@ async function handleStructuredAuthRequest(
     return {
       statusCode: 200,
       headers: combinedHeaders,
-      body: { linked: true },
+      body: { linked: true, discordUserId: record.discord_user_id },
     };
   }
 

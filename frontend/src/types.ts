@@ -4,6 +4,8 @@ export type AppState = 'loading' | 'not_linked' | 'linked' | 'error' | 'billing'
 
 export interface SessionResponse {
   linked: boolean;
+  /** Present when `linked` is true (Discord user bound to the current link session). */
+  discordUserId?: string;
 }
 
 // --- Billing types ---

@@ -245,6 +245,30 @@ describe('billing-ui', () => {
     });
   });
 
+  describe('error step - three_ds with server operationId', () => {
+    it('should show operation id and no retry when three_ds_failed includes operationId', () => {
+      const callbacks = createMockCallbacks();
+      renderBilling(
+        container,
+        defaultFormState({
+          step: 'error',
+          error: {
+            kind: 'three_ds_failed',
+            message: '3Dセキュア認証または決済トークンの検証に失敗しました。',
+            operationId: 'op-from-server',
+          },
+        }),
+        callbacks,
+        null,
+        PLANS,
+      );
+
+      expect(container.querySelector('.operation-id-value')?.textContent).toBe('op-from-server');
+      expect(container.querySelector('.submit-button')).toBeNull();
+      expect(container.textContent).toContain('自動再試行は行われません');
+    });
+  });
+
   describe('error step - inflight', () => {
     it('should display operationId with copy button', () => {
       renderBilling(

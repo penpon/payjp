@@ -64,7 +64,7 @@ describe('main init()', () => {
   }
 
   it('should show linked state when session returns linked: true and no subscription', async () => {
-    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
 
     await runInit();
@@ -74,7 +74,7 @@ describe('main init()', () => {
   });
 
   it('should show start billing button when linked with no subscription', async () => {
-    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
 
     await runInit();
@@ -165,7 +165,7 @@ describe('main init()', () => {
       }),
     );
 
-    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
 
     await runInit();

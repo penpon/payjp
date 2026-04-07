@@ -149,7 +149,7 @@ describe('GET /v1/auth/discord/callback', () => {
       headers: { origin: 'https://example.com' },
     });
     expect(sessionRes.statusCode).toBe(200);
-    expect(sessionRes.json()).toEqual({ linked: true });
+    expect(sessionRes.json()).toEqual({ linked: true, discordUserId: '123456789012345678' });
   });
 
   it('includes security headers on callback', async () => {

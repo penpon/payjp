@@ -265,6 +265,17 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.errorCode).toBe('CONSUMED_LINK_SESSION');
       }
     });
+
+    it('rejects with 403 when discordUserId does not match link session (IDOR)', async () => {
+      const deps = makeSuccessfulDeps();
+      const result = await handleSubscribe(makeSubscribeRequest({ discordUserId: 'wrong-discord-user' }), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(403);
+        expect(result.errorCode).toBe('DISCORD_USER_ID_MISMATCH');
+      }
+      expect(deps.db.acquireAdvisoryLock).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------

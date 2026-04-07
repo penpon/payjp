@@ -249,6 +249,16 @@ describe('POST /v1/subscriptions', () => {
     expect(res.json().errorCode).toBe('INVALID_PLAN_ID');
   });
 
+  it('returns 403 when discordUserId does not match link session', async () => {
+    const app = createApp();
+    const res = await app.inject(
+      injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), discordUserId: 'wrong-discord-user' }),
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('DISCORD_USER_ID_MISMATCH');
+  });
+
   it('returns 422 for non-verified 3DS token', async () => {
     const deps = makeMockDeps();
     (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({

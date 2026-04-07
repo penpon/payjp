@@ -25,6 +25,7 @@ export interface BillingCallbacks {
 
 // --- Main render function ---
 
+/** Appends billing UI into `container`. Caller should clear the container first (e.g. `replaceChildren()`). */
 export function renderBilling(
   container: HTMLElement,
   state: BillingFormState,
@@ -32,8 +33,6 @@ export function renderBilling(
   payjpAdapter: PayjpAdapter | null,
   plans: PlanDef[],
 ): void {
-  container.replaceChildren();
-
   switch (state.step) {
     case 'form':
       renderBillingForm(container, state, callbacks, payjpAdapter, plans);
@@ -52,8 +51,8 @@ export function renderBilling(
 
 // --- Subscribed state (for returning users) ---
 
+/** Appends subscribed summary into `container`. Caller should clear the container first (e.g. `replaceChildren()`). */
 export function renderSubscribed(container: HTMLElement, subscription: SubscriptionInfo, plans: PlanDef[]): void {
-  container.replaceChildren();
   const plan = plans.find((p) => p.id === subscription.planId);
   const planName = plan?.name ?? subscription.planId ?? '不明';
 
@@ -376,6 +375,19 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
     const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
     topBtn.addEventListener('click', callbacks.onBackToTop);
     children.push(topBtn);
+  } else if (error.kind === 'three_ds_failed' && error.operationId) {
+    children.push(
+      el('div', { class: 'error-banner', role: 'alert' }, [
+        '3Dセキュア認証または決済トークンの検証に失敗しました。すぐに再試行すると別のエラーになる場合があります。以下のIDをサポートにお知らせください。',
+      ]),
+    );
+    children.push(
+      el('div', { class: 'operation-id-box' }, [
+        el('code', { class: 'operation-id-value' }, [error.operationId]),
+        createCopyButton(error.operationId),
+      ]),
+    );
+    children.push(el('p', { class: 'body-text' }, ['自動再試行は行われません。サポートにて状況を確認いたします。']));
   } else {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
     const retryBtn = el('button', { type: 'button', class: 'submit-button' }, ['もう一度試す']);
