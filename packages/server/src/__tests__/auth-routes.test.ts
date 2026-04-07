@@ -264,7 +264,7 @@ describe('Global error handler', () => {
     expect(res.statusCode).toBe(404);
     const body = res.json();
     expect(body.error).not.toContain('550e8400-e29b-41d4-a716-446655440000');
-    expect(body.error).toBe('Bad Request');
+    expect(body.error).toBe('Not Found');
   });
 
   it('returns generic message on 5xx', async () => {

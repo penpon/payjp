@@ -46,8 +46,6 @@ describe('main init()', () => {
     appDiv.id = 'app';
     document.body.appendChild(appDiv);
     vi.resetModules();
-    // Clear sessionStorage to prevent cached state from affecting tests
-    sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -79,6 +77,8 @@ describe('main init()', () => {
 
     await runInit();
 
+    expect(checkSession).toHaveBeenCalled();
+    expect(fetchSubscriptionStatus).toHaveBeenCalled();
     expect(appDiv.querySelector('.start-billing-button')).not.toBeNull();
     expect(appDiv.textContent).toContain('プランを選択して登録する');
   });
@@ -150,30 +150,6 @@ describe('main init()', () => {
     await runInit();
 
     expect(consoleSpy).not.toHaveBeenCalled();
-  });
-
-  it('should ignore sessionStorage subscription cache and use API after OAuth', async () => {
-    sessionStorage.setItem(
-      'hayane_subscription_result',
-      JSON.stringify({
-        ok: true,
-        memberId: 'uuid-other-user',
-        subscriptionStatus: 'trial',
-        planId: 'plan_starter',
-        trialApplied: true,
-        accessEndAt: '2026-07-07T00:00:00Z',
-      }),
-    );
-
-    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
-    vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
-
-    await runInit();
-
-    expect(checkSession).toHaveBeenCalled();
-    expect(fetchSubscriptionStatus).toHaveBeenCalled();
-    expect(appDiv.querySelector('.subscribed-status')).toBeNull();
-    expect(appDiv.querySelector('.start-billing-button')).not.toBeNull();
   });
 
   it('shows error state when PAY.JP SDK initialization throws', async () => {

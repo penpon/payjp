@@ -152,6 +152,28 @@ describe('billing api', () => {
       expect(result).toBeNull();
     });
 
+    it('should accept subscription with null planId and accessEndAt', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            subscription: { status: 'active', planId: null, accessEndAt: null },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await fetchSubscriptionStatus();
+      expect(result).toEqual({ status: 'active', planId: null, accessEndAt: null });
+    });
+
+    it('should throw on subscription missing planId or accessEndAt', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(JSON.stringify({ subscription: { status: 'active' } }), { status: 200 }),
+      );
+
+      await expect(fetchSubscriptionStatus()).rejects.toThrow('Invalid subscription status response');
+    });
+
     it('should throw SubscriptionStatusError on server error', async () => {
       vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 500 }));
 

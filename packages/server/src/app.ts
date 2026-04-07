@@ -17,6 +17,28 @@ export interface AppConfig {
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
+/** Standard phrases for 4xx when the framework uses a non-standard `error.message` (e.g. Fastify 404). */
+function clientErrorMessageForStatus(statusCode: number): string | undefined {
+  switch (statusCode) {
+    case 400:
+      return 'Bad Request';
+    case 401:
+      return 'Unauthorized';
+    case 403:
+      return 'Forbidden';
+    case 404:
+      return 'Not Found';
+    case 409:
+      return 'Conflict';
+    case 422:
+      return 'Unprocessable Entity';
+    case 429:
+      return 'Too Many Requests';
+    default:
+      return undefined;
+  }
+}
+
 export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?: SyncDeps) {
   const app = Fastify({ logger: false });
 
@@ -58,8 +80,9 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
       );
       reply.status(statusCode).send({ error: 'Internal Server Error' });
     } else {
+      const byStatus = clientErrorMessageForStatus(statusCode);
       const KNOWN_4XX = ['Bad Request', 'Unauthorized', 'Forbidden', 'Not Found', 'Too Many Requests'];
-      const clientMessage = KNOWN_4XX.includes(safeMessage) ? safeMessage : 'Bad Request';
+      const clientMessage = byStatus ?? (KNOWN_4XX.includes(safeMessage) ? safeMessage : 'Bad Request');
       reply.status(statusCode).send({ error: clientMessage });
     }
   });
