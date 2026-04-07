@@ -347,7 +347,8 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.operationId).toBe(OPERATION_ID);
-        // F-02: 4xx確定失敗 + 既存charge_idなし → inflightをクリアして503を返す
+        // F-02: 4xx確定失敗 + 既存charge_idなし → inflightをクリアして422を返す
+        expect(result.statusCode).toBe(422);
         expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
       }
     });
