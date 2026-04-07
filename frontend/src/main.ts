@@ -285,7 +285,18 @@ async function init(): Promise<void> {
           renderState(app, 'cancel_complete', startOAuth, { cancelComplete: { result } });
         } catch (err) {
           console.error('[cancel] cancelSubscription failed:', err);
-          renderState(app, 'cancel_error', startOAuth, { cancelError: mapCancelError(err) });
+          const cancelError = mapCancelError(err);
+          renderState(
+            app,
+            'cancel_error',
+            cancelError.kind === 'session_expired'
+              ? () => {
+                  sessionStorage.setItem(CANCEL_PENDING_KEY, '1');
+                  startOAuth();
+                }
+              : startOAuth,
+            { cancelError },
+          );
         }
         return;
       }
