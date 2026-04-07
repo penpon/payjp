@@ -152,6 +152,13 @@ describe('billing api', () => {
       expect(result).toBeNull();
     });
 
+    it('should return null when subscription key is omitted', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+
+      const result = await fetchSubscriptionStatus();
+      expect(result).toBeNull();
+    });
+
     it('should accept subscription with null planId and accessEndAt', async () => {
       vi.mocked(globalThis.fetch).mockResolvedValue(
         new Response(

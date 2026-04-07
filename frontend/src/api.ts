@@ -85,7 +85,8 @@ function isNullableString(v: unknown): v is string | null {
 function isSubscriptionStatusResponse(data: unknown): data is { subscription: SubscriptionInfo | null } {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
-  if (obj.subscription === null) return true;
+  // Treat omitted key (undefined) like null — same as `data.subscription ?? null` at call site
+  if (obj.subscription === null || obj.subscription === undefined) return true;
   if (typeof obj.subscription !== 'object' || obj.subscription === null) return false;
   const sub = obj.subscription as Record<string, unknown>;
   return typeof sub.status === 'string' && isNullableString(sub.planId) && isNullableString(sub.accessEndAt);

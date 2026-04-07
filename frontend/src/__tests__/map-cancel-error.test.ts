@@ -43,6 +43,19 @@ describe('mapCancelError', () => {
     expect(mapCancelError(err).kind).toBe('no_subscription');
   });
 
+  it('maps PAYJP_CANCEL_FAILED to server_error with definitive message (not transient wait)', () => {
+    const err = new CancelError(
+      422,
+      'PAYJP_CANCEL_FAILED',
+      undefined,
+      'Cancel not applied (confirmed by reconciliation)',
+    );
+    expect(mapCancelError(err)).toEqual({
+      kind: 'server_error',
+      message: '決済サービスで退会を完了できませんでした。サポートまでお問い合わせください。',
+    });
+  });
+
   it('maps unknown 503 with operationId to inflight', () => {
     const err = new CancelError(503, 'PAYJP_UNCERTAIN', 'op-456', 'Uncertain');
     expect(mapCancelError(err)).toEqual({

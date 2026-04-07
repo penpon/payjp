@@ -55,6 +55,12 @@ export function mapCancelError(err: unknown): CancelUIError {
           : '退会処理は完了しましたが、状態の記録に失敗しました。サポートまでお問い合わせください。',
         operationId: err.operationId,
       };
+    case 'PAYJP_CANCEL_FAILED':
+      // Definite PAY.JP rejection + reconcile confirmed cancel not applied (422) — not a transient "retry later" case
+      return {
+        kind: 'server_error',
+        message: '決済サービスで退会を完了できませんでした。サポートまでお問い合わせください。',
+      };
     default:
       if (err.operationId) {
         return { kind: 'inflight', message: 'サーバーエラーが発生しました。', operationId: err.operationId };
