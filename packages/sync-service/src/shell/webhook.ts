@@ -401,13 +401,18 @@ async function attemptRoleSync(
         lockedMember.id,
       ]);
     } catch (dbErr) {
+      // Both role sync AND role_state DB update failed — member is stuck; daily resync cannot recover automatically.
+      // Log as critical_failure so monitoring can alert on this condition.
       deps.log({
         timestamp: formatRfc3339Utc(new Date()),
         service: 'sync-service',
         endpoint: '/v1/payjp/webhook',
-        result: 'error',
-        error: 'role_state_update_failed',
+        result: 'critical_failure',
+        error: 'role_sync_and_role_state_update_both_failed',
         member_id: lockedMember.id as string,
+        discord_user_id: lockedMember.discord_user_id as string,
+        action,
+        roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
         dbError: dbErr instanceof Error ? dbErr.message : String(dbErr),
       } as unknown as LogEntry);
     }

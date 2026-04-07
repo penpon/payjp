@@ -86,10 +86,10 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     }
 
     // Step 7: Acceptance boundary check
+    // calculateCancelAcceptanceStart returns a UTC Date; isCancelAcceptable is a simple >= comparison,
+    // so both sides can stay in UTC without further conversion.
     const acceptanceStart = calculateCancelAcceptanceStart(member.access_end_at, JST_OFFSET_MINUTES);
-    const nowJst = new Date(now.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
-    const acceptanceStartJst = new Date(acceptanceStart.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
-    if (!isCancelAcceptable(nowJst, acceptanceStartJst)) {
+    if (!isCancelAcceptable(now, acceptanceStart)) {
       return { ok: false, statusCode: 409, errorCode: 'BEFORE_ACCEPTANCE_BOUNDARY', message: 'Too early to cancel' };
     }
 

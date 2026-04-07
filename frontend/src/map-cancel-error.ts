@@ -46,6 +46,15 @@ export function mapCancelError(err: unknown): CancelUIError {
         kind: 'server_error',
         message: 'サーバーが一時的に処理できません。しばらく経ってから再度お試しください。',
       };
+    case 'DB_UPDATE_FAILED':
+      // PAY.JP cancel succeeded but DB update failed — user IS cancelled but state wasn't persisted
+      return {
+        kind: 'inflight',
+        message: err.operationId
+          ? '退会処理は完了しましたが、状態の記録に失敗しました。以下のIDをサポートにお知らせください。'
+          : '退会処理は完了しましたが、状態の記録に失敗しました。サポートまでお問い合わせください。',
+        operationId: err.operationId,
+      };
     default:
       if (err.operationId) {
         return { kind: 'inflight', message: 'サーバーエラーが発生しました。', operationId: err.operationId };

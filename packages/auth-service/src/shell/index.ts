@@ -269,33 +269,11 @@ async function handleLegacyAuthRequest(
   }
 
   if (endpoint === '/v1/auth/discord/start') {
-    const stateToken = randomBytes(32).toString('hex');
-    const sessionToken = randomBytes(32).toString('hex');
-    const stateHashVal = createHash('sha256').update(stateToken).digest('hex');
-    const sessionHashVal = createHash('sha256').update(sessionToken).digest('hex');
-
-    await saveOAuthState(null, {
-      id: randomBytes(16).toString('hex'),
-      stateHash: stateHashVal,
-      oauthSessionHash: sessionHashVal,
-      expiresAt: new Date(Date.now() + 600_000),
-    });
-
-    const attrs = buildCookieAttributes('__Host-oauth_session', 600);
-    // FIND-006: clientId と redirectUri はハードコードしない
-    // テスト環境では固定値を使用するが、将来は config から参照する
-    const url = buildDiscordAuthorizationUrl(
-      'test-client-id',
-      'https://api.example.com/v1/auth/discord/callback',
-      stateToken,
+    // Legacy handler does not have access to config (clientId/redirectUri).
+    // Callers must use the structured AuthRequest overload instead.
+    throw new Error(
+      'handleLegacyAuthRequest does not support /v1/auth/discord/start — use the AuthRequest overload with a config object',
     );
-    return {
-      statusCode: 302,
-      headers: {
-        Location: url,
-        'Set-Cookie': serializeCookieAttributes(attrs, sessionToken),
-      },
-    };
   }
 
   return { statusCode: 404, headers: {} };
@@ -338,13 +316,14 @@ async function handleStructuredAuthRequest(
         redirectUri: discordRedirectUri,
       });
       discordUserId = await fetchDiscordUserId(accessToken);
-      // Revoke Discord access_token immediately — no longer needed
-      revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch((revokeErr) => {
+      // Revoke Discord access_token immediately (best-effort, REQ-AUTH-016)
+      void revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch((revokeErr) => {
         structuredLog({
           service: 'auth-service',
           endpoint: '/v1/auth/discord/callback',
           result: 'failure',
           error: 'discord_token_revoke_failed',
+          discordUserId,
           message: revokeErr instanceof Error ? revokeErr.message : String(revokeErr),
         });
       });

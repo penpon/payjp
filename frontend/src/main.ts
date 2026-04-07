@@ -15,6 +15,21 @@ import type { BillingFormState, PayjpAdapter, PlanDef } from './types.js';
 import { renderState } from './ui.js';
 
 const CANCEL_PENDING_KEY = 'cancelPending';
+/** Max age for cancelPending flag: 10 minutes. Prevents stale intent from firing on later page visits. */
+const CANCEL_PENDING_TTL_MS = 10 * 60 * 1000;
+
+/** Set cancelPending with a timestamp so it expires after CANCEL_PENDING_TTL_MS. */
+function setCancelPending(): void {
+  sessionStorage.setItem(CANCEL_PENDING_KEY, String(Date.now()));
+}
+
+/** Returns true only if cancelPending is set and has not expired. */
+function isCancelPendingValid(): boolean {
+  const raw = sessionStorage.getItem(CANCEL_PENDING_KEY);
+  if (!raw) return false;
+  const ts = Number(raw);
+  return !Number.isNaN(ts) && Date.now() - ts < CANCEL_PENDING_TTL_MS;
+}
 
 /** OAuth 後も未連携のときは退会意図フラグを捨てる（次回の別ログインで誤って cancel API を叩かない） */
 function clearStaleCancelPending(): void {
@@ -250,7 +265,7 @@ function startCancelFlow(app: HTMLElement): void {
   dismiss = showCancelConfirmModal(app, {
     onConfirm: () => {
       dismiss?.();
-      sessionStorage.setItem(CANCEL_PENDING_KEY, '1');
+      setCancelPending();
       startOAuth();
     },
     onDismiss: () => {
@@ -275,9 +290,8 @@ async function init(): Promise<void> {
   try {
     const session = await checkSession();
     if (session.linked) {
-      // Check for pending cancel after OAuth redirect
-      const cancelPending = sessionStorage.getItem(CANCEL_PENDING_KEY);
-      if (cancelPending) {
+      // Check for pending cancel after OAuth redirect (TTL-validated to prevent stale intent)
+      if (isCancelPendingValid()) {
         sessionStorage.removeItem(CANCEL_PENDING_KEY);
         renderState(app, 'loading', startOAuth);
         try {
@@ -291,7 +305,7 @@ async function init(): Promise<void> {
             'cancel_error',
             cancelError.kind === 'session_expired'
               ? () => {
-                  sessionStorage.setItem(CANCEL_PENDING_KEY, '1');
+                  setCancelPending();
                   startOAuth();
                 }
               : startOAuth,

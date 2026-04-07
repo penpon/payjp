@@ -8,6 +8,13 @@ export function mapSubscribeError(err: unknown): BillingError {
       message: 'リクエストがタイムアウトしました。処理が完了している可能性があるため、自動再試行は行われません。',
     };
   }
+  if (err instanceof TypeError) {
+    return {
+      kind: 'inflight',
+      message:
+        'ネットワークエラーが発生しました。処理が完了している可能性があるため、自動再試行は行われません。しばらく経ってからページを再読み込みしてください。',
+    };
+  }
   if (!(err instanceof SubscribeError)) {
     return { kind: 'server_error', message: '予期しないエラーが発生しました。' };
   }

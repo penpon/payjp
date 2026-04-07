@@ -43,6 +43,15 @@ export function showCancelConfirmModal(
     if (e.target === overlay) callbacks.onDismiss();
   });
 
+  // Idempotent dismiss: safe to call multiple times (ESC + overlay click race, onConfirm + ESC race)
+  let dismissed = false;
+  const dismiss = (): void => {
+    if (dismissed) return;
+    dismissed = true;
+    document.removeEventListener('keydown', handleKeydown);
+    overlay.remove();
+  };
+
   // Dismiss on ESC key
   const handleKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') callbacks.onDismiss();
@@ -54,10 +63,7 @@ export function showCancelConfirmModal(
   // Focus the confirm button on open
   queueMicrotask(() => confirmBtn.focus());
 
-  return () => {
-    document.removeEventListener('keydown', handleKeydown);
-    overlay.remove();
-  };
+  return dismiss;
 }
 
 // --- Cancel complete screen ---

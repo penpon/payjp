@@ -515,9 +515,10 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     if (!roleAssigned) {
       // Step 7 で設定した inflight は維持される（updateMemberAfterSubscribe は inflight 列を更新しない）。
       // 運用は operationId と CLI で対応する。
+      const attemptCount = roleSyncAttempts > 0 ? roleSyncAttempts : ROLE_SYNC_MAX_RETRIES;
       const message = roleSyncStoppedNonRetryable4xx
         ? 'Discord role assignment failed with a non-retryable error'
-        : `Failed to assign Discord role after ${roleSyncAttempts} failed ${roleSyncAttempts === 1 ? 'attempt' : 'attempts'}`;
+        : `Failed to assign Discord role after ${attemptCount} failed ${attemptCount === 1 ? 'attempt' : 'attempts'}`;
       return {
         ok: false,
         statusCode: 503,
