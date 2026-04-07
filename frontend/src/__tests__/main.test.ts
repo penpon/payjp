@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../api.js', () => ({
   checkSession: vi.fn(),
+  fetchSubscriptionStatus: vi.fn(),
+  createSubscription: vi.fn(),
   startOAuth: vi.fn(),
   SessionCheckError: class SessionCheckError extends Error {
     status: number;
@@ -11,9 +13,21 @@ vi.mock('../api.js', () => ({
       this.status = status;
     }
   },
+  SubscribeError: class SubscribeError extends Error {
+    status: number;
+    errorCode: string;
+    operationId: string | undefined;
+    constructor(status: number, errorCode: string, operationId: string | undefined, message: string) {
+      super(message);
+      this.name = 'SubscribeError';
+      this.status = status;
+      this.errorCode = errorCode;
+      this.operationId = operationId;
+    }
+  },
 }));
 
-import { checkSession, SessionCheckError } from '../api.js';
+import { checkSession, fetchSubscriptionStatus, SessionCheckError } from '../api.js';
 
 describe('main init()', () => {
   let appDiv: HTMLDivElement;
@@ -24,11 +38,14 @@ describe('main init()', () => {
     appDiv.id = 'app';
     document.body.appendChild(appDiv);
     vi.resetModules();
+    // Clear sessionStorage to prevent cached state from affecting tests
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     appDiv.remove();
     vi.mocked(checkSession).mockReset();
+    vi.mocked(fetchSubscriptionStatus).mockReset();
     consoleSpy.mockClear();
   });
 
@@ -38,13 +55,38 @@ describe('main init()', () => {
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  it('should show linked state when session returns linked: true', async () => {
+  it('should show linked state when session returns linked: true and no subscription', async () => {
     vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
 
     await runInit();
 
     expect(appDiv.querySelector('.success-badge')).not.toBeNull();
     expect(appDiv.textContent).toContain('Discord連携済み');
+  });
+
+  it('should show start billing button when linked with no subscription', async () => {
+    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
+
+    await runInit();
+
+    expect(appDiv.querySelector('.start-billing-button')).not.toBeNull();
+    expect(appDiv.textContent).toContain('プランを選択して登録する');
+  });
+
+  it('should show subscribed state when user has active subscription', async () => {
+    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue({
+      status: 'active',
+      planId: 'plan_business',
+      accessEndAt: '2026-05-07T00:00:00Z',
+    });
+
+    await runInit();
+
+    expect(appDiv.querySelector('.subscribed-status')).not.toBeNull();
+    expect(appDiv.textContent).toContain('購読状況');
   });
 
   it('should show not_linked state when session returns linked: false', async () => {
@@ -90,5 +132,25 @@ describe('main init()', () => {
     await runInit();
 
     expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it('should use cached subscription from sessionStorage', async () => {
+    sessionStorage.setItem(
+      'hayane_subscription_result',
+      JSON.stringify({
+        ok: true,
+        memberId: 'uuid-123',
+        subscriptionStatus: 'trial',
+        planId: 'plan_starter',
+        trialApplied: true,
+        accessEndAt: '2026-07-07T00:00:00Z',
+      }),
+    );
+
+    await runInit();
+
+    // Should NOT call checkSession when cache exists
+    expect(checkSession).not.toHaveBeenCalled();
+    expect(appDiv.querySelector('.subscribed-status')).not.toBeNull();
   });
 });

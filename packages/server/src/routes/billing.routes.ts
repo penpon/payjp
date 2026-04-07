@@ -1,5 +1,5 @@
 import type { BillingDeps, CancelRequest, SubscribeRequest } from '@hayane/billing-service';
-import { handleCancel, handleSubscribe } from '@hayane/billing-service';
+import { handleCancel, handleSubscribe, linkSessionTokenHash } from '@hayane/billing-service';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /** Cookie attributes matching __Host- prefix requirements (§6 fixed) */
@@ -41,6 +41,36 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
     const result = await handleSubscribe(req, billingDeps);
     return sendBillingResponse(reply, result);
+  });
+
+  app.get('/v1/subscriptions/status', async (request, reply) => {
+    const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
+    if (!linkSessionToken) {
+      return reply.status(200).send({ subscription: null });
+    }
+
+    try {
+      const tokenHash = linkSessionTokenHash(linkSessionToken);
+      const linkSession = await billingDeps.db.findLinkSession(tokenHash);
+      if (!linkSession) {
+        return reply.status(200).send({ subscription: null });
+      }
+
+      const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
+      if (!member?.subscription_status || member.subscription_status === 'deleted') {
+        return reply.status(200).send({ subscription: null });
+      }
+
+      return reply.status(200).send({
+        subscription: {
+          status: member.subscription_status,
+          planId: member.payjp_plan_id,
+          accessEndAt: member.access_end_at ? member.access_end_at.toISOString().replace(/\.\d{3}Z$/, 'Z') : null,
+        },
+      });
+    } catch {
+      return reply.status(200).send({ subscription: null });
+    }
   });
 
   app.post('/v1/subscriptions/cancel', async (request, reply) => {
