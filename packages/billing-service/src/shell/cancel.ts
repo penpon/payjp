@@ -151,6 +151,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
             statusCode: 422,
             errorCode: 'PAYJP_CANCEL_FAILED',
             message: 'Cancel not applied (confirmed by reconciliation)',
+            operationId,
           };
         }
         canceledSubscription = refetched;

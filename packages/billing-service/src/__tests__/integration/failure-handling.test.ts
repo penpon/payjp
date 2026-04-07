@@ -405,6 +405,46 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(true);
       expect(deps.payjp.fetchSubscription).toHaveBeenCalledWith(PAYJP_SUBSCRIPTION_ID);
     });
+
+    it('TypeError from fetch-style network failure → 503 + operationId, inflight retained', async () => {
+      const deps = makeCancelDeps();
+      (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError('fetch failed'));
+
+      const result = await handleCancel(makeCancelRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('PAYJP_UNCERTAIN');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+    });
+
+    it('PAYJP_CANCEL_FAILED still returns operationId when clearInflightOperation throws', async () => {
+      const deps = makeCancelDeps();
+      const definiteError = Object.assign(new Error('definite cancel error'), { status: 400 });
+      (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
+      (deps.payjp.fetchSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: PAYJP_SUBSCRIPTION_ID,
+        status: 'active',
+        current_period_end: Math.floor(ACCESS_END_AT.getTime() / 1000),
+        trial_end: null,
+        plan: { id: PLAN_ID, interval: 'month' },
+        metadata: {},
+      });
+      (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB timeout'));
+
+      const result = await handleCancel(makeCancelRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(422);
+        expect(result.errorCode).toBe('PAYJP_CANCEL_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
   });
 
   // -------------------------------------------------------------------------
