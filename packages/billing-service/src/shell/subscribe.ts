@@ -368,7 +368,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       } catch (err) {
         lastRoleSyncError = err;
         const status = (err as { status?: number }).status;
-        if (status !== undefined && status >= 400 && status < 500) {
+        // 429 はレート制限 — バックオフ付きリトライの対象。それ以外の 4xx は再試行しない。
+        const isNonRetryable4xx = status !== undefined && status >= 400 && status < 500 && status !== 429;
+        if (isNonRetryable4xx) {
           slog('error', `Discord role assignment failed with non-retryable status ${status}`, {
             discordUserId,
             operationId,

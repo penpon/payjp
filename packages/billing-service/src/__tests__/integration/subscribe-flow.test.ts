@@ -706,6 +706,41 @@ describe('POST /v1/subscriptions — Integration', () => {
         vi.useRealTimers();
       }
     });
+
+    it('retries when assignRole rejects with HTTP 429 (rate limit) on the error object', async () => {
+      vi.useFakeTimers();
+      try {
+        const deps = makeSuccessfulDeps();
+        let attempts = 0;
+        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+          attempts++;
+          if (attempts < 2) {
+            throw Object.assign(new Error('Too Many Requests'), { status: 429 });
+          }
+          return Promise.resolve();
+        });
+        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
+        expect(attempts).toBe(2);
+        expect(result.ok).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not retry on non-429 4xx (e.g. 403) from assignRole', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        throw Object.assign(new Error('Missing Access'), { status: 403 });
+      });
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(deps.discord.assignRole).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe('DISCORD_ROLE_SYNC_FAILED');
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
