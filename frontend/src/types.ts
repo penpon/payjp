@@ -29,6 +29,7 @@ export interface BillingFormState {
 
 export type BillingErrorKind =
   | 'session_expired'
+  | 'forbidden_origin'
   | 'already_subscribed'
   | 'discord_not_member'
   | 'three_ds_failed'

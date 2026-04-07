@@ -106,6 +106,11 @@ function mapSubscribeError(err: unknown): BillingError {
     case 'EXPIRED_LINK_SESSION':
     case 'CONSUMED_LINK_SESSION':
       return { kind: 'session_expired', message: 'セッションが無効です。再度Discordでログインしてください。' };
+    case 'FORBIDDEN_ORIGIN':
+      return {
+        kind: 'forbidden_origin',
+        message: 'アクセス元のサイトが許可されていません。サービスが案内するURLから再度お試しください。',
+      };
     case 'DISCORD_NOT_MEMBER':
       return { kind: 'discord_not_member', message: 'Discordサーバーに参加してからお試しください。' };
     case 'TOKEN_ALREADY_USED':

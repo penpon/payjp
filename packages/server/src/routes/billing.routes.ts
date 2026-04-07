@@ -1,5 +1,5 @@
 import type { BillingDeps, CancelRequest, SubscribeRequest } from '@hayane/billing-service';
-import { handleCancel, handleSubscribe, linkSessionTokenHash } from '@hayane/billing-service';
+import { formatRfc3339Utc, handleCancel, handleSubscribe, linkSessionTokenHash } from '@hayane/billing-service';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /** Cookie attributes matching __Host- prefix requirements (§6 fixed) */
@@ -67,7 +67,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         subscription: {
           status: member.subscription_status,
           planId: member.payjp_plan_id,
-          accessEndAt: member.access_end_at ? member.access_end_at.toISOString().replace(/\.\d{3}Z$/, 'Z') : null,
+          accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
         },
       });
     } catch (err) {

@@ -270,6 +270,31 @@ describe('billing-ui', () => {
     });
   });
 
+  describe('error step - forbidden_origin', () => {
+    it('should show top button and no misleading retry', () => {
+      const callbacks = createMockCallbacks();
+      renderBilling(
+        container,
+        defaultFormState({
+          step: 'error',
+          error: {
+            kind: 'forbidden_origin',
+            message: 'アクセス元のサイトが許可されていません。',
+          },
+        }),
+        callbacks,
+        null,
+        PLANS,
+      );
+
+      expect(container.querySelector('.submit-button')).toBeNull();
+      const topBtn = container.querySelector('.secondary-button') as HTMLButtonElement;
+      expect(topBtn).not.toBeNull();
+      topBtn.click();
+      expect(callbacks.onBackToTop).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('error step - session_expired', () => {
     it('should show re-auth button', () => {
       const callbacks = createMockCallbacks();

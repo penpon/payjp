@@ -352,6 +352,11 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
     const reAuthBtn = el('button', { type: 'button', class: 'discord-button' }, ['再度Discordで連携する']);
     reAuthBtn.addEventListener('click', callbacks.onBackToTop);
     children.push(reAuthBtn);
+  } else if (error.kind === 'forbidden_origin') {
+    children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
+    const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
+    topBtn.addEventListener('click', callbacks.onBackToTop);
+    children.push(topBtn);
   } else if (error.kind === 'already_subscribed') {
     children.push(el('div', { class: 'info-banner', role: 'status' }, ['すでにプランに加入済みです。']));
     const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
