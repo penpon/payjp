@@ -23,11 +23,6 @@ export function mapSubscribeError(err: unknown): BillingError {
       };
     case 'DISCORD_NOT_MEMBER':
       return { kind: 'discord_not_member', message: 'Discordサーバーに参加してからお試しください。' };
-    case 'DISCORD_USER_ID_MISMATCH':
-      return {
-        kind: 'server_error',
-        message: 'セッションと一致しません。ページを再読み込みしてから再度お試しください。',
-      };
     case 'TOKEN_ALREADY_USED':
     case 'THREE_D_SECURE_REQUIRED':
       if (err.operationId) {
