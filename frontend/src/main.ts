@@ -327,7 +327,6 @@ async function init(): Promise<void> {
         return;
       }
 
-      const discordUserId = session.discordUserId!; // Narrowed by guard above
       renderState(app, 'linked', startOAuth, {
         onStartBilling: () => startBillingFlow(app),
       });
