@@ -2,13 +2,15 @@
   "name": "hayane-payjp",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "frontend"
   ],
   "scripts": {
     "test": "vitest run",
     "test:auth": "vitest run --project @hayane/auth-service",
     "test:billing": "vitest run --project @hayane/billing-service",
     "test:sync": "vitest run --project @hayane/sync-service",
+    "test:frontend": "vitest run --project @hayane/frontend",
     "lint": "biome check .",
     "format": "biome check --write ."
   },

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discord連携 — PAY.JP購読管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --color-primary: #533afd;
+      --color-primary-hover: #4434d4;
+      --color-heading: #061b31;
+      --color-body: #64748d;
+      --color-label: #273951;
+      --color-bg: #ffffff;
+      --color-border: #e5edf5;
+      --color-success: #15be53;
+      --color-error: #ea2261;
+      --color-discord-blurple: #5865F2;
+      --color-discord-blurple-hover: #4752C4;
+      --color-discord-green: #57F287;
+      --color-discord-red: #ED4245;
+      --color-discord-dark: #2C2F33;
+      --color-discord-not-quite-black: #23272A;
+      --font-sans: Inter, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-bg);
+      color: var(--color-body);
+      line-height: 1.6;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .card {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 32px 24px;
+      box-shadow:
+        rgba(50, 50, 93, 0.25) 0px 30px 45px -30px,
+        rgba(0, 0, 0, 0.1) 0px 18px 36px -18px;
+    }
+
+    .heading {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--color-heading);
+      margin-bottom: 12px;
+    }
+
+    .body-text {
+      font-size: 16px;
+      font-weight: 300;
+      color: var(--color-body);
+      margin-bottom: 20px;
+    }
+
+    .discord-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--color-discord-blurple);
+      color: #ffffff;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 400;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow:
+        rgba(50, 50, 93, 0.25) 0px 6px 12px -2px,
+        rgba(0, 0, 0, 0.1) 0px 3px 7px -3px;
+      transition: background-color 150ms ease-out;
+    }
+
+    .discord-button:hover {
+      background: var(--color-discord-blurple-hover);
+    }
+
+    .discord-button:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .discord-button:active {
+      transform: scale(0.98);
+    }
+
+    .badge {
+      border-radius: 4px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 400;
+      margin-bottom: 20px;
+    }
+
+    .success-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(87, 242, 135, 0.2);
+      border: 1px solid var(--color-discord-green);
+      color: var(--color-heading);
+    }
+
+    .success-icon {
+      color: var(--color-discord-green);
+      font-weight: 500;
+    }
+
+    .error-badge {
+      background: rgba(237, 66, 69, 0.2);
+      border: 1px solid var(--color-discord-red);
+      color: var(--color-discord-red);
+    }
+
+    .plan-placeholder {
+      border-top: 1px solid var(--color-border);
+      padding-top: 20px;
+      margin-top: 4px;
+    }
+
+    .plan-placeholder .body-text {
+      margin-bottom: 0;
+    }
+
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px 0;
+    }
+
+    .loading-container .body-text {
+      margin-bottom: 0;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--color-border);
+      border-top-color: var(--color-discord-blurple);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner {
+        animation: none;
+        border-color: var(--color-discord-blurple);
+      }
+      .discord-button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
