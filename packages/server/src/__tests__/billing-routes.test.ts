@@ -108,9 +108,10 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     access_end_at: new Date(periodEndMs),
     next_billing_at: new Date(periodEndMs),
     role_state: 'granted',
-    inflight_operation_id: null,
-    inflight_operation_type: null,
-    inflight_operation_started_at: null,
+    // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、setInflightOperation の値がそのまま残る
+    inflight_operation_id: OPERATION_ID,
+    inflight_operation_type: 'subscribe',
+    inflight_operation_started_at: NOW,
     privacy_consented_at: NOW,
   };
 }
@@ -363,9 +364,20 @@ describe('POST /v1/subscriptions', () => {
 describe('GET /v1/subscriptions/status', () => {
   const STATUS_URL = '/v1/subscriptions/status';
 
-  it('returns 200 subscription null when no link_session cookie', async () => {
+  it('returns 403 when no origin header', async () => {
     const app = createApp();
     const res = await app.inject({ method: 'GET', url: STATUS_URL });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 200 subscription null when no link_session cookie', async () => {
+    const app = createApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ subscription: null });
@@ -379,6 +391,7 @@ describe('GET /v1/subscriptions/status', () => {
     const res = await app.inject({
       method: 'GET',
       url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
       cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
     });
 
@@ -404,6 +417,7 @@ describe('GET /v1/subscriptions/status', () => {
     const res = await app.inject({
       method: 'GET',
       url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
       cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
     });
 
@@ -428,6 +442,7 @@ describe('GET /v1/subscriptions/status', () => {
     const res = await app.inject({
       method: 'GET',
       url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
       cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
     });
 
@@ -449,6 +464,7 @@ describe('GET /v1/subscriptions/status', () => {
     const res = await app.inject({
       method: 'GET',
       url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
       cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
     });
 

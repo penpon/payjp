@@ -250,7 +250,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     const isFirstTime = isFirstTimeUser(member.first_trial_granted_at);
     let initialChargeId: string | null = null;
     if (isFirstTime) {
-      let charge: Awaited<ReturnType<typeof payjp.createCharge>>;
+      let charge: Awaited<ReturnType<typeof payjp.createCharge>> | undefined;
       try {
         charge = await payjp.createCharge({
           customer: customerId,
@@ -297,7 +297,17 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         }
       }
       if (!initialChargeId) {
-        initialChargeId = charge!.id;
+        if (!charge) {
+          slog('error', 'No charge object available after createCharge flow', { discordUserId, operationId });
+          return {
+            ok: false,
+            statusCode: 503,
+            errorCode: 'PAYJP_ERROR',
+            message: 'No charge ID available',
+            operationId,
+          };
+        }
+        initialChargeId = charge.id;
       }
       // REQ-BILL-013: immediately persist charge_id before subscription creation
       await db.updateMemberChargeId(member.id, initialChargeId, now);
@@ -454,8 +464,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
     // P-09: ロール同期成功後に inflight をクリア。決済・Discord は完了済みのため、
     // ここでの DB 失敗はユーザーに 503 を返さずログのみ（従来は UPDATE 内で原子的にクリアしていた）。
+    let memberForResponse = updatedMember;
     try {
       await db.clearInflightOperation(updatedMember.id);
+      memberForResponse = {
+        ...updatedMember,
+        inflight_operation_id: null,
+        inflight_operation_type: null,
+        inflight_operation_started_at: null,
+      };
     } catch (err) {
       slog('error', 'clearInflightOperation failed after successful subscribe and role sync', {
         discordUserId,
@@ -471,7 +488,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       planId: req.planId,
       subscriptionId: subscription.id,
     });
-    return { ok: true, data: buildSubscriptionResponse(updatedMember) };
+    return { ok: true, data: buildSubscriptionResponse(memberForResponse) };
   } finally {
     try {
       await db.releaseAdvisoryLock(discordUserId);

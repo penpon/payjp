@@ -321,14 +321,22 @@ describe('PROP-BILL-012: formatRfc3339Utc', () => {
     expect(formatRfc3339Utc(date)).toBe('2026-04-03T12:34:56Z');
   });
 
-  it('(property) always ends with Z', () => {
+  it('(property) always ends with Z for valid dates', () => {
     fc.assert(
-      fc.property(fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }), (date) => {
-        const result = formatRfc3339Utc(date);
-        expect(result).toMatch(/Z$/);
-        expect(typeof result).toBe('string');
-      }),
+      fc.property(
+        fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31'), noInvalidDate: true }),
+        (date) => {
+          fc.pre(!Number.isNaN(date.getTime()));
+          const result = formatRfc3339Utc(date);
+          expect(result).toMatch(/Z$/);
+          expect(typeof result).toBe('string');
+        },
+      ),
     );
+  });
+
+  it('throws on invalid date', () => {
+    expect(() => formatRfc3339Utc(new Date(Number.NaN))).toThrow('formatRfc3339Utc: received invalid Date');
   });
 });
 
