@@ -131,6 +131,14 @@ function mapSubscribeError(err: unknown): BillingError {
       return { kind: 'three_ds_failed', message: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
     case 'INFLIGHT_OPERATION':
       return { kind: 'inflight', message: '処理中の操作があります。', operationId: err.operationId };
+    case 'LOCK_UNAVAILABLE':
+    case 'DISCORD_ROLE_CAPABILITY':
+      return {
+        kind: 'server_error',
+        message: 'サーバーが一時的に処理できません。しばらく経ってから再度お試しください。',
+      };
+    case 'DISCORD_ROLE_SYNC_FAILED':
+      return { kind: 'inflight', message: 'ロールの付与に失敗しました。', operationId: err.operationId };
     default:
       if (err.status === 409) return { kind: 'already_subscribed', message: 'すでに購読済みです。' };
       if (err.status === 422)
@@ -226,6 +234,7 @@ function startBillingFlow(app: HTMLElement, discordUserId: string): void {
         });
 
         if (tokenResult.error || !tokenResult.tokenId) {
+          currentCardElement = null; // Card iframe will be re-mounted after re-render
           update({
             step: 'form',
             selectedPlanId: data.planId,
@@ -257,6 +266,7 @@ function startBillingFlow(app: HTMLElement, discordUserId: string): void {
     },
 
     onRetry: () => {
+      currentCardElement = null; // Clear stale reference; new element will be set via onCardElementReady
       update({ step: 'form', error: null });
     },
 
@@ -272,7 +282,11 @@ function startBillingFlow(app: HTMLElement, discordUserId: string): void {
 
 async function init(): Promise<void> {
   const app = document.getElementById('app');
-  if (!app) return;
+  if (!app) {
+    console.error('[init] #app element not found — cannot render application');
+    document.body.textContent = 'ページの読み込みに失敗しました。ページを再読み込みしてください。';
+    return;
+  }
 
   renderState(app, 'loading', startOAuth);
 
@@ -307,8 +321,9 @@ async function init(): Promise<void> {
         return;
       }
 
+      const discordUserId = session.discordUserId!; // Narrowed by guard above
       renderState(app, 'linked', startOAuth, {
-        onStartBilling: () => startBillingFlow(app, session.discordUserId),
+        onStartBilling: () => startBillingFlow(app, discordUserId),
       });
     } else {
       renderState(app, 'not_linked', startOAuth);

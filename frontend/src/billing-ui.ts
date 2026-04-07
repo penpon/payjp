@@ -41,10 +41,30 @@ export function renderBilling(
       container.appendChild(renderSubmitting());
       break;
     case 'success':
-      container.appendChild(renderSuccess(state.result!, plans, callbacks));
+      if (!state.result) {
+        console.error('[billing] step=success but result is null — state machine error');
+        container.appendChild(
+          renderError(
+            { kind: 'server_error', message: '表示エラーが発生しました。ページを再読み込みしてください。' },
+            callbacks,
+          ),
+        );
+      } else {
+        container.appendChild(renderSuccess(state.result, plans, callbacks));
+      }
       break;
     case 'error':
-      container.appendChild(renderError(state.error!, callbacks));
+      if (!state.error) {
+        console.error('[billing] step=error but error is null — state machine error');
+        container.appendChild(
+          renderError(
+            { kind: 'server_error', message: '予期しないエラーが発生しました。ページを再読み込みしてください。' },
+            callbacks,
+          ),
+        );
+      } else {
+        container.appendChild(renderError(state.error, callbacks));
+      }
       break;
   }
 }
@@ -216,7 +236,10 @@ function renderBillingForm(
         cardholderName: cardholderName.trim(),
         privacyConsented: consented,
       }),
-    ).catch((err) => console.error('[billing] onSubmit rejected:', err));
+    ).catch((err) => {
+      console.error('[billing] onSubmit rejected unexpectedly:', err);
+      callbacks.onRetry();
+    });
   });
 
   // Error banner (if returning from error)
@@ -255,7 +278,12 @@ function renderBillingForm(
   if (payjpAdapter) {
     queueMicrotask(() => {
       const target = container.querySelector('#payjp-card-element');
-      if (target) {
+      if (!target) {
+        console.error('[billing] Card mount point #payjp-card-element not found in DOM');
+        cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
+        return;
+      }
+      try {
         const cardElement = payjpAdapter.createCardElement(target as HTMLElement);
         callbacks.onCardElementReady?.(cardElement);
         cardElement.on('change', (e) => {
@@ -275,8 +303,13 @@ function renderBillingForm(
             existing.remove();
           }
         });
+      } catch (err) {
+        console.error('[billing] PAY.JP card element creation failed:', err);
+        cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
       }
     });
+  } else {
+    cardMountPoint.textContent = 'カード入力欄を読み込めませんでした。ページを再読み込みしてください。';
   }
 }
 
@@ -409,14 +442,23 @@ function createCopyButton(text: string): HTMLButtonElement {
       setTimeout(() => {
         btn.textContent = 'コピー';
       }, 2000);
-    } catch {
-      // Fallback: select text
-      const range = document.createRange();
+    } catch (err) {
+      console.warn('[billing] Clipboard API unavailable, falling back to text selection:', err);
       const codeEl = btn.previousElementSibling;
       if (codeEl) {
+        const range = document.createRange();
         range.selectNodeContents(codeEl);
         window.getSelection()?.removeAllRanges();
         window.getSelection()?.addRange(range);
+        btn.textContent = '選択済み（手動コピーを）';
+        setTimeout(() => {
+          btn.textContent = 'コピー';
+        }, 3000);
+      } else {
+        btn.textContent = 'コピー失敗';
+        setTimeout(() => {
+          btn.textContent = 'コピー';
+        }, 2000);
       }
     }
   });

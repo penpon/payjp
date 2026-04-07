@@ -114,7 +114,8 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     let payjpTokenData: Awaited<ReturnType<typeof payjp.fetchToken>>;
     try {
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
-    } catch (_err) {
+    } catch (err) {
+      console.error('[subscribe] PAY.JP token fetch failed:', err);
       return {
         ok: false,
         statusCode: 503,
@@ -214,7 +215,8 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
           try {
             const existingCharge = await payjp.fetchCharge(member.payjp_initial_charge_id);
             initialChargeId = existingCharge.id;
-          } catch {
+          } catch (reconcileErr) {
+            console.error('[subscribe] Charge reconciliation failed:', { originalErr: err, reconcileErr });
             return {
               ok: false,
               statusCode: 503,
@@ -262,7 +264,8 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         try {
           const existingSub = await payjp.fetchSubscription(member.payjp_subscription_id);
           subscription = existingSub;
-        } catch {
+        } catch (reconcileErr) {
+          console.error('[subscribe] Subscription reconciliation failed:', { originalErr: err, reconcileErr });
           return {
             ok: false,
             statusCode: 503,
@@ -305,8 +308,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         inflight_operation_type: null,
         inflight_operation_started_at: null,
       });
-    } catch {
+    } catch (err) {
       // DB failure after PAY.JP success — retain inflight for CLI reconciliation
+      console.error('[subscribe] DB update failed after PAY.JP subscription creation:', err);
       return {
         ok: false,
         statusCode: 503,
@@ -319,6 +323,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     // Role sync (retry 3x: 0s/1s/2s wait, 1s timeout each, total ≤ 6s)
     const ROLE_SYNC_DELAYS_MS = [0, 1000, 2000];
     let roleAssigned = false;
+    let lastRoleSyncError: unknown;
     for (let attempt = 0; attempt < ROLE_SYNC_MAX_RETRIES; attempt++) {
       if (ROLE_SYNC_DELAYS_MS[attempt] > 0) {
         await new Promise((r) => setTimeout(r, ROLE_SYNC_DELAYS_MS[attempt]));
@@ -327,9 +332,18 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         await discord.assignRole(config.discordGuildId, discordUserId, config.discordPaidRoleId);
         roleAssigned = true;
         break;
-      } catch {
-        // retry with next delay
+      } catch (err) {
+        lastRoleSyncError = err;
+        const status = (err as { status?: number }).status;
+        if (status !== undefined && status >= 400 && status < 500) {
+          console.error(`[subscribe] Discord role assignment failed with non-retryable status ${status}:`, err);
+          break;
+        }
+        console.warn(`[subscribe] Discord role assignment attempt ${attempt + 1} failed, retrying:`, err);
       }
+    }
+    if (!roleAssigned && lastRoleSyncError !== undefined) {
+      console.error('[subscribe] Discord role assignment failed after all retries:', lastRoleSyncError);
     }
 
     if (!roleAssigned) {
@@ -348,8 +362,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
   } finally {
     try {
       await db.releaseAdvisoryLock(discordUserId);
-    } catch {
+    } catch (err) {
       // Lock release failure must not mask the billing response
+      console.error('[subscribe] Advisory lock release failed:', err);
     }
   }
 }

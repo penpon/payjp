@@ -57,20 +57,38 @@ export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null
     credentials: 'include',
   });
   if (res.status === 503) {
-    const body: unknown = await res.json().catch(() => ({}));
+    const body: unknown = await res.json().catch((parseErr) => {
+      console.warn('[api] Failed to parse subscription status error body:', parseErr);
+      return {};
+    });
     const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
     throw new SubscriptionStatusError(res.status, (obj.message as string) ?? '購読状況を確認できませんでした。');
   }
   if (!res.ok) {
-    const body: unknown = await res.json().catch(() => ({}));
+    const body: unknown = await res.json().catch((parseErr) => {
+      console.warn('[api] Failed to parse subscription status error body:', parseErr);
+      return {};
+    });
     const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
     throw new SubscriptionStatusError(
       res.status,
       (obj.message as string) ?? `Subscription status check failed: ${res.status}`,
     );
   }
-  const data = (await res.json()) as { subscription: SubscriptionInfo | null };
+  const data: unknown = await res.json();
+  if (!isSubscriptionStatusResponse(data)) {
+    throw new Error('Invalid subscription status response');
+  }
   return data.subscription ?? null;
+}
+
+function isSubscriptionStatusResponse(data: unknown): data is { subscription: SubscriptionInfo | null } {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  if (obj.subscription === null || obj.subscription === undefined) return true;
+  if (typeof obj.subscription !== 'object') return false;
+  const sub = obj.subscription as Record<string, unknown>;
+  return typeof sub.status === 'string';
 }
 
 // --- Subscribe ---

@@ -1,5 +1,11 @@
 import type { BillingDeps, CancelRequest, SubscribeRequest } from '@hayane/billing-service';
-import { formatRfc3339Utc, handleCancel, handleSubscribe, linkSessionTokenHash } from '@hayane/billing-service';
+import {
+  formatRfc3339Utc,
+  handleCancel,
+  handleSubscribe,
+  isSameOrigin,
+  linkSessionTokenHash,
+} from '@hayane/billing-service';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /** Cookie attributes matching __Host- prefix requirements (§6 fixed) */
@@ -45,9 +51,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       }
       return sendBillingResponse(reply, result);
     } catch (err) {
-      request.log.error({ err }, 'subscribe handler threw unexpectedly');
-      return reply.status(503).send({
+      request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscribe handler threw unexpectedly');
+      return sendBillingResponse(reply, {
         ok: false,
+        statusCode: 503,
         errorCode: 'INTERNAL_ERROR',
         message: 'An unexpected error occurred',
       });
@@ -55,6 +62,16 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
   });
 
   app.get('/v1/subscriptions/status', async (request, reply) => {
+    const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+    if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+      return sendBillingResponse(reply, {
+        ok: false,
+        statusCode: 403,
+        errorCode: 'FORBIDDEN_ORIGIN',
+        message: 'Origin not allowed',
+      });
+    }
+
     const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
     if (!linkSessionToken) {
       return reply.status(200).send({ subscription: null });
@@ -87,9 +104,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         },
       });
     } catch (err) {
-      request.log.error({ err }, 'subscription status lookup failed');
-      return reply.status(503).send({
+      request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscription status lookup failed');
+      return sendBillingResponse(reply, {
         ok: false,
+        statusCode: 503,
         errorCode: 'STATUS_UNAVAILABLE',
         message: 'Could not load subscription status',
       });
@@ -112,9 +130,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       }
       return sendBillingResponse(reply, result);
     } catch (err) {
-      request.log.error({ err }, 'cancel handler threw unexpectedly');
-      return reply.status(503).send({
+      request.log.error({ message: (err as Error)?.message ?? String(err) }, 'cancel handler threw unexpectedly');
+      return sendBillingResponse(reply, {
         ok: false,
+        statusCode: 503,
         errorCode: 'INTERNAL_ERROR',
         message: 'An unexpected error occurred',
       });
