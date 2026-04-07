@@ -75,8 +75,8 @@ function createPayjpAdapter(): PayjpAdapter | null {
       try {
         const result = await payjp.createToken(
           cardElement,
-          { card: { name: data.name, email: data.email } },
-          { three_d_secure: true, threeDSecureDialogOptions: { timeout: 1800000 } },
+          { three_d_secure: true, card: { name: data.name, email: data.email } },
+          { threeDSecureDialogOptions: { timeout: 1800000 } },
         );
         if (result.error) {
           return { error: result.error.message };

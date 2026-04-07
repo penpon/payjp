@@ -87,8 +87,8 @@ export interface PayjpInstance {
   elements(options?: { locale?: string }): PayjpElements;
   createToken(
     element: PayjpCardElement,
-    data?: { card?: { name?: string; email?: string } },
-    options?: { three_d_secure?: boolean; threeDSecureDialogOptions?: { timeout?: number } },
+    data?: { three_d_secure?: boolean; card?: { name?: string; email?: string } },
+    options?: { threeDSecureDialogOptions?: { timeout?: number } },
   ): Promise<{ error?: { code: string; message: string }; id?: string; card?: { three_d_secure_status?: string } }>;
 }
 
