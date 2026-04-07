@@ -405,6 +405,54 @@ describe('billing-ui', () => {
     });
   });
 
+  describe('error step - already_subscribed', () => {
+    it('should show warning-banner with back button and no retry', () => {
+      const callbacks = createMockCallbacks();
+      renderBilling(
+        container,
+        defaultFormState({
+          step: 'error',
+          error: { kind: 'already_subscribed', message: 'すでにプランに加入済みです。' },
+        }),
+        callbacks,
+        null,
+        PLANS,
+      );
+
+      expect(container.querySelector('.warning-banner')?.textContent).toContain('すでにプランに加入済みです');
+      expect(container.querySelector('.warning-banner')?.getAttribute('role')).toBe('alert');
+      expect(container.querySelector('.submit-button')).toBeNull();
+      const topBtn = container.querySelector('.secondary-button') as HTMLButtonElement;
+      expect(topBtn).not.toBeNull();
+      topBtn.click();
+      expect(callbacks.onBackToTop).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('error step - discord_not_member', () => {
+    it('should show error-banner with join guidance and back button', () => {
+      const callbacks = createMockCallbacks();
+      renderBilling(
+        container,
+        defaultFormState({
+          step: 'error',
+          error: { kind: 'discord_not_member', message: 'Discordサーバーに参加してからお試しください。' },
+        }),
+        callbacks,
+        null,
+        PLANS,
+      );
+
+      expect(container.querySelector('.error-banner')).not.toBeNull();
+      expect(container.textContent).toContain('Discordサーバーに参加後');
+      expect(container.querySelector('.submit-button')).toBeNull();
+      const topBtn = container.querySelector('.secondary-button') as HTMLButtonElement;
+      expect(topBtn).not.toBeNull();
+      topBtn.click();
+      expect(callbacks.onBackToTop).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('error step - server_error', () => {
     it('should show retry button', () => {
       const callbacks = createMockCallbacks();

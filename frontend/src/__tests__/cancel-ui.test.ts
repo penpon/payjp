@@ -148,11 +148,12 @@ describe('cancel-ui', () => {
   describe('renderCancelError', () => {
     const baseCallbacks = { onBackToTop: vi.fn(), onReAuth: vi.fn() };
 
-    it('should show not_in_period as info-banner with back button', () => {
+    it('should show not_in_period as warning-banner with back button', () => {
       const error: CancelUIError = { kind: 'not_in_period', message: '受付期間外です。' };
       renderCancelError(container, error, baseCallbacks);
 
-      expect(container.querySelector('.info-banner')?.textContent).toContain('受付期間外');
+      expect(container.querySelector('.warning-banner')?.textContent).toContain('受付期間外');
+      expect(container.querySelector('.warning-banner')?.getAttribute('role')).toBe('alert');
       expect(container.querySelector('.secondary-button')).not.toBeNull();
     });
 
