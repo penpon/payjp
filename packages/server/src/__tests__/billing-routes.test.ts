@@ -1,6 +1,6 @@
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import type { LinkSessionRecord, Member } from '@hayane/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +47,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -107,9 +108,11 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     access_end_at: new Date(periodEndMs),
     next_billing_at: new Date(periodEndMs),
     role_state: 'granted',
-    inflight_operation_id: null,
-    inflight_operation_type: null,
-    inflight_operation_started_at: null,
+    // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、setInflightOperation の値がそのまま残る
+    inflight_operation_id: OPERATION_ID,
+    inflight_operation_type: 'subscribe',
+    inflight_operation_started_at: NOW,
+    privacy_consented_at: NOW,
   };
 }
 
@@ -174,23 +177,21 @@ function createApp(deps?: BillingDeps) {
 
 function subscribePayload() {
   return {
-    discordUserId: DISCORD_USER_ID,
     email: EMAIL,
     payjpToken: PAYJP_TOKEN_ID,
     planId: PLAN_ID,
+    privacyConsented: true,
   };
 }
 
 function cancelPayload() {
-  return {
-    discordUserId: DISCORD_USER_ID,
-  };
+  return {};
 }
 
 /** Common inject options for billing endpoints */
 function injectOpts(
   url: string,
-  payload: Record<string, string>,
+  payload: Record<string, unknown>,
   overrides: { origin?: string; withCookie?: boolean } = {},
 ) {
   const { origin = FRONTEND_BASE_URL, withCookie = true } = overrides;
@@ -249,6 +250,14 @@ describe('POST /v1/subscriptions', () => {
     expect(res.json().errorCode).toBe('INVALID_PLAN_ID');
   });
 
+  it('returns 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
+    const app = createApp();
+    const res = await app.inject(injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), privacyConsented: false }));
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errorCode).toBe('CONSENT_REQUIRED');
+  });
+
   it('returns 422 for non-verified 3DS token', async () => {
     const deps = makeMockDeps();
     (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -287,14 +296,12 @@ describe('POST /v1/subscriptions', () => {
     expect(setCookie).toContain('Max-Age=0');
   });
 
-  it('clears __Host-link_session cookie on error', async () => {
+  it('does not clear __Host-link_session cookie on subscribe error', async () => {
     const app = createApp();
     const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }));
 
     expect(res.statusCode).toBe(403);
-    const setCookie = res.headers['set-cookie'] as string;
-    expect(setCookie).toContain('__Host-link_session=');
-    expect(setCookie).toContain('Max-Age=0');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('includes security headers', async () => {
@@ -351,6 +358,155 @@ describe('POST /v1/subscriptions', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /v1/subscriptions/status
+// ---------------------------------------------------------------------------
+
+describe('GET /v1/subscriptions/status', () => {
+  const STATUS_URL = '/v1/subscriptions/status';
+
+  it('allows request when origin header is omitted (same-origin browser GET)', async () => {
+    const app = createApp();
+    const res = await app.inject({ method: 'GET', url: STATUS_URL });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
+
+  it('returns 200 subscription null when no link_session cookie', async () => {
+    const app = createApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
+
+  it('returns 503 when database lookup throws', async () => {
+    const deps = makeMockDeps();
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.ok).toBe(false);
+    expect(body.errorCode).toBe('STATUS_UNAVAILABLE');
+  });
+
+  it('returns 200 subscription null when link session is expired without loading member', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeLinkSession({ expires_at: new Date('2025-01-01T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+    expect(deps.db.findMemberByDiscordUserId).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 with subscription when link session is consumed but member has active subscription', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeLinkSession({ used_at: new Date('2025-03-15T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { subscription: { status: string; planId: string; accessEndAt: string } };
+    expect(body.subscription).toMatchObject({
+      status: 'active',
+      planId: PLAN_ID,
+    });
+    expect(body.subscription.accessEndAt).toMatch(/2025-06-01/);
+    expect(deps.db.findMemberByDiscordUserId).toHaveBeenCalledWith(DISCORD_USER_ID);
+  });
+
+  it('returns 200 subscription null when link session is consumed and member has no subscription', async () => {
+    const deps = makeMockDeps({
+      subscription_status: null,
+      payjp_plan_id: null,
+    });
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeLinkSession({ used_at: new Date('2025-03-15T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+    expect(deps.db.findMemberByDiscordUserId).toHaveBeenCalledWith(DISCORD_USER_ID);
+  });
+
+  it('returns 200 with subscription when link session is valid', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { subscription: { status: string; planId: string; accessEndAt: string } };
+    expect(body.subscription).toMatchObject({
+      status: 'active',
+      planId: PLAN_ID,
+    });
+    expect(body.subscription.accessEndAt).toMatch(/2025-06-01/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /v1/subscriptions/cancel
 // ---------------------------------------------------------------------------
 
@@ -399,6 +555,7 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('returns 409 when no active subscription', async () => {
@@ -410,6 +567,7 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().errorCode).toBe('NO_SUBSCRIPTION');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('returns 409 when before acceptance boundary', async () => {
@@ -496,14 +654,6 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(503);
     expect(res.json().operationId).toBe(OPERATION_ID);
-  });
-
-  it('returns 403 when discordUserId does not match link session (IDOR)', async () => {
-    const app = createApp(makeCancelDeps());
-    const res = await app.inject(injectOpts(CANCEL_URL, { discordUserId: 'different-user-id' }));
-
-    expect(res.statusCode).toBe(403);
-    expect(res.json().errorCode).toBe('DISCORD_USER_ID_MISMATCH');
   });
 
   it('returns 401 when link session is expired', async () => {

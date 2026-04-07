@@ -17,7 +17,11 @@
       --color-bg: #ffffff;
       --color-border: #e5edf5;
       --color-success: #15be53;
+      --color-success-bg: rgba(21, 190, 83, 0.2);
+      --color-success-text: #108c3d;
       --color-error: #ea2261;
+      --color-error-bg: rgba(234, 34, 97, 0.08);
+      --color-error-border: rgba(234, 34, 97, 0.2);
       --color-discord-blurple: #5865F2;
       --color-discord-blurple-hover: #4752C4;
       --color-discord-green: #57F287;
@@ -49,8 +53,10 @@
 
     #app {
       width: 100%;
-      max-width: 480px;
+      max-width: 720px;
     }
+
+    /* --- Card --- */
 
     .card {
       background: var(--color-bg);
@@ -76,6 +82,14 @@
       margin-bottom: 20px;
     }
 
+    .body-text-sub {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--color-body);
+    }
+
+    /* --- Discord button --- */
+
     .discord-button {
       display: inline-flex;
       align-items: center;
@@ -95,18 +109,11 @@
       transition: background-color 150ms ease-out;
     }
 
-    .discord-button:hover {
-      background: var(--color-discord-blurple-hover);
-    }
+    .discord-button:hover { background: var(--color-discord-blurple-hover); }
+    .discord-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    .discord-button:active { transform: scale(0.98); }
 
-    .discord-button:focus-visible {
-      outline: 2px solid var(--color-primary);
-      outline-offset: 2px;
-    }
-
-    .discord-button:active {
-      transform: scale(0.98);
-    }
+    /* --- Badge --- */
 
     .badge {
       border-radius: 4px;
@@ -125,10 +132,7 @@
       color: var(--color-heading);
     }
 
-    .success-icon {
-      color: var(--color-discord-green);
-      font-weight: 500;
-    }
+    .success-icon { color: var(--color-discord-green); font-weight: 500; }
 
     .error-badge {
       background: rgba(237, 66, 69, 0.2);
@@ -142,9 +146,9 @@
       margin-top: 4px;
     }
 
-    .plan-placeholder .body-text {
-      margin-bottom: 0;
-    }
+    .plan-placeholder .body-text { margin-bottom: 0; }
+
+    /* --- Loading --- */
 
     .loading-container {
       display: flex;
@@ -154,9 +158,7 @@
       padding: 24px 0;
     }
 
-    .loading-container .body-text {
-      margin-bottom: 0;
-    }
+    .loading-container .body-text { margin-bottom: 0; }
 
     .spinner {
       width: 32px;
@@ -167,8 +169,422 @@
       animation: spin 0.8s linear infinite;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- Plan grid --- */
+
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .plan-card {
+      background: var(--color-bg);
+      border: 2px solid var(--color-border);
+      border-radius: 6px;
+      padding: 20px 16px;
+      cursor: pointer;
+      transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+    }
+
+    .plan-card:hover {
+      border-color: var(--color-primary);
+    }
+
+    .plan-card--selected {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(83, 58, 253, 0.1);
+    }
+
+    .plan-card:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .plan-card-name {
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 16px;
+      font-weight: 300;
+      color: var(--color-heading);
+      margin-bottom: 4px;
+    }
+
+    .plan-card-price {
+      font-family: Inter, sans-serif;
+      font-size: 32px;
+      font-weight: 300;
+      color: var(--color-heading);
+      letter-spacing: -0.64px;
+      line-height: 1.2;
+    }
+
+    .plan-card-interval {
+      font-size: 14px;
+      color: var(--color-body);
+      margin-bottom: 12px;
+    }
+
+    .plan-card-features {
+      list-style: none;
+      font-size: 13px;
+      color: var(--color-body);
+    }
+
+    .plan-card-features li {
+      padding: 2px 0;
+    }
+
+    .plan-card-features li::before {
+      content: '\2713';
+      color: var(--color-success);
+      margin-right: 6px;
+      font-size: 12px;
+    }
+
+    /* --- Form --- */
+
+    .billing-card {
+      max-width: 720px;
+    }
+
+    .form-section {
+      margin-bottom: 24px;
+    }
+
+    .form-section-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--color-heading);
+      margin-bottom: 16px;
+      padding-top: 8px;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--color-label);
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--color-heading);
+      background: var(--color-bg);
+      transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+    }
+
+    .form-input::placeholder { color: var(--color-body); }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(83, 58, 253, 0.1);
+    }
+
+    .form-input--error {
+      border-color: var(--color-error);
+      box-shadow: 0 0 0 3px rgba(234, 34, 97, 0.1);
+    }
+
+    /* --- PAY.JP card element --- */
+
+    .payjp-mount {
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      padding: 12px;
+      min-height: 44px;
+      transition: border-color 150ms ease-out;
+    }
+
+    .payjp-mount:focus-within {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(83, 58, 253, 0.1);
+    }
+
+    .card-error {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--color-error);
+      margin-top: 4px;
+    }
+
+    /* --- Consent --- */
+
+    .consent-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .consent-checkbox {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--color-border);
+      border-radius: 3px;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .consent-checkbox:checked {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+    }
+
+    .consent-checkbox:checked::after {
+      content: '\2713';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .consent-checkbox:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .consent-label {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--color-label);
+      cursor: pointer;
+    }
+
+    .consent-link {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+
+    /* --- Buttons --- */
+
+    .submit-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      background: var(--color-primary);
+      color: #ffffff;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 400;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow:
+        rgba(50, 50, 93, 0.25) 0px 6px 12px -2px,
+        rgba(0, 0, 0, 0.1) 0px 3px 7px -3px;
+      transition: background-color 150ms ease-out;
+    }
+
+    .submit-button:hover { background: var(--color-primary-hover); }
+    .submit-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    .submit-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .submit-button:disabled:hover { background: var(--color-primary); }
+
+    .start-billing-button { width: auto; }
+
+    .secondary-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      background: transparent;
+      color: var(--color-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 400;
+      padding: 10px 20px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: border-color 150ms ease-out;
+    }
+
+    .secondary-button:hover { border-color: var(--color-primary); }
+
+    /* --- Error / Info banners --- */
+
+    .error-banner {
+      background: var(--color-error-bg);
+      border: 1px solid var(--color-error-border);
+      color: var(--color-error);
+      font-size: 14px;
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .info-banner {
+      background: var(--color-success-bg);
+      border: 1px solid var(--color-success);
+      color: var(--color-success-text);
+      font-size: 14px;
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    /* --- Operation ID box --- */
+
+    .operation-id-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f8f9fa;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .operation-id-value {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--color-heading);
+      word-break: break-all;
+      flex: 1;
+    }
+
+    .copy-button {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--color-primary);
+      background: transparent;
+      border: 1px solid var(--color-primary);
+      border-radius: 3px;
+      padding: 4px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 150ms ease-out;
+    }
+
+    .copy-button:hover {
+      background: rgba(83, 58, 253, 0.08);
+    }
+
+    /* --- Success --- */
+
+    .success-container {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .success-icon-large {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      font-size: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    .success-heading {
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 26px;
+      font-weight: 300;
+      color: var(--color-heading);
+    }
+
+    .result-details {
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .result-row + .result-row {
+      border-top: 1px solid var(--color-border);
+    }
+
+    .result-label {
+      font-size: 14px;
+      color: var(--color-body);
+    }
+
+    .result-value {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--color-heading);
+    }
+
+    .status-badge {
+      display: inline-block;
+      background: var(--color-success-bg);
+      color: var(--color-success-text);
+      font-size: 13px;
+      font-weight: 400;
+      padding: 2px 10px;
+      border-radius: 4px;
+    }
+
+    /* --- Subscribed state --- */
+
+    .subscribed-status {
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .subscribed-plan-name {
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 22px;
+      font-weight: 300;
+      color: var(--color-heading);
+      margin: 8px 0;
+    }
+
+    .subscribed-detail {
+      font-size: 14px;
+      color: var(--color-body);
+      text-align: center;
+      margin-top: 12px;
+    }
+
+    /* --- Responsive --- */
+
+    @media (max-width: 640px) {
+      .plan-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .plan-card-price {
+        font-size: 26px;
+      }
+
+      #app {
+        max-width: 480px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -176,7 +592,12 @@
         animation: none;
         border-color: var(--color-discord-blurple);
       }
-      .discord-button {
+      .discord-button,
+      .submit-button,
+      .secondary-button,
+      .plan-card,
+      .form-input,
+      .copy-button {
         transition: none;
       }
     }
@@ -184,6 +605,7 @@
 </head>
 <body>
   <div id="app"></div>
+  <script src="https://js.pay.jp/v2/pay.js"></script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

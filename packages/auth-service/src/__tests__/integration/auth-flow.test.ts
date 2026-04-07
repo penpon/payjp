@@ -6,7 +6,7 @@
  */
 
 import type { LinkSessionRecord } from '@hayane/shared';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateLinkSessionRecord, validateStartupConfig } from '../../core/index.js';
 import {
   checkHealth,
@@ -164,28 +164,37 @@ describe('PROP-AUTH-012: callback 302 Location contains no token in query or fra
       expiresAt: new Date('2099-01-01T01:00:00Z'),
     });
 
-    const response = await handleAuthRequest(
-      {
-        endpoint: '/v1/auth/discord/callback',
-        query: { code: 'test-code', state: stateToken },
-        cookies: { '__Host-oauth_session': sessionToken },
-      },
-      {
-        frontendBaseUrl,
-        discordClientId: 'test-client',
-        discordClientSecret: 'test-secret',
-        discordRedirectUri: 'https://api.example.com/callback',
-      },
-    );
-    expect(response.statusCode).toBe(302);
-    const locationUrl = response.headers.Location;
-    expect(locationUrl).toBe(frontendBaseUrl);
-    const parsed = new URL(locationUrl);
-    const sensitiveParams = ['token', 'link_session', 'oauth_session', 'code', 'authorization'];
-    for (const param of sensitiveParams) {
-      expect(parsed.searchParams.get(param)).toBeNull();
+    const mockFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'mock_access_token' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '123456789012345678' }) } as Response);
+
+    try {
+      const response = await handleAuthRequest(
+        {
+          endpoint: '/v1/auth/discord/callback',
+          query: { code: 'test-code', state: stateToken },
+          cookies: { '__Host-oauth_session': sessionToken },
+        },
+        {
+          frontendBaseUrl,
+          discordClientId: 'test-client',
+          discordClientSecret: 'test-secret',
+          discordRedirectUri: 'https://api.example.com/callback',
+        },
+      );
+      expect(response.statusCode).toBe(302);
+      const locationUrl = response.headers.Location;
+      expect(locationUrl).toBe(frontendBaseUrl);
+      const parsed = new URL(locationUrl);
+      const sensitiveParams = ['token', 'link_session', 'oauth_session', 'code', 'authorization'];
+      for (const param of sensitiveParams) {
+        expect(parsed.searchParams.get(param)).toBeNull();
+      }
+      expect(parsed.hash).toBe('');
+    } finally {
+      mockFetch.mockRestore();
     }
-    expect(parsed.hash).toBe('');
   });
 });
 
@@ -304,19 +313,29 @@ describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact a
       expiresAt: new Date('2099-01-01T01:00:00Z'),
     });
 
-    const response = await handleAuthRequest(
-      {
-        endpoint: '/v1/auth/discord/callback',
-        query: { code: 'auth-code-018', state: stateToken },
-        cookies: { '__Host-oauth_session': sessionToken },
-      },
-      {
-        frontendBaseUrl,
-        discordClientId: 'test-client',
-        discordClientSecret: 'test-secret',
-        discordRedirectUri: 'https://api.example.com/callback',
-      },
-    );
+    const mockFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'mock_access_token_018' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '123456789012345678' }) } as Response);
+
+    let response: Awaited<ReturnType<typeof handleAuthRequest>>;
+    try {
+      response = await handleAuthRequest(
+        {
+          endpoint: '/v1/auth/discord/callback',
+          query: { code: 'auth-code-018', state: stateToken },
+          cookies: { '__Host-oauth_session': sessionToken },
+        },
+        {
+          frontendBaseUrl,
+          discordClientId: 'test-client',
+          discordClientSecret: 'test-secret',
+          discordRedirectUri: 'https://api.example.com/callback',
+        },
+      );
+    } finally {
+      mockFetch.mockRestore();
+    }
 
     expect(response.statusCode).toBe(302);
     const setCookie = response.headers['Set-Cookie'];
@@ -645,18 +664,32 @@ describe('PROP-AUTH-036: checkHealth returns status ok when service is operation
 // ---------------------------------------------------------------------------
 describe('Discord API shell functions return expected results', () => {
   it('exchangeDiscordCode returns a valid access token string', async () => {
-    const token = await exchangeDiscordCode('valid-code', {
-      clientId: 'id',
-      clientSecret: 'secret',
-      redirectUri: 'https://example.com/callback',
-    });
-    expect(typeof token).toBe('string');
-    expect(token.length).toBeGreaterThan(0);
+    const mockFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'mock_token_abc123' }) } as Response);
+    try {
+      const token = await exchangeDiscordCode('valid-code', {
+        clientId: 'id',
+        clientSecret: 'secret',
+        redirectUri: 'https://example.com/callback',
+      });
+      expect(typeof token).toBe('string');
+      expect(token.length).toBeGreaterThan(0);
+    } finally {
+      mockFetch.mockRestore();
+    }
   });
 
   it('fetchDiscordUserId returns a discord user id string', async () => {
-    const userId = await fetchDiscordUserId('valid-access-token');
-    expect(typeof userId).toBe('string');
-    expect(userId).toMatch(/^\d+$/);
+    const mockFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '123456789012345678' }) } as Response);
+    try {
+      const userId = await fetchDiscordUserId('valid-access-token');
+      expect(typeof userId).toBe('string');
+      expect(userId).toMatch(/^\d+$/);
+    } finally {
+      mockFetch.mockRestore();
+    }
   });
 });

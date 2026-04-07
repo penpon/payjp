@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Lock files
+package-lock.json
+
+# VCSDD pipeline intermediate files
+.vcsdd/
+
+# Git worktree
+feature/
+
+# Generated reports
+*.html
+
+# Coverage
+coverage/

@@ -28,9 +28,7 @@ export interface DbClient {
       next_billing_at: Date;
       role_state: 'granted';
       last_synced_at: Date;
-      inflight_operation_id: null;
-      inflight_operation_type: null;
-      inflight_operation_started_at: null;
+      privacy_consented_at: Date;
     },
   ): Promise<Member>;
   updateMemberAfterCancel(
@@ -76,11 +74,16 @@ export interface TransactionDbClient {
 
 // --- Row mapping helpers ---
 
+function assertString(v: unknown, field: string): string {
+  if (typeof v !== 'string') throw new Error(`DB field "${field}" expected string, got ${typeof v}`);
+  return v;
+}
+
 function toMember(row: Record<string, unknown>): Member {
   return {
-    id: row.id as string,
-    discord_user_id: row.discord_user_id as string,
-    email: row.email as string,
+    id: assertString(row.id, 'id'),
+    discord_user_id: assertString(row.discord_user_id, 'discord_user_id'),
+    email: assertString(row.email, 'email'),
     payjp_customer_id: (row.payjp_customer_id as string) ?? null,
     payjp_subscription_id: (row.payjp_subscription_id as string) ?? null,
     payjp_initial_charge_id: (row.payjp_initial_charge_id as string) ?? null,
@@ -92,6 +95,7 @@ function toMember(row: Record<string, unknown>): Member {
     inflight_operation_id: (row.inflight_operation_id as string) ?? null,
     inflight_operation_type: (row.inflight_operation_type as Member['inflight_operation_type']) ?? null,
     inflight_operation_started_at: (row.inflight_operation_started_at as Date) ?? null,
+    privacy_consented_at: (row.privacy_consented_at as Date) ?? null,
     access_end_at: (row.access_end_at as Date) ?? null,
     next_billing_at: (row.next_billing_at as Date) ?? null,
     role_state: row.role_state as Member['role_state'],
@@ -178,11 +182,11 @@ async function querySetInflightOperation(
          inflight_operation_type = $3,
          inflight_operation_started_at = $4,
          updated_at = now()
-     WHERE id = $1`,
+     WHERE id = $1 AND inflight_operation_id IS NULL`,
     [memberId, operationId, operationType, now],
   );
   if ((result.rowCount ?? 0) === 0) {
-    throw new Error(`Member not found: ${memberId}`);
+    throw new Error(`Member not found or inflight operation already set: ${memberId}`);
   }
 }
 
@@ -243,9 +247,7 @@ async function queryUpdateMemberAfterSubscribe(
        next_billing_at = $9,
        role_state = $10,
        last_synced_at = $11,
-       inflight_operation_id = NULL,
-       inflight_operation_type = NULL,
-       inflight_operation_started_at = NULL,
+       privacy_consented_at = $12,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,
@@ -261,6 +263,7 @@ async function queryUpdateMemberAfterSubscribe(
       params.next_billing_at,
       params.role_state,
       params.last_synced_at,
+      params.privacy_consented_at,
     ],
   );
   if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
@@ -336,9 +339,10 @@ export class PgDbClient implements DbClient {
     }
     const client = await this.pool.connect();
     try {
-      const result = await client.query<{ pg_try_advisory_lock: boolean }>('SELECT pg_try_advisory_lock($1::bigint)', [
-        discordUserId,
-      ]);
+      const result = await client.query<{ pg_try_advisory_lock: boolean }>(
+        'SELECT pg_try_advisory_lock(0, hashtext($1))',
+        [discordUserId],
+      );
       if (result.rows[0].pg_try_advisory_lock) {
         this.lockClients.set(discordUserId, client);
         return true;
@@ -362,7 +366,7 @@ export class PgDbClient implements DbClient {
     }
     this.lockClients.delete(discordUserId);
     try {
-      await client.query('SELECT pg_advisory_unlock($1::bigint)', [discordUserId]);
+      await client.query('SELECT pg_advisory_unlock(0, hashtext($1))', [discordUserId]);
     } finally {
       client.release();
     }
@@ -372,7 +376,7 @@ export class PgDbClient implements DbClient {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [discordUserId]);
+      await client.query('SELECT pg_advisory_xact_lock(0, hashtext($1))', [discordUserId]);
       const txDb = new PgTransactionClient(client);
       const result = await fn(txDb);
       await client.query('COMMIT');
@@ -386,7 +390,7 @@ export class PgDbClient implements DbClient {
             level: 'error',
             message: 'ROLLBACK failed after transaction error',
             rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
-            originalError: err instanceof Error ? (err as Error).message : String(err),
+            originalError: err instanceof Error ? err.message : String(err),
             lockKey: discordUserId,
           }),
         );

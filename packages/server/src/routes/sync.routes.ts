@@ -9,16 +9,20 @@ export interface SyncDeps {
 export async function syncRoutes(app: FastifyInstance, opts: { syncDeps: SyncDeps }) {
   const { webhookDeps } = opts.syncDeps;
 
-  app.post('/v1/payjp/webhook', async (request, reply) => {
-    const req: WebhookRequest = {
-      headers: extractWebhookHeaders(request.headers),
-      body: request.body,
-      remoteIp: request.ip,
-    };
+  app.post(
+    '/v1/payjp/webhook',
+    { config: { rateLimit: { max: 100, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const req: WebhookRequest = {
+        headers: extractWebhookHeaders(request.headers),
+        body: request.body,
+        remoteIp: request.ip,
+      };
 
-    const result = await handleWebhook(req, webhookDeps);
-    return reply.status(result.status).send(result.body);
-  });
+      const result = await handleWebhook(req, webhookDeps);
+      return reply.status(result.status).send(result.body);
+    },
+  );
 }
 
 function extractWebhookHeaders(

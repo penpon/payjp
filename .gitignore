@@ -2,6 +2,7 @@
 .DS_Store
 ._*
 Thumbs.db
+awesome-design-md/
 
 # Editor
 .vscode/settings.json
@@ -53,3 +54,6 @@ feature/
 # Docker / DB volume
 postgres-data/
 docker-data/
+
+# Serena
+.serena/

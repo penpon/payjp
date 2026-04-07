@@ -1,5 +1,6 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
+import fastifyRateLimit from '@fastify/rate-limit';
 import type { BillingDeps } from '@hayane/billing-service';
 import Fastify, { type FastifyError } from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
@@ -16,6 +17,28 @@ export interface AppConfig {
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
+/** Standard phrases for 4xx when the framework uses a non-standard `error.message` (e.g. Fastify 404). */
+function clientErrorMessageForStatus(statusCode: number): string | undefined {
+  switch (statusCode) {
+    case 400:
+      return 'Bad Request';
+    case 401:
+      return 'Unauthorized';
+    case 403:
+      return 'Forbidden';
+    case 404:
+      return 'Not Found';
+    case 409:
+      return 'Conflict';
+    case 422:
+      return 'Unprocessable Entity';
+    case 429:
+      return 'Too Many Requests';
+    default:
+      return undefined;
+  }
+}
+
 export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?: SyncDeps) {
   const app = Fastify({ logger: false });
 
@@ -27,9 +50,17 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
     credentials: true,
   });
 
+  // Rate limiting — global: false means per-route opt-in via config.rateLimit
+  app.register(fastifyRateLimit, { global: false });
+
   app.addHook('onSend', (_request, reply, payload, done) => {
     reply.header('Cache-Control', 'no-store');
     reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+    reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     done(null, payload);
   });
 
@@ -49,7 +80,10 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
       );
       reply.status(statusCode).send({ error: 'Internal Server Error' });
     } else {
-      reply.status(statusCode).send({ error: safeMessage });
+      const byStatus = clientErrorMessageForStatus(statusCode);
+      const KNOWN_4XX = ['Bad Request', 'Unauthorized', 'Forbidden', 'Not Found', 'Too Many Requests'];
+      const clientMessage = byStatus ?? (KNOWN_4XX.includes(safeMessage) ? safeMessage : 'Bad Request');
+      reply.status(statusCode).send({ error: clientMessage });
     }
   });
 

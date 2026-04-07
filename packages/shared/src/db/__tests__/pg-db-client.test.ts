@@ -139,10 +139,11 @@ describe('PgDbClient - discord_link_sessions', () => {
 });
 
 describe('PgDbClient - updateMemberAfterSubscribe', () => {
-  it('updates all subscribe fields and clears inflight', async () => {
+  it('updates subscribe fields and does not modify inflight columns', async () => {
     const member = await db.upsertProvisionalMember('discord-030', 'sub@example.com');
     await db.updateMemberCustomerId(member.id, 'cus_sub');
     const now = new Date();
+    await db.setInflightOperation(member.id, 'op-subscribe-ongoing', 'subscribe', now);
 
     const updated = await db.updateMemberAfterSubscribe(member.id, {
       payjp_initial_charge_id: 'ch_sub',
@@ -155,15 +156,15 @@ describe('PgDbClient - updateMemberAfterSubscribe', () => {
       next_billing_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       role_state: 'granted',
       last_synced_at: now,
-      inflight_operation_id: null,
-      inflight_operation_type: null,
-      inflight_operation_started_at: null,
+      privacy_consented_at: now,
     });
 
     expect(updated.subscription_status).toBe('active');
     expect(updated.payjp_subscription_id).toBe('sub_test');
     expect(updated.role_state).toBe('granted');
-    expect(updated.inflight_operation_id).toBeNull();
+    expect(updated.inflight_operation_id).toBe('op-subscribe-ongoing');
+    expect(updated.inflight_operation_type).toBe('subscribe');
+    expect(updated.inflight_operation_started_at!.getTime()).toBe(now.getTime());
   });
 });
 

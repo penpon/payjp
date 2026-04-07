@@ -57,6 +57,7 @@ export interface Member {
   inflight_operation_id: string | null;
   inflight_operation_type: InflightOperationType | null;
   inflight_operation_started_at: Date | null;
+  privacy_consented_at: Date | null;
   access_end_at: Date | null;
   next_billing_at: Date | null;
   role_state: 'granted' | 'revoked' | 'unknown';

@@ -1,4 +1,7 @@
-import type { AppState } from './types.js';
+import type { BillingCallbacks } from './billing-ui.js';
+import { renderBilling, renderSubscribed } from './billing-ui.js';
+import { el } from './dom.js';
+import type { AppState, BillingFormState, PayjpAdapter, PlanDef, SubscriptionInfo } from './types.js';
 
 function createDiscordLogoSvg(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -14,25 +17,6 @@ function createDiscordLogoSvg(): SVGSVGElement {
   );
   svg.appendChild(path);
   return svg;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs?: Record<string, string>,
-  children?: (Node | string)[],
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  if (attrs) {
-    for (const [key, value] of Object.entries(attrs)) {
-      element.setAttribute(key, value);
-    }
-  }
-  if (children) {
-    for (const child of children) {
-      element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
-    }
-  }
-  return element;
 }
 
 function createDiscordButton(onConnect: () => void): HTMLButtonElement {
@@ -65,30 +49,66 @@ function renderNotLinked(onConnect: () => void): HTMLDivElement {
   ]);
 }
 
-function renderLinked(): HTMLDivElement {
+function renderLinked(onStartBilling?: () => void): HTMLDivElement {
   const badge = el('div', { class: 'badge success-badge', role: 'status' }, [
     el('span', { class: 'success-icon', 'aria-hidden': 'true' }, ['\u2713']),
     el('span', {}, ['Discord連携済み']),
   ]);
 
-  return createCard([
-    el('h1', { class: 'heading' }, ['Discord連携']),
-    badge,
-    el('div', { class: 'plan-placeholder' }, [
-      el('p', { class: 'body-text' }, ['プラン選択は次のステップで利用可能になります。']),
-    ]),
-  ]);
+  const children: Node[] = [el('h1', { class: 'heading' }, ['Discord連携']), badge];
+
+  if (onStartBilling) {
+    const startBtn = el('button', { type: 'button', class: 'submit-button start-billing-button' }, [
+      'プランを選択して登録する',
+    ]);
+    startBtn.addEventListener('click', onStartBilling);
+    children.push(el('div', { class: 'plan-placeholder' }, [startBtn]));
+  } else {
+    children.push(
+      el('div', { class: 'plan-placeholder' }, [
+        el('p', { class: 'body-text' }, ['プラン選択は次のステップで利用可能になります。']),
+      ]),
+    );
+  }
+
+  return createCard(children);
 }
 
-function renderError(onConnect: () => void): HTMLDivElement {
+function renderError(onConnect: () => void, message?: string): HTMLDivElement {
   return createCard([
     el('h1', { class: 'heading' }, ['Discord連携']),
-    el('div', { class: 'badge error-badge', role: 'alert' }, ['連携状態の確認に失敗しました。再度お試しください。']),
+    el('div', { class: 'badge error-badge', role: 'alert' }, [
+      message ?? '連携状態の確認に失敗しました。再度お試しください。',
+    ]),
     createDiscordButton(onConnect),
   ]);
 }
 
-export function renderState(container: HTMLElement, state: AppState, onConnect: () => void): void {
+// --- Billing context (optional, for billing state) ---
+
+export interface BillingContext {
+  billingState: BillingFormState;
+  billingCallbacks: BillingCallbacks;
+  payjpAdapter: PayjpAdapter | null;
+  plans: PlanDef[];
+}
+
+export interface SubscribedContext {
+  subscription: SubscriptionInfo;
+  plans: PlanDef[];
+}
+
+export function renderState(
+  container: HTMLElement,
+  state: AppState,
+  onConnect: () => void,
+  extra?: {
+    onStartBilling?: () => void;
+    billing?: BillingContext;
+    subscribed?: SubscribedContext;
+    errorMessage?: string;
+  },
+): void {
   container.replaceChildren();
   switch (state) {
     case 'loading':
@@ -98,10 +118,28 @@ export function renderState(container: HTMLElement, state: AppState, onConnect: 
       container.appendChild(renderNotLinked(onConnect));
       break;
     case 'linked':
-      container.appendChild(renderLinked());
+      if (extra?.subscribed) {
+        renderSubscribed(container, extra.subscribed.subscription, extra.subscribed.plans);
+      } else {
+        container.appendChild(renderLinked(extra?.onStartBilling));
+      }
       break;
     case 'error':
-      container.appendChild(renderError(onConnect));
+      container.appendChild(renderError(onConnect, extra?.errorMessage));
+      break;
+    case 'billing':
+      if (extra?.billing) {
+        renderBilling(
+          container,
+          extra.billing.billingState,
+          extra.billing.billingCallbacks,
+          extra.billing.payjpAdapter,
+          extra.billing.plans,
+        );
+      } else {
+        console.error('[ui] renderState("billing") called without billing context');
+        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+      }
       break;
   }
 }

@@ -16,6 +16,10 @@ import {
 import { isUncertainError } from './errors.js';
 import type { BillingDeps, CancelRequest, CancelResult } from './types.js';
 
+function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
+  console[level](JSON.stringify({ level, service: 'billing-cancel', message, ...ctx }));
+}
+
 export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promise<CancelResult> {
   const { db, payjp, config, clock, generateOperationId } = deps;
   const now = clock();
@@ -39,25 +43,18 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return { ok: false, statusCode: 401, errorCode: 'CONSUMED_LINK_SESSION', message: 'Link session already used' };
   }
 
-  // Step 1c: Verify discordUserId matches link session (IDOR prevention)
-  if (linkSession.discord_user_id !== req.discordUserId) {
-    return {
-      ok: false,
-      statusCode: 403,
-      errorCode: 'DISCORD_USER_ID_MISMATCH',
-      message: 'discordUserId does not match link session',
-    };
-  }
+  // P-03: discordUserIdはリンクセッションから取得（ボディからは受け取らない）
+  const discordUserId = linkSession.discord_user_id;
 
   // Step 2: Advisory lock (spec §5.2 step 2)
-  const lockAcquired = await db.acquireAdvisoryLock(req.discordUserId);
+  const lockAcquired = await db.acquireAdvisoryLock(discordUserId);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
 
   try {
     // Step 3: Existing subscription check
-    const member = await db.findMemberByDiscordUserId(req.discordUserId);
+    const member = await db.findMemberByDiscordUserId(discordUserId);
     if (!member || !hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
@@ -69,7 +66,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         statusCode: 503,
         errorCode: 'INFLIGHT_OPERATION',
         message: 'Another operation is in progress',
-        operationId: member.inflight_operation_id!,
+        operationId: member.inflight_operation_id,
       };
     }
 
@@ -166,8 +163,9 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         inflight_operation_type: null,
         inflight_operation_started_at: null,
       });
-    } catch {
+    } catch (err) {
       // DB failure after PAY.JP cancel success — retain inflight for CLI reconciliation
+      slog('error', 'DB update failed after PAY.JP cancel', { discordUserId, operationId, error: String(err) });
       return {
         ok: false,
         statusCode: 503,
@@ -180,9 +178,9 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return { ok: true, data: buildCancelResponse(updatedMember) };
   } finally {
     try {
-      await db.releaseAdvisoryLock(req.discordUserId);
-    } catch {
-      // Lock release failure must not mask the billing response
+      await db.releaseAdvisoryLock(discordUserId);
+    } catch (err) {
+      slog('error', 'Advisory lock release failed', { discordUserId, error: String(err) });
     }
   }
 }

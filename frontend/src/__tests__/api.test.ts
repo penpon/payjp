@@ -16,7 +16,9 @@ describe('api', () => {
 
   describe('checkSession', () => {
     it('should call /v1/auth/discord/session with credentials: include', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ linked: true }), { status: 200 }));
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(JSON.stringify({ linked: true, discordUserId: 'u1' }), { status: 200 }),
+      );
 
       await checkSession();
 
@@ -25,11 +27,13 @@ describe('api', () => {
       });
     });
 
-    it('should return { linked: true } when session is valid', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ linked: true }), { status: 200 }));
+    it('should return session with discordUserId when linked', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(JSON.stringify({ linked: true, discordUserId: 'u1' }), { status: 200 }),
+      );
 
       const result = await checkSession();
-      expect(result).toEqual({ linked: true });
+      expect(result).toEqual({ linked: true, discordUserId: 'u1' });
     });
 
     it('should return { linked: false } when session responds with linked false', async () => {
@@ -59,6 +63,12 @@ describe('api', () => {
       vi.mocked(globalThis.fetch).mockRejectedValue(new TypeError('Failed to fetch'));
 
       await expect(checkSession()).rejects.toThrow('Failed to fetch');
+    });
+
+    it('should throw on invalid response shape (linked true without discordUserId)', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ linked: true }), { status: 200 }));
+
+      await expect(checkSession()).rejects.toThrow('Invalid session response');
     });
 
     it('should throw on invalid response shape (linked is string)', async () => {

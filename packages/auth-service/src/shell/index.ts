@@ -101,21 +101,45 @@ export async function saveDiscordLinkSession(
 }
 
 // REQ-AUTH-002: Discord code → access_token 交換
-// Green フェーズ: モック実装（実際の HTTP 呼び出しは E2E フェーズで置換）
 export async function exchangeDiscordCode(
   code: string,
-  _env: { clientId: string; clientSecret: string; redirectUri: string },
+  env: { clientId: string; clientSecret: string; redirectUri: string },
 ): Promise<string> {
-  // テスト用モック: 実際の Discord API を呼び出す代わりにモックレスポンスを返す
-  // 空の clientId/Secret が渡された場合もモックトークンを返す（テスト目的）
-  return `mock_access_token_for_${code}`;
+  const params = new URLSearchParams({
+    client_id: env.clientId,
+    client_secret: env.clientSecret,
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: env.redirectUri,
+  });
+  const response = await fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+  if (!response.ok) {
+    throw new Error(`Discord token exchange failed: ${response.status}`);
+  }
+  const data = (await response.json()) as { access_token?: unknown };
+  if (!data.access_token || typeof data.access_token !== 'string') {
+    throw new Error('Discord token exchange: missing access_token');
+  }
+  return data.access_token;
 }
 
 // REQ-AUTH-002: Discord /users/@me → discord_user_id 取得
-// Green フェーズ: モック実装
-export async function fetchDiscordUserId(_accessToken: string): Promise<string> {
-  // テスト用モック: 数値のみの Discord ユーザーIDを返す
-  return '123456789012345678';
+export async function fetchDiscordUserId(accessToken: string): Promise<string> {
+  const response = await fetch('https://discord.com/api/users/@me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Discord user fetch failed: ${response.status}`);
+  }
+  const data = (await response.json()) as { id?: unknown };
+  if (!data.id || typeof data.id !== 'string') {
+    throw new Error('Discord user fetch: missing id');
+  }
+  return data.id;
 }
 
 // REQ-AUTH-010: 構造化ログ出力（機密マスク適用後）
@@ -343,7 +367,7 @@ async function handleStructuredAuthRequest(
     return {
       statusCode: 200,
       headers: combinedHeaders,
-      body: { linked: true },
+      body: { linked: true, discordUserId: record.discord_user_id },
     };
   }
 

@@ -10,16 +10,17 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
-    "@hayane/shared": "*",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@hayane/auth-service": "*",
     "@hayane/billing-service": "*",
+    "@hayane/shared": "*",
     "@hayane/sync-service": "*",
-    "fastify": "^5.8.4",
-    "@fastify/cookie": "^11.0.2",
-    "@fastify/cors": "^11.2.0"
+    "fastify": "^5.8.4"
   },
   "devDependencies": {
-    "vitest": "^3.1.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   }
 }

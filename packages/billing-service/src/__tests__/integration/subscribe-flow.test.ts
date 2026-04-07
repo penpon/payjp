@@ -44,6 +44,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -121,9 +122,11 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     access_end_at: new Date(makePayjpSubscription().current_period_end * 1000),
     next_billing_at: new Date(makePayjpSubscription().current_period_end * 1000),
     role_state: 'granted',
-    inflight_operation_id: null,
-    inflight_operation_type: null,
-    inflight_operation_started_at: null,
+    // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、step 7 の値がそのまま残る
+    inflight_operation_id: OPERATION_ID,
+    inflight_operation_type: 'subscribe',
+    inflight_operation_started_at: NOW,
+    privacy_consented_at: NOW,
   };
 }
 
@@ -177,14 +180,14 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
   };
 }
 
-function makeSubscribeRequest(overrides: Record<string, string> = {}) {
+function makeSubscribeRequest(overrides: Record<string, unknown> = {}) {
   return {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
-    discordUserId: DISCORD_USER_ID,
     email: EMAIL,
     payjpToken: PAYJP_TOKEN_ID,
     planId: PLAN_ID,
+    privacyConsented: true,
     ...overrides,
   };
 }
@@ -264,6 +267,17 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.statusCode).toBe(401);
         expect(result.errorCode).toBe('CONSUMED_LINK_SESSION');
       }
+    });
+
+    it('rejects with 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
+      const deps = makeSuccessfulDeps();
+      const result = await handleSubscribe(makeSubscribeRequest({ privacyConsented: false }), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(422);
+        expect(result.errorCode).toBe('CONSENT_REQUIRED');
+      }
+      expect(deps.db.acquireAdvisoryLock).not.toHaveBeenCalled();
     });
   });
 
@@ -535,6 +549,20 @@ describe('POST /v1/subscriptions — Integration', () => {
       // updateMemberCustomerId が呼ばれたことを確認
       expect(deps.db.updateMemberCustomerId).toHaveBeenCalledWith(MEMBER_ID, PAYJP_CUSTOMER_ID);
     });
+
+    it('returns 503 + operationId when customer id persistence fails', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.updateMemberCustomerId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -553,6 +581,20 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.trialApplied).toBe(true);
+      }
+    });
+
+    it('returns 503 + operationId when initial charge id persistence fails', async () => {
+      const deps = makeSuccessfulDeps({ first_trial_granted_at: null });
+      (deps.db.updateMemberChargeId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
       }
     });
   });
@@ -693,13 +735,62 @@ describe('POST /v1/subscriptions — Integration', () => {
         vi.useRealTimers();
       }
     });
+
+    it('retries when assignRole rejects with HTTP 429 (rate limit) on the error object', async () => {
+      vi.useFakeTimers();
+      try {
+        const deps = makeSuccessfulDeps();
+        let attempts = 0;
+        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+          attempts++;
+          if (attempts < 2) {
+            throw Object.assign(new Error('Too Many Requests'), { status: 429 });
+          }
+          return Promise.resolve();
+        });
+        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
+        expect(attempts).toBe(2);
+        expect(result.ok).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not retry on non-429 4xx (e.g. 403) from assignRole', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        throw Object.assign(new Error('Missing Access'), { status: 403 });
+      });
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(deps.discord.assignRole).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe('DISCORD_ROLE_SYNC_FAILED');
+        expect(result.message).toBe('Discord role assignment failed with a non-retryable error');
+      }
+    });
+
+    it('does not retry when assignRole rejects with 4xx on statusCode (no top-level status)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        throw Object.assign(new Error('Missing Access'), { statusCode: 403 });
+      });
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(deps.discord.assignRole).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.message).toBe('Discord role assignment failed with a non-retryable error');
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
   // PROP-BILL-040: Role sync final failure
   // -------------------------------------------------------------------------
   describe('PROP-BILL-040: Role sync final failure', () => {
-    it('503 + operationId, inflight_operation_* retained', async () => {
+    it('503 + operationId, inflight retained from step 7 on role sync failure (P-09)', async () => {
       vi.useFakeTimers();
       try {
         const deps = makeSuccessfulDeps();
@@ -711,7 +802,11 @@ describe('POST /v1/subscriptions — Integration', () => {
         if (!result.ok) {
           expect(result.statusCode).toBe(503);
           expect(result.operationId).toBe(OPERATION_ID);
+          expect(result.message).toBe('Failed to assign Discord role after 3 failed attempts');
         }
+        // step 7 のみ（updateMemberAfterSubscribe は inflight をクリアしない）
+        expect(deps.db.setInflightOperation).toHaveBeenCalledTimes(1);
+        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
@@ -737,6 +832,35 @@ describe('POST /v1/subscriptions — Integration', () => {
           accessEndAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/),
         });
       }
+    });
+
+    it('P-09: clearInflightOperation called after role sync success', async () => {
+      const deps = makeSuccessfulDeps();
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(true);
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('P-09: returns 503 + operationId when clearInflightOperation fails after subscribe and role sync', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('F-10: privacy_consented_at passed to updateMemberAfterSubscribe', async () => {
+      const deps = makeSuccessfulDeps();
+      await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(deps.db.updateMemberAfterSubscribe).toHaveBeenCalledWith(
+        MEMBER_ID,
+        expect.objectContaining({ privacy_consented_at: NOW }),
+      );
     });
   });
 

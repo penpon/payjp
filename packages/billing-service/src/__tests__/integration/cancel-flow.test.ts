@@ -40,6 +40,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: ACCESS_END_AT,
     next_billing_at: ACCESS_END_AT,
     role_state: 'granted',
@@ -147,7 +148,6 @@ function makeCancelRequest(overrides: Record<string, string> = {}) {
   return {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
-    discordUserId: DISCORD_USER_ID,
     ...overrides,
   };
 }

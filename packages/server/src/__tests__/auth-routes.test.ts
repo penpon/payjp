@@ -1,5 +1,5 @@
 import { clearStores } from '@hayane/auth-service/test-utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
 const TEST_CONFIG = {
@@ -96,60 +96,68 @@ describe('GET /v1/auth/discord/callback', () => {
 
   it('completes full OAuth flow: start -> callback -> session', async () => {
     const app = createApp();
+    const mockFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'mock_token' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '123456789012345678' }) } as Response);
 
-    // Step 1: Start OAuth
-    const startRes = await app.inject({
-      method: 'GET',
-      url: '/v1/auth/discord/start',
-    });
-    expect(startRes.statusCode).toBe(302);
+    try {
+      // Step 1: Start OAuth
+      const startRes = await app.inject({
+        method: 'GET',
+        url: '/v1/auth/discord/start',
+      });
+      expect(startRes.statusCode).toBe(302);
 
-    // Extract session cookie value from Set-Cookie header
-    const setCookieHeader = startRes.headers['set-cookie'] as string;
-    const sessionMatch = setCookieHeader.match(/__Host-oauth_session=([^;]+)/);
-    expect(sessionMatch).not.toBeNull();
-    const oauthSessionToken = sessionMatch![1];
+      // Extract session cookie value from Set-Cookie header
+      const setCookieHeader = startRes.headers['set-cookie'] as string;
+      const sessionMatch = setCookieHeader.match(/__Host-oauth_session=([^;]+)/);
+      expect(sessionMatch).not.toBeNull();
+      const oauthSessionToken = sessionMatch![1];
 
-    // Extract state from Location URL
-    const location = startRes.headers.location as string;
-    const locationUrl = new URL(location);
-    const stateToken = locationUrl.searchParams.get('state');
-    expect(stateToken).not.toBeNull();
+      // Extract state from Location URL
+      const location = startRes.headers.location as string;
+      const locationUrl = new URL(location);
+      const stateToken = locationUrl.searchParams.get('state');
+      expect(stateToken).not.toBeNull();
 
-    // Step 2: Callback with code + state + cookie
-    const callbackRes = await app.inject({
-      method: 'GET',
-      url: `/v1/auth/discord/callback?code=mock-code&state=${stateToken}`,
-      cookies: { '__Host-oauth_session': oauthSessionToken },
-    });
-    expect(callbackRes.statusCode).toBe(302);
+      // Step 2: Callback with code + state + cookie
+      const callbackRes = await app.inject({
+        method: 'GET',
+        url: `/v1/auth/discord/callback?code=mock-code&state=${stateToken}`,
+        cookies: { '__Host-oauth_session': oauthSessionToken },
+      });
+      expect(callbackRes.statusCode).toBe(302);
 
-    // Should redirect to frontend
-    expect(callbackRes.headers.location).toBe('https://example.com');
+      // Should redirect to frontend
+      expect(callbackRes.headers.location).toBe('https://example.com');
 
-    // Should set __Host-link_session cookie
-    const linkCookieHeader = callbackRes.headers['set-cookie'] as string;
-    expect(linkCookieHeader).toContain('__Host-link_session=');
-    expect(linkCookieHeader).toContain('Secure');
-    expect(linkCookieHeader).toContain('HttpOnly');
-    expect(linkCookieHeader).toContain('SameSite=Lax');
-    expect(linkCookieHeader).toContain('Path=/');
-    expect(linkCookieHeader).toContain('Max-Age=900');
+      // Should set __Host-link_session cookie
+      const linkCookieHeader = callbackRes.headers['set-cookie'] as string;
+      expect(linkCookieHeader).toContain('__Host-link_session=');
+      expect(linkCookieHeader).toContain('Secure');
+      expect(linkCookieHeader).toContain('HttpOnly');
+      expect(linkCookieHeader).toContain('SameSite=Lax');
+      expect(linkCookieHeader).toContain('Path=/');
+      expect(linkCookieHeader).toContain('Max-Age=900');
 
-    // Extract link session token
-    const linkMatch = linkCookieHeader.match(/__Host-link_session=([^;]+)/);
-    expect(linkMatch).not.toBeNull();
-    const linkSessionToken = linkMatch![1];
+      // Extract link session token
+      const linkMatch = linkCookieHeader.match(/__Host-link_session=([^;]+)/);
+      expect(linkMatch).not.toBeNull();
+      const linkSessionToken = linkMatch![1];
 
-    // Step 3: Session check with link session cookie
-    const sessionRes = await app.inject({
-      method: 'GET',
-      url: '/v1/auth/discord/session',
-      cookies: { '__Host-link_session': linkSessionToken },
-      headers: { origin: 'https://example.com' },
-    });
-    expect(sessionRes.statusCode).toBe(200);
-    expect(sessionRes.json()).toEqual({ linked: true });
+      // Step 3: Session check with link session cookie
+      const sessionRes = await app.inject({
+        method: 'GET',
+        url: '/v1/auth/discord/session',
+        cookies: { '__Host-link_session': linkSessionToken },
+        headers: { origin: 'https://example.com' },
+      });
+      expect(sessionRes.statusCode).toBe(200);
+      expect(sessionRes.json()).toEqual({ linked: true, discordUserId: '123456789012345678' });
+    } finally {
+      mockFetch.mockRestore();
+    }
   });
 
   it('includes security headers on callback', async () => {
@@ -256,7 +264,7 @@ describe('Global error handler', () => {
     expect(res.statusCode).toBe(404);
     const body = res.json();
     expect(body.error).not.toContain('550e8400-e29b-41d4-a716-446655440000');
-    expect(body.error).toContain('[REDACTED]');
+    expect(body.error).toBe('Not Found');
   });
 
   it('returns generic message on 5xx', async () => {

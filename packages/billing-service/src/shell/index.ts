@@ -1,3 +1,4 @@
+export { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash } from '../core/index.js';
 export { handleCancel } from './cancel.js';
 export { isUncertainError } from './errors.js';
 export { handleSubscribe } from './subscribe.js';

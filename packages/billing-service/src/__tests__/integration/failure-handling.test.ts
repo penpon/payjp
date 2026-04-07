@@ -37,6 +37,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -214,10 +215,10 @@ function makeSubscribeRequest() {
   return {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
-    discordUserId: DISCORD_USER_ID,
     email: 'test@example.com',
     payjpToken: 'tok_001',
     planId: PLAN_ID,
+    privacyConsented: true,
   };
 }
 
@@ -225,7 +226,6 @@ function makeCancelRequest() {
   return {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
-    discordUserId: DISCORD_USER_ID,
   };
 }
 
@@ -257,9 +257,9 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-052: Definite failure before PAY.JP write
   // -------------------------------------------------------------------------
   describe('PROP-BILL-052: Definite failure before PAY.JP write', () => {
-    it('inflight retained on pre-write failure; operationId returned for CLI resolution', async () => {
+    it('inflight cleared on pre-write (READ-only) failure; operationId still returned', async () => {
       const deps = makeSubscribeDeps();
-      // 3DS 検証失敗は PAY.JP write 前の definite failure
+      // 3DS 検証失敗は PAY.JP write 前の READ-only failure — inflight をクリアする
       (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'tok_001',
         used: false,
@@ -272,8 +272,8 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.statusCode).toBe(422);
-        // inflight は自動解除しない — 手動 CLI で解除する
-        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+        // READ-only failure — PAY.JP write は発生していないため inflight をクリアする
+        expect(deps.db.clearInflightOperation).toHaveBeenCalledOnce();
         expect(result.operationId).toBe(OPERATION_ID);
       }
     });
@@ -301,9 +301,25 @@ describe('Failure Handling — Integration', () => {
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
         expect(result.operationId).toBe(OPERATION_ID);
-        // inflight は自動解除しない
-        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+        // F-02: 4xx確定失敗 + 既存顧客なし → inflightをクリアして503を返す
+        expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
       }
+    });
+
+    it('definite failure: still returns PAYJP_ERROR + operationId when clearInflightOperation throws', async () => {
+      const deps = makeSubscribeDeps();
+      const definiteError = Object.assign(new Error('definite customer creation error'), { status: 402 });
+      (deps.payjp.createCustomer as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
+      (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe('PAYJP_ERROR');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -311,7 +327,7 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-053b: Failure after charge
   // -------------------------------------------------------------------------
   describe('PROP-BILL-053b: Failure after charge', () => {
-    it('definite failure with no existing charge_id → retain inflight, no duplicate charge', async () => {
+    it('definite failure with no existing charge_id → clear inflight, no duplicate charge (F-02)', async () => {
       const deps = makeSubscribeDeps();
       let chargeAttempts = 0;
 
@@ -329,7 +345,8 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.operationId).toBe(OPERATION_ID);
-        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+        // F-02: 4xx確定失敗 + 既存charge_idなし → inflightをクリアして503を返す
+        expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
       }
     });
   });

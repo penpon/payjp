@@ -50,6 +50,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    privacy_consented_at: null,
     access_end_at: new Date('2026-05-01T00:00:00Z'),
     next_billing_at: new Date('2026-05-01T00:00:00Z'),
     role_state: 'granted',
@@ -285,7 +286,7 @@ describe('PROP-BILL-010: buildSubscriptionResponse', () => {
 
   it('(property) accessEndAt is always RFC 3339 UTC', () => {
     fc.assert(
-      fc.property(fc.date(), (date) => {
+      fc.property(fc.date({ noInvalidDate: true }), (date) => {
         const member = makeMember({ access_end_at: date });
         const response = buildSubscriptionResponse(member);
         expect(response.accessEndAt).toMatch(/Z$/);
@@ -320,14 +321,22 @@ describe('PROP-BILL-012: formatRfc3339Utc', () => {
     expect(formatRfc3339Utc(date)).toBe('2026-04-03T12:34:56Z');
   });
 
-  it('(property) always ends with Z', () => {
+  it('(property) always ends with Z for valid dates', () => {
     fc.assert(
-      fc.property(fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }), (date) => {
-        const result = formatRfc3339Utc(date);
-        expect(result).toMatch(/Z$/);
-        expect(typeof result).toBe('string');
-      }),
+      fc.property(
+        fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31'), noInvalidDate: true }),
+        (date) => {
+          fc.pre(!Number.isNaN(date.getTime()));
+          const result = formatRfc3339Utc(date);
+          expect(result).toMatch(/Z$/);
+          expect(typeof result).toBe('string');
+        },
+      ),
     );
+  });
+
+  it('throws on invalid date', () => {
+    expect(() => formatRfc3339Utc(new Date(Number.NaN))).toThrow('formatRfc3339Utc: received invalid Date');
   });
 });
 
