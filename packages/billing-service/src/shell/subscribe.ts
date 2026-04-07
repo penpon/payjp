@@ -441,7 +441,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         first_trial_granted_at: isFirstTime ? now : member.first_trial_granted_at,
         access_end_at: accessEndAt,
         next_billing_at: nextBillingAt,
-        role_state: 'granted',
+        role_state: 'unknown',
         last_synced_at: now,
         privacy_consented_at: now,
       });
@@ -527,13 +527,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // P-09: ロール同期成功後に inflight をクリア。
+    // P-09: ロール同期成功後に role_state を granted に更新し、inflight をクリア。
     // ここで失敗した場合は不整合な成功レスポンスを避けるため 503 + operationId を返し、CLI で解決可能にする。
     let memberForResponse = updatedMember;
     try {
+      await db.updateMemberRoleState(updatedMember.id, 'granted');
       await db.clearInflightOperation(updatedMember.id);
       memberForResponse = {
         ...updatedMember,
+        role_state: 'granted',
         inflight_operation_id: null,
         inflight_operation_type: null,
         inflight_operation_started_at: null,

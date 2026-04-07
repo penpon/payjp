@@ -20,6 +20,16 @@ function evictExpired<T extends { expires_at: Date }>(store: Map<string, T>): vo
   // If still over capacity after TTL eviction, remove oldest entries (FIFO order of Map)
   if (store.size > MAX_STORE_SIZE) {
     const excess = store.size - MAX_STORE_SIZE;
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        service: 'auth-service',
+        message: 'Store size cap reached, evicting oldest entries',
+        storeSize: store.size,
+        excess,
+        maxSize: MAX_STORE_SIZE,
+      }),
+    );
     const keys = store.keys();
     for (let i = 0; i < excess; i++) {
       const { value, done } = keys.next();

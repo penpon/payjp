@@ -26,11 +26,12 @@ export interface DbClient {
       first_trial_granted_at: Date | null;
       access_end_at: Date;
       next_billing_at: Date;
-      role_state: 'granted';
+      role_state: 'granted' | 'unknown';
       last_synced_at: Date;
       privacy_consented_at: Date;
     },
   ): Promise<Member>;
+  updateMemberRoleState(memberId: string, roleState: 'granted' | 'revoked' | 'unknown'): Promise<void>;
   updateMemberAfterCancel(
     memberId: string,
     params: {
@@ -70,6 +71,7 @@ export interface TransactionDbClient {
     memberId: string,
     params: Parameters<DbClient['updateMemberAfterCancel']>[1],
   ): Promise<Member>;
+  updateMemberRoleState(memberId: string, roleState: 'granted' | 'revoked' | 'unknown'): Promise<void>;
 }
 
 // --- Row mapping helpers ---
@@ -205,6 +207,10 @@ async function queryClearInflightOperation(q: Queryable, memberId: string): Prom
   }
 }
 
+async function queryUpdateMemberRoleState(q: Queryable, memberId: string, roleState: string): Promise<void> {
+  await q.query('UPDATE members SET role_state = $2, updated_at = now() WHERE id = $1', [memberId, roleState]);
+}
+
 async function queryUpdateMemberCustomerId(q: Queryable, memberId: string, payjpCustomerId: string): Promise<void> {
   const result = await q.query('UPDATE members SET payjp_customer_id = $2, updated_at = now() WHERE id = $1', [
     memberId,
@@ -331,6 +337,9 @@ export class PgDbClient implements DbClient {
   }
   updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) {
     return queryUpdateMemberAfterCancel(this.pool, memberId, params);
+  }
+  updateMemberRoleState(memberId: string, roleState: 'granted' | 'revoked' | 'unknown') {
+    return queryUpdateMemberRoleState(this.pool, memberId, roleState);
   }
 
   async acquireAdvisoryLock(discordUserId: string): Promise<boolean> {
@@ -567,5 +576,8 @@ class PgTransactionClient implements TransactionDbClient {
   }
   updateMemberAfterCancel(memberId: string, params: Parameters<DbClient['updateMemberAfterCancel']>[1]) {
     return queryUpdateMemberAfterCancel(this.client, memberId, params);
+  }
+  updateMemberRoleState(memberId: string, roleState: 'granted' | 'revoked' | 'unknown') {
+    return queryUpdateMemberRoleState(this.client, memberId, roleState);
   }
 }

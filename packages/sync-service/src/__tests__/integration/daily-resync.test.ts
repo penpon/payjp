@@ -5,10 +5,15 @@ import type { DailyResyncDeps } from '../../shell/daily-resync.js';
 import { runDailyResync } from '../../shell/daily-resync.js';
 import type { DbPool } from '../../shell/types.js';
 
-function createMockCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
-  const db: DbPool = {
-    query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+function mockDbPool(query: DbPool['query']): DbPool {
+  return {
+    query,
+    withTransaction: async <T>(fn: (q: DbPool['query']) => Promise<T>) => fn(query),
   };
+}
+
+function createMockCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
+  const db: DbPool = mockDbPool(vi.fn(async () => ({ rows: [], rowCount: 0 })));
 
   return {
     db,
@@ -50,8 +55,8 @@ describe('runDailyResync', () => {
   });
 
   it('logs failure when exitCode is non-zero (partial failure)', async () => {
-    const db: DbPool = {
-      query: vi.fn(async (text: string) => {
+    const db: DbPool = mockDbPool(
+      vi.fn(async (text: string) => {
         if (text.includes('FROM members')) {
           return {
             rows: [
@@ -69,7 +74,7 @@ describe('runDailyResync', () => {
         }
         return { rows: [], rowCount: 0 };
       }),
-    };
+    );
 
     const getPayjpSubscription = vi.fn().mockRejectedValue(new Error('PAY.JP API error'));
     const { deps, log } = createDeps({ db, getPayjpSubscription });
@@ -82,9 +87,7 @@ describe('runDailyResync', () => {
   });
 
   it('logs error and rethrows when runResyncCli throws', async () => {
-    const db: DbPool = {
-      query: vi.fn().mockRejectedValue(new Error('DB connection failed')),
-    };
+    const db: DbPool = mockDbPool(vi.fn().mockRejectedValue(new Error('DB connection failed')));
 
     const { deps, log } = createDeps({ db });
 
@@ -99,8 +102,8 @@ describe('runDailyResync', () => {
   });
 
   it('does not clear inflight_operation (--all mode skips inflight members)', async () => {
-    const db: DbPool = {
-      query: vi.fn(async (text: string) => {
+    const db: DbPool = mockDbPool(
+      vi.fn(async (text: string) => {
         if (text.includes('FROM members')) {
           return {
             rows: [
@@ -119,7 +122,7 @@ describe('runDailyResync', () => {
         }
         return { rows: [], rowCount: 0 };
       }),
-    };
+    );
 
     const { deps, log } = createDeps({ db });
     await runDailyResync(deps);

@@ -13,39 +13,41 @@ function createMockDb(
 ): DbPool {
   const insertedEvents: Array<Record<string, unknown>> = [];
 
-  return {
-    query: vi.fn(async (text: string, params?: unknown[]) => {
-      if (options.throwOnQuery) throw new Error('DB unavailable');
+  const queryFn = vi.fn(async (text: string, params?: unknown[]) => {
+    if (options.throwOnQuery) throw new Error('DB unavailable');
 
-      // Transaction control
-      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') {
-        return { rows: [], rowCount: 0 };
-      }
-      // Advisory lock
-      if (text.includes('pg_advisory_xact_lock')) {
-        return { rows: [], rowCount: 0 };
-      }
-      if (text.includes('FROM payjp_events WHERE id')) {
-        return { rows: options.existingEvent ? [options.existingEvent] : [], rowCount: options.existingEvent ? 1 : 0 };
-      }
-      if (text.includes('INSERT INTO payjp_events')) {
-        insertedEvents.push({ id: params?.[0], processing_result: params?.[3] });
-        return { rows: [], rowCount: 1 };
-      }
-      if (text.includes('FROM members WHERE id')) {
-        return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
-      }
-      if (text.includes('FROM members WHERE discord_user_id')) {
-        return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
-      }
-      if (text.includes('FROM members WHERE payjp_subscription_id')) {
-        return { rows: options.memberBySub ? [options.memberBySub] : [], rowCount: options.memberBySub ? 1 : 0 };
-      }
-      if (text.includes('UPDATE members SET')) {
-        return { rows: [], rowCount: 1 };
-      }
+    // Advisory lock
+    if (text.includes('pg_advisory_xact_lock')) {
       return { rows: [], rowCount: 0 };
-    }),
+    }
+    if (text.includes('FROM payjp_events WHERE id')) {
+      return { rows: options.existingEvent ? [options.existingEvent] : [], rowCount: options.existingEvent ? 1 : 0 };
+    }
+    if (text.includes('INSERT INTO payjp_events')) {
+      insertedEvents.push({ id: params?.[0], processing_result: params?.[3] });
+      return { rows: [], rowCount: 1 };
+    }
+    if (text.includes('FROM members WHERE id')) {
+      return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
+    }
+    if (text.includes('FROM members WHERE discord_user_id')) {
+      return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
+    }
+    if (text.includes('FROM members WHERE payjp_subscription_id')) {
+      return { rows: options.memberBySub ? [options.memberBySub] : [], rowCount: options.memberBySub ? 1 : 0 };
+    }
+    if (text.includes('UPDATE members SET')) {
+      return { rows: [], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  });
+
+  return {
+    query: queryFn,
+    withTransaction: async <T>(fn: (query: typeof queryFn) => Promise<T>): Promise<T> => {
+      if (options.throwOnQuery) throw new Error('DB unavailable');
+      return fn(queryFn);
+    },
     _insertedEvents: insertedEvents,
   } as unknown as DbPool & { _insertedEvents: Array<Record<string, unknown>> };
 }

@@ -136,13 +136,21 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       try {
         const refetched = await payjp.fetchSubscription(member.payjp_subscription_id);
         if (refetched.status !== 'canceled') {
-          // Cancel was not actually applied — retain inflight for CLI resolution
+          // Cancel was not actually applied — definite 4xx + reconcile confirms no cancel → clear inflight
+          try {
+            await db.clearInflightOperation(member.id);
+          } catch (clearErr) {
+            slog('error', 'clearInflightOperation failed after definite cancel failure', {
+              discordUserId,
+              operationId,
+              error: String(clearErr),
+            });
+          }
           return {
             ok: false,
-            statusCode: 503,
-            errorCode: 'PAYJP_CANCEL_NOT_CONFIRMED',
-            message: 'Cancel not confirmed after reconciliation',
-            operationId,
+            statusCode: 422,
+            errorCode: 'PAYJP_CANCEL_FAILED',
+            message: 'Cancel not applied (confirmed by reconciliation)',
           };
         }
         canceledSubscription = refetched;
@@ -165,9 +173,10 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
 
     // Step 12: State update + clear inflight
     // PAY.JP cancel is complete — DB update failure retains inflight for CLI resolution
-    const accessEndAt = canceledSubscription.current_period_end
-      ? new Date(canceledSubscription.current_period_end * 1000)
-      : member.access_end_at;
+    const accessEndAt =
+      canceledSubscription.current_period_end != null && canceledSubscription.current_period_end !== 0
+        ? new Date(canceledSubscription.current_period_end * 1000)
+        : member.access_end_at;
 
     let updatedMember: Awaited<ReturnType<typeof db.updateMemberAfterCancel>>;
     try {

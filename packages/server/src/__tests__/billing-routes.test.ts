@@ -135,6 +135,7 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     updateMemberChargeId: vi.fn().mockResolvedValue(undefined),
     updateMemberAfterSubscribe: vi.fn().mockResolvedValue(updatedMember),
     updateMemberAfterCancel: vi.fn().mockResolvedValue(undefined as never),
+    updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),

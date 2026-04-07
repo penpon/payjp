@@ -72,37 +72,39 @@ function makeMockDb(
 ): DbPool {
   const { findEventResult = null, findMemberResult = makeMember(), shouldThrow = false } = options;
 
-  return {
-    query: vi.fn().mockImplementation((sql: string, _params?: unknown[]) => {
-      if (shouldThrow) throw new Error('DB connection failed');
+  const queryFn = vi.fn().mockImplementation((sql: string, _params?: unknown[]) => {
+    if (shouldThrow) throw new Error('DB connection failed');
 
-      // Transaction control
-      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
-        return { rows: [], rowCount: 0 };
-      }
-      // pg_advisory_xact_lock
-      if (sql.includes('pg_advisory_xact_lock')) {
-        return { rows: [], rowCount: 0 };
-      }
-      // Duplicate check
-      if (sql.includes('FROM payjp_events WHERE id')) {
-        return { rows: findEventResult ? [findEventResult] : [], rowCount: findEventResult ? 1 : 0 };
-      }
-      // Member by id (re-fetch under lock)
-      if (sql.includes('FROM members WHERE id')) {
-        return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
-      }
-      // Member by discord_user_id
-      if (sql.includes('FROM members WHERE discord_user_id')) {
-        return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
-      }
-      // Member by subscription_id
-      if (sql.includes('FROM members WHERE payjp_subscription_id')) {
-        return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
-      }
-      // INSERT/UPDATE
-      return { rows: [], rowCount: 1 };
-    }),
+    // pg_advisory_xact_lock
+    if (sql.includes('pg_advisory_xact_lock')) {
+      return { rows: [], rowCount: 0 };
+    }
+    // Duplicate check
+    if (sql.includes('FROM payjp_events WHERE id')) {
+      return { rows: findEventResult ? [findEventResult] : [], rowCount: findEventResult ? 1 : 0 };
+    }
+    // Member by id (re-fetch under lock)
+    if (sql.includes('FROM members WHERE id')) {
+      return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
+    }
+    // Member by discord_user_id
+    if (sql.includes('FROM members WHERE discord_user_id')) {
+      return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
+    }
+    // Member by subscription_id
+    if (sql.includes('FROM members WHERE payjp_subscription_id')) {
+      return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
+    }
+    // INSERT/UPDATE
+    return { rows: [], rowCount: 1 };
+  });
+
+  return {
+    query: queryFn,
+    async withTransaction<T>(fn: (query: typeof queryFn) => Promise<T>): Promise<T> {
+      if (shouldThrow) throw new Error('DB connection failed');
+      return fn(queryFn);
+    },
   };
 }
 

@@ -8,6 +8,12 @@ export function mapCancelError(err: unknown): CancelUIError {
       message: 'リクエストがタイムアウトしました。処理が完了している可能性があるため、自動再試行は行われません。',
     };
   }
+  if (err instanceof TypeError) {
+    return {
+      kind: 'server_error',
+      message: 'ネットワークエラーが発生しました。処理が完了しているか確認するため、ページを再読み込みしてください。',
+    };
+  }
   if (!(err instanceof CancelError)) {
     return { kind: 'server_error', message: '予期しないエラーが発生しました。' };
   }
@@ -30,6 +36,16 @@ export function mapCancelError(err: unknown): CancelUIError {
       };
     case 'INFLIGHT_OPERATION':
       return { kind: 'inflight', message: '処理中の操作があります。', operationId: err.operationId };
+    case 'FORBIDDEN_ORIGIN':
+      return {
+        kind: 'server_error',
+        message: 'アクセス元のサイトが許可されていません。サービスが案内するURLから再度お試しください。',
+      };
+    case 'LOCK_UNAVAILABLE':
+      return {
+        kind: 'server_error',
+        message: 'サーバーが一時的に処理できません。しばらく経ってから再度お試しください。',
+      };
     default:
       if (err.operationId) {
         return { kind: 'inflight', message: 'サーバーエラーが発生しました。', operationId: err.operationId };

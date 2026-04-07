@@ -35,6 +35,8 @@ export function mapSubscribeError(err: unknown): BillingError {
       return { kind: 'three_ds_failed', message: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
     case 'INFLIGHT_OPERATION':
       return { kind: 'inflight', message: '処理中の操作があります。', operationId: err.operationId };
+    case 'PAYJP_TOKEN_INVALID':
+      return { kind: 'card_invalid', message: '決済トークンの取得に失敗しました。再度カード情報を入力してください。' };
     case 'LOCK_UNAVAILABLE':
     case 'DISCORD_ROLE_CAPABILITY':
       return {

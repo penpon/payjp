@@ -173,7 +173,13 @@ export async function checkHealth(isHealthy: () => boolean): Promise<{ status: '
   try {
     if (isHealthy()) return { status: 'ok' };
     return { status: 'error' };
-  } catch {
+  } catch (err) {
+    structuredLog({
+      service: 'auth-service',
+      endpoint: '/health',
+      result: 'error',
+      error: err instanceof Error ? err.message : String(err),
+    });
     return { status: 'error' };
   }
 }
@@ -333,8 +339,14 @@ async function handleStructuredAuthRequest(
       });
       discordUserId = await fetchDiscordUserId(accessToken);
       // Revoke Discord access_token immediately — no longer needed
-      revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch(() => {
-        // Best-effort revocation; failure is non-critical
+      revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch((revokeErr) => {
+        structuredLog({
+          service: 'auth-service',
+          endpoint: '/v1/auth/discord/callback',
+          result: 'failure',
+          error: 'discord_token_revoke_failed',
+          message: revokeErr instanceof Error ? revokeErr.message : String(revokeErr),
+        });
       });
     } catch (err) {
       structuredLog({
