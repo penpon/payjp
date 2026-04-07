@@ -57,9 +57,23 @@ HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは Git
 
 | ツール | 用途 | 適するIssue |
 |---|---|---|
-| `/feature-dev` | 設計判断が必要な新機能（7フェーズ構造化開発） | #1 DBアダプタ, #5-#6 frontend |
-| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #2-#4 Fastifyルート, #7 退会UI, #9 E2E |
-| `/ui-ux-pro-max` | フロントエンドUI/UX設計・スタイル・カラー・フォント選定 | #5-#6 frontend, #7 退会UI |
+| `/feature-dev` | 設計判断が必要な新機能（7フェーズ構造化開発） | #16 退会フロー, #20 E2Eハーネス |
+| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #17 共通エラーUI, #21-#22 E2Eシナリオ |
+| `/ui-ux-pro-max` | フロントエンドUI/UX設計・スタイル・カラー・フォント選定 | #16, #17 frontend |
+
+#### Issue 別推奨モデル
+
+| Issue | 推奨モデル | 理由 |
+|---|---|---|
+| #16 退会フロー | opus high effort | 多コンポーネントUI（ボタン・モーダル・完了画面）＋詳細デザイン仕様を同時参照 |
+| #17 共通エラーUI | sonnet high effort | 仕様確定済みリファクタ、エラーコード別UIの実装 |
+| #18 Docker Compose | sonnet high effort | インフラ設定・構成確認、推論より実装重視 |
+| #19 Cloudflare Pages | sonnet high effort | デプロイ設定確認、ドキュメント作業 |
+| #20 E2Eハーネス | opus medium effort | 複数サービス統合アーキテクチャ設計、1M Windowで仕様＋全サービスコード同時参照 |
+| #21 Webhook E2E | sonnet high effort | #20 で確立したパターンへの追加、シナリオ仕様明確 |
+| #22 Cancel E2E | sonnet high effort | 同上 |
+| #23 T-P0 Go-Live検証 | opus medium effort | T-P0-01〜07 の仕様文書を横断参照しながら検証、1M Windowで全T-P0仕様＋テスト結果を保持 |
+| #24 運用文書 | sonnet high effort | 文書整理・ベンダー確認チェックリスト作成 |
 
 フロントエンド実装・修正時は `/ui-ux-pro-max` を**必須で使用**し、デザインシステム・配色・タイポグラフィ・UXガイドラインの判断に利用すること。CSS・HTML・UIコンポーネントの変更が含まれる場合は必ず `/ui-ux-pro-max` を通すこと。
 
