@@ -16,6 +16,11 @@ import { renderState } from './ui.js';
 
 const CANCEL_PENDING_KEY = 'cancelPending';
 
+/** OAuth 後も未連携のときは退会意図フラグを捨てる（次回の別ログインで誤って cancel API を叩かない） */
+function clearStaleCancelPending(): void {
+  sessionStorage.removeItem(CANCEL_PENDING_KEY);
+}
+
 // --- Plan definitions (hardcoded for MVP) ---
 
 const PLANS: PlanDef[] = [
@@ -321,10 +326,12 @@ async function init(): Promise<void> {
         onStartBilling: () => startBillingFlow(app),
       });
     } else {
+      clearStaleCancelPending();
       renderState(app, 'not_linked', startOAuth);
     }
   } catch (err) {
     if (err instanceof SessionCheckError && err.status === 401) {
+      clearStaleCancelPending();
       renderState(app, 'not_linked', startOAuth);
     } else {
       console.error('[init] Session check failed:', err);
