@@ -184,6 +184,7 @@ function startBillingFlow(app: HTMLElement): void {
         email: data.email,
         cardholderName: data.cardholderName,
         selectedPlanId: data.planId,
+        privacyConsented: data.privacyConsented,
       };
 
       // Disable submit button inline instead of destroying DOM

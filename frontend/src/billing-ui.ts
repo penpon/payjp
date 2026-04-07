@@ -12,7 +12,7 @@ import type {
 // --- Callbacks interface ---
 
 export interface BillingCallbacks {
-  onSubmit: (data: { planId: string; email: string; cardholderName: string }) => void;
+  onSubmit: (data: { planId: string; email: string; cardholderName: string; privacyConsented: boolean }) => void;
   onRetry: () => void;
   onBackToTop: () => void;
   onCardElementReady?: (element: PayjpCardElement) => void;
@@ -205,7 +205,12 @@ function renderBillingForm(
 
   submitBtn.addEventListener('click', () => {
     if (submitBtn.hasAttribute('disabled')) return;
-    callbacks.onSubmit({ planId: selectedPlanId, email: email.trim(), cardholderName: cardholderName.trim() });
+    callbacks.onSubmit({
+      planId: selectedPlanId,
+      email: email.trim(),
+      cardholderName: cardholderName.trim(),
+      privacyConsented: consented,
+    });
   });
 
   // Error banner (if returning from error)

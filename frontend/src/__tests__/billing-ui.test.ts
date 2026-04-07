@@ -106,6 +106,34 @@ describe('billing-ui', () => {
       expect(banner?.textContent).toContain('3DS認証に失敗しました');
     });
 
+    it('should show consent checked when state preserves privacyConsented', () => {
+      renderBilling(
+        container,
+        defaultFormState({ privacyConsented: true }),
+        createMockCallbacks(),
+        createMockPayjpAdapter(),
+        PLANS,
+      );
+
+      const checkbox = container.querySelector('#billing-consent') as HTMLInputElement;
+      expect(checkbox.checked).toBe(true);
+    });
+
+    it('should keep consent checked when re-rendering form after error with privacyConsented saved', () => {
+      renderBilling(
+        container,
+        defaultFormState({
+          privacyConsented: true,
+          error: { kind: 'three_ds_failed', message: '3DS失敗' },
+        }),
+        createMockCallbacks(),
+        createMockPayjpAdapter(),
+        PLANS,
+      );
+
+      expect((container.querySelector('#billing-consent') as HTMLInputElement).checked).toBe(true);
+    });
+
     it('should change plan selection on click', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 
