@@ -1,7 +1,7 @@
 /**
  * sync-service Webhook Handler — Phase 2b (Green)
  */
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { LogEntry } from '@hayane/shared';
 import {
   buildTokenMismatchLog,
@@ -12,6 +12,7 @@ import {
   isSubscriptionCreatedEvent,
   mapSubscriptionStatus,
   maskSensitiveLogFields,
+  resolveEffectiveSubscriptionStatus,
   shouldGrantRole,
   shouldSyncRole,
   validateRequiredFields,
@@ -20,15 +21,12 @@ import {
 } from '../core/index.js';
 import type { DbPool, PayjpEventInsert, WebhookHandlerDeps, WebhookRequest, WebhookResponse } from './types.js';
 
-// Constant-time string comparison (length-independent via padding)
+// Constant-time string comparison via HMAC — normalizes length and prevents timing leaks from Buffer allocation
 function constantTimeCompare(a: string, b: string): boolean {
-  const maxLen = Math.max(a.length, b.length, 1);
-  const bufA = Buffer.alloc(maxLen, 0);
-  const bufB = Buffer.alloc(maxLen, 0);
-  Buffer.from(a).copy(bufA);
-  Buffer.from(b).copy(bufB);
-  // XOR a length-match flag into the result to reject length mismatches
-  return timingSafeEqual(bufA, bufB) && a.length === b.length;
+  const key = 'webhook-token-cmp';
+  const ha = createHmac('sha256', key).update(a).digest();
+  const hb = createHmac('sha256', key).update(b).digest();
+  return timingSafeEqual(ha, hb);
 }
 
 export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDeps): Promise<WebhookResponse> {
@@ -72,7 +70,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
     } catch (err) {
       return handleDbError(err, deps);
     }
-    return { status: 200, body: { status: 'ignored', reason: ignoreReason } };
+    return { status: 200, body: { ok: true } };
   }
 
   // REQ-SYNC-005: Required field validation
@@ -90,14 +88,14 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
     } catch (err) {
       return handleDbError(err, deps);
     }
-    return { status: 200, body: { status: 'failed', reason: 'missing_required_fields' } };
+    return { status: 200, body: { ok: true } };
   }
 
   // REQ-SYNC-006: Idempotency
   try {
     const existing = await findPayjpEvent(deps.db, event.id!);
     if (existing) {
-      return { status: 200, body: { status: 'duplicate' } };
+      return { status: 200, body: { ok: true } };
     }
   } catch (err) {
     return handleDbError(err, deps);
@@ -117,18 +115,12 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
     } catch (err) {
       return handleDbError(err, deps);
     }
-    return { status: 200, body: { status: 'ignored', reason: 'subscription_created' } };
+    return { status: 200, body: { ok: true } };
   }
 
   // REQ-SYNC-029: Acquire per-member advisory lock before member resolution/update
+  // Use hashtext for consistency with billing-service's lock strategy
   const discordUserIdFromMetadata = event.data?.metadata?.discord_user_id;
-  if (discordUserIdFromMetadata) {
-    try {
-      await deps.db.query('SELECT pg_advisory_xact_lock($1::bigint)', [discordUserIdFromMetadata]);
-    } catch (err) {
-      return handleDbError(err, deps);
-    }
-  }
 
   // REQ-SYNC-009: Member resolution
   let member: Record<string, unknown> | null = null;
@@ -136,15 +128,19 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
     member = await resolveMember(deps.db, discordUserIdFromMetadata, event.data!.id!);
   } catch (err) {
     if (err instanceof MemberResolutionConflictError) {
-      await insertPayjpEvent(deps.db, {
-        id: event.id!,
-        event_type: event.type!,
-        payload: event,
-        processing_result: 'failed',
-        fail_reason: 'member_resolution_conflict',
-        data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
-      });
-      return { status: 200, body: { status: 'failed', reason: 'member_resolution_conflict' } };
+      try {
+        await insertPayjpEvent(deps.db, {
+          id: event.id!,
+          event_type: event.type!,
+          payload: event,
+          processing_result: 'failed',
+          fail_reason: 'member_resolution_conflict',
+          data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
+        });
+      } catch (insertErr) {
+        return handleDbError(insertErr, deps);
+      }
+      return { status: 200, body: { ok: true } };
     }
     return handleDbError(err, deps);
   }
@@ -162,99 +158,125 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
     } catch (err) {
       return handleDbError(err, deps);
     }
-    return { status: 200, body: { status: 'failed', reason: 'member_not_found' } };
+    return { status: 200, body: { ok: true } };
   }
 
-  // REQ-SYNC-007: Stale event check
-  const lastEventCreated = member.last_payjp_event_created_at as number | null;
-  if (isEventStale(event.created!, lastEventCreated)) {
-    try {
+  // --- Transactional section: lock + stale check + status update + event insert ---
+  const lockKey = member.discord_user_id as string;
+  try {
+    await deps.db.query('BEGIN');
+    // Advisory lock inside transaction — released automatically on COMMIT/ROLLBACK
+    await deps.db.query('SELECT pg_advisory_xact_lock(0, hashtext($1))', [lockKey]);
+
+    // Re-fetch member inside transaction to get consistent state under lock
+    const memberRes = await deps.db.query('SELECT * FROM members WHERE id = $1', [member.id]);
+    const lockedMember = (memberRes.rows[0] as Record<string, unknown>) ?? member;
+
+    // REQ-SYNC-007: Stale event check
+    const lastEventCreated = lockedMember.last_payjp_event_created_at as number | null;
+    if (isEventStale(event.created!, lastEventCreated)) {
       await insertPayjpEvent(deps.db, {
         id: event.id!,
         event_type: event.type!,
         payload: event,
         processing_result: 'ignored',
-        member_id: member.id as string,
+        member_id: lockedMember.id as string,
         ignore_reason: 'stale_event',
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
-    } catch (err) {
-      return handleDbError(err, deps);
+      await deps.db.query('COMMIT');
+      return { status: 200, body: { ok: true } };
     }
-    return { status: 200, body: { status: 'ignored', reason: 'stale_event' } };
-  }
 
-  // REQ-SYNC-011: Unknown status check
-  const dataStatus = event.data!.status!;
-  if (isStatusUnknown(dataStatus)) {
-    try {
+    // REQ-SYNC-011: Unknown status check（subscription.deleted は resolve で常に deleted）
+    const dataStatus = resolveEffectiveSubscriptionStatus(event.type!, event.data?.status);
+    if (isStatusUnknown(dataStatus)) {
       await insertPayjpEvent(deps.db, {
         id: event.id!,
         event_type: event.type!,
         payload: event,
         processing_result: 'failed',
-        member_id: member.id as string,
+        member_id: lockedMember.id as string,
         fail_reason: `unknown_status:${dataStatus}`,
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
-      // Safe-side revocation
+      await deps.db.query('COMMIT');
+      // Safe-side revocation (outside transaction — best-effort)
       try {
-        await deps.syncRole(member.discord_user_id as string, 'revoke');
-      } catch {
-        // Log but don't block
+        await deps.syncRole(lockedMember.discord_user_id as string, 'revoke');
+      } catch (roleSyncErr) {
+        deps.log({
+          timestamp: formatRfc3339Utc(new Date()),
+          service: 'sync-service',
+          endpoint: '/v1/payjp/webhook',
+          result: 'failure',
+          error: 'role_sync_failed_unknown_status',
+          member_id: lockedMember.id as string,
+          discord_user_id: lockedMember.discord_user_id as string,
+          action: 'revoke',
+          roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
+        } as unknown as LogEntry);
       }
-    } catch (err) {
-      return handleDbError(err, deps);
+      return { status: 200, body: { ok: true } };
     }
-    return { status: 200, body: { status: 'failed', reason: 'unknown_status' } };
-  }
 
-  // REQ-SYNC-010: Status update
-  const newStatus = mapSubscriptionStatus(dataStatus)!;
-  const oldStatus = member.subscription_status as string | null;
-  const statusChanged = shouldSyncRole(oldStatus, newStatus);
+    // REQ-SYNC-010: Status update (atomic with event insert)
+    const newStatus = mapSubscriptionStatus(dataStatus)!;
+    const oldStatus = lockedMember.subscription_status as string | null;
+    const statusChanged = shouldSyncRole(oldStatus, newStatus);
 
-  const updates: Record<string, unknown> = {
-    last_payjp_event_created_at: event.created!,
-  };
+    const updates: Record<string, unknown> = {
+      last_payjp_event_created_at: event.created!,
+      subscription_status: newStatus,
+    };
 
-  // Always update status
-  updates.subscription_status = newStatus;
+    if (event.data?.plan?.id) {
+      updates.payjp_plan_id = event.data.plan.id;
+    }
+    if (event.data?.current_period_end) {
+      updates.access_end_at = new Date(event.data.current_period_end * 1000);
+    }
 
-  // subscription.updated: always update plan/dates even if status unchanged
-  if (event.data?.plan?.id) {
-    updates.payjp_plan_id = event.data.plan.id;
-  }
-  if (event.data?.current_period_end) {
-    updates.access_end_at = new Date(event.data.current_period_end * 1000);
-  }
-
-  try {
-    await updateMemberFromWebhook(deps.db, member.id as string, updates);
-
+    await updateMemberFromWebhook(deps.db, lockedMember.id as string, updates);
     await insertPayjpEvent(deps.db, {
       id: event.id!,
       event_type: event.type!,
       payload: event,
       processing_result: 'processed',
-      member_id: member.id as string,
+      member_id: lockedMember.id as string,
       data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
     });
+    await deps.db.query('COMMIT');
 
-    // REQ-SYNC-012: Role sync only on status change
+    // REQ-SYNC-012: Role sync only on status change (outside transaction — best-effort)
     if (statusChanged) {
       const action = shouldGrantRole(newStatus) ? 'grant' : 'revoke';
       try {
-        await deps.syncRole(member.discord_user_id as string, action);
-      } catch {
-        // Retry logic is in syncRole; log but don't block
+        await deps.syncRole(lockedMember.discord_user_id as string, action);
+      } catch (roleSyncErr) {
+        deps.log({
+          timestamp: formatRfc3339Utc(new Date()),
+          service: 'sync-service',
+          endpoint: '/v1/payjp/webhook',
+          result: 'failure',
+          error: 'role_sync_failed',
+          member_id: lockedMember.id as string,
+          discord_user_id: lockedMember.discord_user_id as string,
+          action,
+          roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
+        } as unknown as LogEntry);
       }
     }
   } catch (err) {
+    try {
+      await deps.db.query('ROLLBACK');
+    } catch {
+      // ROLLBACK failure is not actionable beyond logging the original error
+    }
     return handleDbError(err, deps);
   }
 
-  return { status: 200, body: { status: 'processed' } };
+  return { status: 200, body: { ok: true } };
 }
 
 // --- DB helpers ---
@@ -351,13 +373,15 @@ async function updateMemberFromWebhook(db: DbPool, memberId: string, updates: Re
   await db.query(`UPDATE members SET ${setClauses.join(', ')} WHERE id = $${i}`, values);
 }
 
-function handleDbError(_err: unknown, deps: WebhookHandlerDeps): WebhookResponse {
+function handleDbError(err: unknown, deps: WebhookHandlerDeps): WebhookResponse {
   deps.log({
     timestamp: formatRfc3339Utc(new Date()),
     service: 'sync-service',
     endpoint: '/v1/payjp/webhook',
     result: 'error',
-    error: 'db_unavailable',
-  });
+    error: 'db_error',
+    errorMessage: err instanceof Error ? err.message : String(err),
+    errorCode: (err as { code?: string })?.code,
+  } as unknown as LogEntry);
   return { status: 503, body: { error: 'Service Unavailable' } };
 }

@@ -17,12 +17,23 @@ function createMockDb(
     query: vi.fn(async (text: string, params?: unknown[]) => {
       if (options.throwOnQuery) throw new Error('DB unavailable');
 
+      // Transaction control
+      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') {
+        return { rows: [], rowCount: 0 };
+      }
+      // Advisory lock
+      if (text.includes('pg_advisory_xact_lock')) {
+        return { rows: [], rowCount: 0 };
+      }
       if (text.includes('FROM payjp_events WHERE id')) {
         return { rows: options.existingEvent ? [options.existingEvent] : [], rowCount: options.existingEvent ? 1 : 0 };
       }
       if (text.includes('INSERT INTO payjp_events')) {
         insertedEvents.push({ id: params?.[0], processing_result: params?.[3] });
         return { rows: [], rowCount: 1 };
+      }
+      if (text.includes('FROM members WHERE id')) {
+        return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
       }
       if (text.includes('FROM members WHERE discord_user_id')) {
         return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
@@ -91,8 +102,34 @@ describe('INT-SYNC-001: Webhook happy path', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant');
+  });
+});
+
+// subscription.deleted may omit data.status (PAY.JP); canonical status is always deleted per spec
+describe('Webhook subscription.deleted without data.status', () => {
+  it('omitted data.status → processed as deleted + role revoke', async () => {
+    const db = createMockDb({ member: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent({
+        type: 'subscription.deleted',
+        created: 1500,
+        data: {
+          id: 'sub_test_1',
+          object: 'subscription',
+          metadata: { discord_user_id: 'user_1' },
+        },
+      }),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
   });
 });
 
@@ -112,7 +149,7 @@ describe('INT-SYNC-002: Webhook idempotency', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('duplicate');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).not.toHaveBeenCalled();
   });
 });
@@ -132,8 +169,8 @@ describe('INT-SYNC-003: Webhook stale event', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('ignored');
-    expect((res.body as Record<string, unknown>).reason).toBe('stale_event');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    // Uniform response body — no internal details leaked
   });
 });
 
@@ -152,7 +189,7 @@ describe('INT-SYNC-004: Webhook same-second event', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -199,7 +236,7 @@ describe('INT-SYNC-006: Webhook unknown status', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('failed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
   });
 });
@@ -218,8 +255,8 @@ describe('INT-SYNC-007: Webhook subscription.created', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('ignored');
-    expect((res.body as Record<string, unknown>).reason).toBe('subscription_created');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    // Uniform response body — no internal details leaked
     expect(deps.syncRole).not.toHaveBeenCalled();
   });
 
@@ -235,7 +272,7 @@ describe('INT-SYNC-007: Webhook subscription.created', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('failed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -255,8 +292,8 @@ describe('INT-SYNC-008: Webhook member resolution', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('failed');
-    expect((res.body as Record<string, unknown>).reason).toBe('member_resolution_conflict');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    // Uniform response body — no internal details leaked
   });
 });
 
@@ -274,7 +311,7 @@ describe('INT-SYNC-009: Webhook subscription.updated status-unchanged', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     // Status didn't change (active → active), so no role sync
     expect(deps.syncRole).not.toHaveBeenCalled();
     // But member update should have happened (plan/dates)
@@ -320,7 +357,7 @@ describe('INT-SYNC-028: Webhook data.metadata.operation_id preservation', () => 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
     // Verify the event was inserted (processed)
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -338,7 +375,7 @@ describe('INT-SYNC-038: Webhook subscription.renewed', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -391,7 +428,7 @@ describe('INT-SYNC-026: Discord role retry all fail', () => {
     const res = await handleWebhook(req, deps);
     // Should still return 200, not propagate the error
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 

@@ -208,6 +208,15 @@ export function isStatusUnknown(status: string | null): boolean {
   return !KNOWN_STATUSES.has(status);
 }
 
+/**
+ * `subscription.deleted` の Webhook では PAY.JP が `data.status` を省略することがある。
+ * 仕様（2weeks-spec）では event.type のみで扱い、常に canonical な `deleted` とする（payload の status は無視）。
+ */
+export function resolveEffectiveSubscriptionStatus(eventType: string, dataStatus: string | undefined): string {
+  if (eventType === 'subscription.deleted') return 'deleted';
+  return dataStatus ?? '';
+}
+
 // REQ-SYNC-015: PROP-SYNC-011
 export function maskSensitiveLogFields(entry: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
