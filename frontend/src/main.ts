@@ -1,4 +1,5 @@
 import {
+  cancelSubscription,
   checkSession,
   createSubscription,
   fetchSubscriptionStatus,
@@ -7,9 +8,33 @@ import {
   startOAuth,
 } from './api.js';
 import type { BillingCallbacks } from './billing-ui.js';
+import { showCancelConfirmModal } from './cancel-ui.js';
+import { mapCancelError } from './map-cancel-error.js';
 import { mapSubscribeError } from './map-subscribe-error.js';
 import type { BillingFormState, PayjpAdapter, PlanDef } from './types.js';
 import { renderState } from './ui.js';
+
+const CANCEL_PENDING_KEY = 'cancelPending';
+/** Max age for cancelPending flag: 10 minutes. Prevents stale intent from firing on later page visits. */
+const CANCEL_PENDING_TTL_MS = 10 * 60 * 1000;
+
+/** Set cancelPending with a timestamp so it expires after CANCEL_PENDING_TTL_MS. */
+function setCancelPending(): void {
+  sessionStorage.setItem(CANCEL_PENDING_KEY, String(Date.now()));
+}
+
+/** Returns true only if cancelPending is set and has not expired. */
+function isCancelPendingValid(): boolean {
+  const raw = sessionStorage.getItem(CANCEL_PENDING_KEY);
+  if (!raw) return false;
+  const ts = Number(raw);
+  return !Number.isNaN(ts) && Date.now() - ts < CANCEL_PENDING_TTL_MS;
+}
+
+/** OAuth 後も未連携のときは退会意図フラグを捨てる（次回の別ログインで誤って cancel API を叩かない） */
+function clearStaleCancelPending(): void {
+  sessionStorage.removeItem(CANCEL_PENDING_KEY);
+}
 
 // --- Plan definitions (hardcoded for MVP) ---
 
@@ -233,6 +258,23 @@ function startBillingFlow(app: HTMLElement): void {
   render();
 }
 
+// --- Cancel flow ---
+
+function startCancelFlow(app: HTMLElement): void {
+  let dismiss: (() => void) | null = null;
+  dismiss = showCancelConfirmModal(app, {
+    onConfirm: () => {
+      dismiss?.();
+      setCancelPending();
+      startOAuth();
+    },
+    onDismiss: () => {
+      dismiss?.();
+      dismiss = null;
+    },
+  });
+}
+
 // --- Init ---
 
 async function init(): Promise<void> {
@@ -248,6 +290,31 @@ async function init(): Promise<void> {
   try {
     const session = await checkSession();
     if (session.linked) {
+      // Check for pending cancel after OAuth redirect (TTL-validated to prevent stale intent)
+      if (isCancelPendingValid()) {
+        sessionStorage.removeItem(CANCEL_PENDING_KEY);
+        renderState(app, 'loading', startOAuth);
+        try {
+          const result = await cancelSubscription();
+          renderState(app, 'cancel_complete', startOAuth, { cancelComplete: { result } });
+        } catch (err) {
+          console.error('[cancel] cancelSubscription failed:', err);
+          const cancelError = mapCancelError(err);
+          renderState(
+            app,
+            'cancel_error',
+            cancelError.kind === 'session_expired'
+              ? () => {
+                  setCancelPending();
+                  startOAuth();
+                }
+              : startOAuth,
+            { cancelError },
+          );
+        }
+        return;
+      }
+
       let subscription: Awaited<ReturnType<typeof fetchSubscriptionStatus>>;
       try {
         subscription = await fetchSubscriptionStatus();
@@ -264,7 +331,11 @@ async function init(): Promise<void> {
 
       if (subscription) {
         renderState(app, 'linked', startOAuth, {
-          subscribed: { subscription, plans: PLANS },
+          subscribed: {
+            subscription,
+            plans: PLANS,
+            onStartCancel: () => startCancelFlow(app),
+          },
         });
         return;
       }
@@ -280,10 +351,12 @@ async function init(): Promise<void> {
         onStartBilling: () => startBillingFlow(app),
       });
     } else {
+      clearStaleCancelPending();
       renderState(app, 'not_linked', startOAuth);
     }
   } catch (err) {
     if (err instanceof SessionCheckError && err.status === 401) {
+      clearStaleCancelPending();
       renderState(app, 'not_linked', startOAuth);
     } else {
       console.error('[init] Session check failed:', err);

@@ -8,33 +8,49 @@ function createMockDb(
     existingEvent?: Record<string, unknown> | null;
     member?: Record<string, unknown> | null;
     memberBySub?: Record<string, unknown> | null;
+    /** Row returned by `SELECT * FROM members WHERE id = $1` inside the transaction (omit to mirror `member`) */
+    memberRefetchInTx?: Record<string, unknown> | null;
     throwOnQuery?: boolean;
   } = {},
 ): DbPool {
   const insertedEvents: Array<Record<string, unknown>> = [];
 
-  return {
-    query: vi.fn(async (text: string, params?: unknown[]) => {
-      if (options.throwOnQuery) throw new Error('DB unavailable');
+  const queryFn = vi.fn(async (text: string, params?: unknown[]) => {
+    if (options.throwOnQuery) throw new Error('DB unavailable');
 
-      if (text.includes('FROM payjp_events WHERE id')) {
-        return { rows: options.existingEvent ? [options.existingEvent] : [], rowCount: options.existingEvent ? 1 : 0 };
-      }
-      if (text.includes('INSERT INTO payjp_events')) {
-        insertedEvents.push({ id: params?.[0], processing_result: params?.[3] });
-        return { rows: [], rowCount: 1 };
-      }
-      if (text.includes('FROM members WHERE discord_user_id')) {
-        return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
-      }
-      if (text.includes('FROM members WHERE payjp_subscription_id')) {
-        return { rows: options.memberBySub ? [options.memberBySub] : [], rowCount: options.memberBySub ? 1 : 0 };
-      }
-      if (text.includes('UPDATE members SET')) {
-        return { rows: [], rowCount: 1 };
-      }
+    // Advisory lock
+    if (text.includes('pg_advisory_xact_lock')) {
       return { rows: [], rowCount: 0 };
-    }),
+    }
+    if (text.includes('FROM payjp_events WHERE id')) {
+      return { rows: options.existingEvent ? [options.existingEvent] : [], rowCount: options.existingEvent ? 1 : 0 };
+    }
+    if (text.includes('INSERT INTO payjp_events')) {
+      insertedEvents.push({ id: params?.[0], processing_result: params?.[3] });
+      return { rows: [], rowCount: 1 };
+    }
+    if (text.includes('FROM members WHERE id')) {
+      const row = options.memberRefetchInTx !== undefined ? options.memberRefetchInTx : options.member;
+      return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
+    }
+    if (text.includes('FROM members WHERE discord_user_id')) {
+      return { rows: options.member ? [options.member] : [], rowCount: options.member ? 1 : 0 };
+    }
+    if (text.includes('FROM members WHERE payjp_subscription_id')) {
+      return { rows: options.memberBySub ? [options.memberBySub] : [], rowCount: options.memberBySub ? 1 : 0 };
+    }
+    if (text.includes('UPDATE members SET')) {
+      return { rows: [], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  });
+
+  return {
+    query: queryFn,
+    withTransaction: async <T>(fn: (query: typeof queryFn) => Promise<T>): Promise<T> => {
+      if (options.throwOnQuery) throw new Error('DB unavailable');
+      return fn(queryFn);
+    },
     _insertedEvents: insertedEvents,
   } as unknown as DbPool & { _insertedEvents: Array<Record<string, unknown>> };
 }
@@ -91,8 +107,54 @@ describe('INT-SYNC-001: Webhook happy path', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant');
+  });
+});
+
+// Member deleted between resolution and transactional re-fetch (TOCTOU)
+describe('INT-SYNC-037: Member missing on re-fetch inside transaction', () => {
+  it('0 rows from SELECT WHERE id under lock → failed member_not_found, no role sync', async () => {
+    const db = createMockDb({ member: MEMBER, memberRefetchInTx: null });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent(),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    expect(deps.syncRole).not.toHaveBeenCalled();
+    const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
+    expect(inserted.some((e) => e.processing_result === 'failed')).toBe(true);
+  });
+});
+
+// subscription.deleted may omit data.status (PAY.JP); canonical status is always deleted per spec
+describe('Webhook subscription.deleted without data.status', () => {
+  it('omitted data.status → processed as deleted + role revoke', async () => {
+    const db = createMockDb({ member: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent({
+        type: 'subscription.deleted',
+        created: 1500,
+        data: {
+          id: 'sub_test_1',
+          object: 'subscription',
+          metadata: { discord_user_id: 'user_1' },
+        },
+      }),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
   });
 });
 
@@ -112,7 +174,7 @@ describe('INT-SYNC-002: Webhook idempotency', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('duplicate');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).not.toHaveBeenCalled();
   });
 });
@@ -132,8 +194,8 @@ describe('INT-SYNC-003: Webhook stale event', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('ignored');
-    expect((res.body as Record<string, unknown>).reason).toBe('stale_event');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    // Uniform response body — no internal details leaked
   });
 });
 
@@ -152,7 +214,7 @@ describe('INT-SYNC-004: Webhook same-second event', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -199,7 +261,7 @@ describe('INT-SYNC-006: Webhook unknown status', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('failed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
   });
 });
@@ -218,8 +280,8 @@ describe('INT-SYNC-007: Webhook subscription.created', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('ignored');
-    expect((res.body as Record<string, unknown>).reason).toBe('subscription_created');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    // Uniform response body — no internal details leaked
     expect(deps.syncRole).not.toHaveBeenCalled();
   });
 
@@ -235,7 +297,7 @@ describe('INT-SYNC-007: Webhook subscription.created', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('failed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -255,8 +317,8 @@ describe('INT-SYNC-008: Webhook member resolution', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('failed');
-    expect((res.body as Record<string, unknown>).reason).toBe('member_resolution_conflict');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    // Uniform response body — no internal details leaked
   });
 });
 
@@ -274,7 +336,7 @@ describe('INT-SYNC-009: Webhook subscription.updated status-unchanged', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
     // Status didn't change (active → active), so no role sync
     expect(deps.syncRole).not.toHaveBeenCalled();
     // But member update should have happened (plan/dates)
@@ -320,7 +382,7 @@ describe('INT-SYNC-028: Webhook data.metadata.operation_id preservation', () => 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
     // Verify the event was inserted (processed)
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -338,7 +400,7 @@ describe('INT-SYNC-038: Webhook subscription.renewed', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 
@@ -391,7 +453,7 @@ describe('INT-SYNC-026: Discord role retry all fail', () => {
     const res = await handleWebhook(req, deps);
     // Should still return 200, not propagate the error
     expect(res.status).toBe(200);
-    expect((res.body as Record<string, unknown>).status).toBe('processed');
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
   });
 });
 

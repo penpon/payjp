@@ -571,6 +571,142 @@
       margin-top: 12px;
     }
 
+    /* --- Cancel button --- */
+
+    .cancel-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: #ea2261;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 400;
+      padding: 10px 20px;
+      border: 1px solid rgba(234, 34, 97, 0.3);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 150ms ease-out;
+    }
+
+    .cancel-button:hover { background: rgba(234, 34, 97, 0.05); }
+    .cancel-button:focus-visible { outline: 2px solid #ea2261; outline-offset: 2px; }
+    .cancel-button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* --- Cancel section --- */
+
+    .cancel-separator {
+      border: none;
+      border-top: 1px solid var(--color-border);
+      margin: 24px 0;
+    }
+
+    .cancel-section-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--color-heading);
+      margin-bottom: 8px;
+    }
+
+    .cancel-section-desc {
+      font-size: 14px;
+      color: var(--color-body);
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    /* --- Modal overlay --- */
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 24px;
+    }
+
+    .modal {
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow:
+        rgba(50, 50, 93, 0.25) 0px 50px 100px -20px,
+        rgba(0, 0, 0, 0.3) 0px 30px 60px -30px;
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .modal-title {
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--color-heading);
+      margin-bottom: 12px;
+    }
+
+    .modal-body {
+      font-size: 14px;
+      color: var(--color-body);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .modal-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* --- Ghost Neutral button --- */
+
+    .ghost-neutral-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      background: transparent;
+      color: var(--color-body);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 400;
+      padding: 10px 20px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 150ms ease-out;
+    }
+
+    .ghost-neutral-button:hover { border-color: var(--color-body); }
+    .ghost-neutral-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+    /* --- Cancel complete icon --- */
+
+    .cancel-complete-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(83, 58, 253, 0.1);
+      color: #533afd;
+      font-size: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    /* --- Cancel info card --- */
+
+    .cancel-info-card {
+      background: rgba(83, 58, 253, 0.04);
+      border: 1px solid #d6d9fc;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
     /* --- Responsive --- */
 
     @media (max-width: 640px) {
@@ -595,6 +731,8 @@
       .discord-button,
       .submit-button,
       .secondary-button,
+      .ghost-neutral-button,
+      .cancel-button,
       .plan-card,
       .form-input,
       .copy-button {

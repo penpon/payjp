@@ -21,6 +21,7 @@ import {
   isStatusUnknown,
   mapSubscriptionStatus,
   maskSensitiveLogFields,
+  resolveEffectiveSubscriptionStatus,
   shouldGrantRole,
   shouldSyncRole,
   validateCliArgs,
@@ -359,13 +360,21 @@ describe('PROP-SYNC-013: validateRequiredFields', () => {
   });
 
   it('created/deleted events do not require data.status', () => {
-    const event = {
+    const created = {
       id: 'evt_1',
       type: 'subscription.created',
       created: 1000,
       data: { id: 'sub_1' },
     };
-    expect(validateRequiredFields(event).ok).toBe(true);
+    expect(validateRequiredFields(created).ok).toBe(true);
+
+    const deleted = {
+      id: 'evt_2',
+      type: 'subscription.deleted',
+      created: 1000,
+      data: { id: 'sub_1', object: 'subscription' as const },
+    };
+    expect(validateRequiredFields(deleted).ok).toBe(true);
   });
 
   it('non-created/deleted without data.status → not ok', () => {
@@ -378,6 +387,21 @@ describe('PROP-SYNC-013: validateRequiredFields', () => {
     const result = validateRequiredFields(event);
     expect(result.ok).toBe(false);
     expect(result.missingFields).toContain('data.status');
+  });
+});
+
+// resolveEffectiveSubscriptionStatus (subscription.deleted + missing data.status)
+describe('resolveEffectiveSubscriptionStatus', () => {
+  it('subscription.deleted → deleted even when data.status omitted', () => {
+    expect(resolveEffectiveSubscriptionStatus('subscription.deleted', undefined)).toBe('deleted');
+  });
+
+  it('subscription.deleted → deleted even when payload status differs', () => {
+    expect(resolveEffectiveSubscriptionStatus('subscription.deleted', 'active')).toBe('deleted');
+  });
+
+  it('other events pass through data.status', () => {
+    expect(resolveEffectiveSubscriptionStatus('subscription.updated', 'paused')).toBe('paused');
   });
 });
 

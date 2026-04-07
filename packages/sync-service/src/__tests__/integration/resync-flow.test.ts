@@ -7,17 +7,23 @@ import type { CliDeps } from '../../shell/cli.js';
 import { runResyncCli } from '../../shell/cli.js';
 import type { DbPool } from '../../shell/types.js';
 
+function mockDbPool(query: DbPool['query']): DbPool {
+  return {
+    query,
+    withTransaction: async <T>(fn: (q: DbPool['query']) => Promise<T>) => fn(query),
+  };
+}
+
 function createMockDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   const queryResults: Map<string, { rows: unknown[]; rowCount: number }> = new Map();
 
-  const db: DbPool = {
-    query: vi.fn(async (text: string, _params?: unknown[]) => {
-      for (const [key, val] of queryResults.entries()) {
-        if (text.includes(key)) return val;
-      }
-      return { rows: [], rowCount: 0 };
-    }),
-  };
+  const queryFn = vi.fn(async (text: string, _params?: unknown[]) => {
+    for (const [key, val] of queryResults.entries()) {
+      if (text.includes(key)) return val;
+    }
+    return { rows: [], rowCount: 0 };
+  });
+  const db: DbPool = mockDbPool(queryFn);
 
   return {
     db,
@@ -94,14 +100,14 @@ describe('INT-SYNC-022: CLI output format', () => {
 describe('INT-SYNC-013: CLI subscribe recovery: charge search + create', () => {
   it('no existing charge → creates 1 charge', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string, _params?: unknown[]) => {
+      db: mockDbPool(
+        vi.fn(async (text: string, _params?: unknown[]) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_SUBSCRIBE], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     const _result = await runResyncCli(['--operation-id', 'op_1'], deps);
@@ -113,14 +119,14 @@ describe('INT-SYNC-013: CLI subscribe recovery: charge search + create', () => {
 describe('INT-SYNC-014: CLI subscribe recovery: existing charge found', () => {
   it('1 matching charge → uses existing', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_SUBSCRIBE], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       listPayjpCharges: vi.fn(async () => ({
         data: [{ id: 'chg_existing', metadata: { operation_id: 'op_1' } }],
         has_more: false,
@@ -136,14 +142,14 @@ describe('INT-SYNC-014: CLI subscribe recovery: existing charge found', () => {
 describe('INT-SYNC-015: CLI subscribe recovery: 2+ charges → fail-close', () => {
   it('multiple matching charges → fail-close', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_SUBSCRIBE], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       listPayjpCharges: vi.fn(async () => ({
         data: [
           { id: 'chg_1', metadata: { operation_id: 'op_1' } },
@@ -163,14 +169,14 @@ describe('INT-SYNC-015: CLI subscribe recovery: 2+ charges → fail-close', () =
 describe('INT-SYNC-016: CLI subscribe recovery: customer_id NULL', () => {
   it('NULL payjp_customer_id → fail-close + impact log', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [{ ...MEMBER_WITH_INFLIGHT_SUBSCRIBE, payjp_customer_id: null }], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     const result = await runResyncCli(['--operation-id', 'op_1'], deps);
@@ -183,14 +189,14 @@ describe('INT-SYNC-016: CLI subscribe recovery: customer_id NULL', () => {
 describe('INT-SYNC-017: CLI cancel recovery: subscription search + cancel', () => {
   it('found subscription → cancel if not already canceled', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_CANCEL], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       getPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'active' })),
     });
 
@@ -204,14 +210,14 @@ describe('INT-SYNC-018: CLI cancel recovery: metadata fallback with period_end',
   it('no metadata, 1 candidate + period_end match → adopt', async () => {
     const memberNoSubId = { ...MEMBER_WITH_INFLIGHT_CANCEL, payjp_subscription_id: null };
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [memberNoSubId], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       listPayjpSubscriptions: vi.fn(async () => ({
         data: [
           {
@@ -242,14 +248,14 @@ describe('INT-SYNC-019: CLI --discord-user-id: full reconciliation', () => {
       last_payjp_event_created_at: null,
     };
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('discord_user_id')) {
             return { rows: [member], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     const result = await runResyncCli(['--discord-user-id', 'user_1'], deps);
@@ -279,14 +285,14 @@ describe('INT-SYNC-020: CLI --all: iterate all + verify 0 inflight residual', ()
       },
     ];
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
             return { rows: members, rowCount: 2 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     const result = await runResyncCli(['--all'], deps);
@@ -299,14 +305,14 @@ describe('INT-SYNC-020: CLI --all: iterate all + verify 0 inflight residual', ()
 describe('INT-SYNC-023: CLI last_payjp_event_created_at update after recovery', () => {
   it('max(existing, resyncStartUnix) after recovery', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string, _params?: unknown[]) => {
+      db: mockDbPool(
+        vi.fn(async (text: string, _params?: unknown[]) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_CANCEL], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       getPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'active' })),
     });
 
@@ -322,14 +328,14 @@ describe('INT-SYNC-023: CLI last_payjp_event_created_at update after recovery', 
 describe('INT-SYNC-024: member_impact_logs: insert on failure, resolve on recovery', () => {
   it('insert on failure', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [{ ...MEMBER_WITH_INFLIGHT_SUBSCRIBE, payjp_customer_id: null }], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     await runResyncCli(['--operation-id', 'op_1'], deps);
@@ -353,14 +359,14 @@ describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
       },
     ];
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
             return { rows: members, rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     const _result = await runResyncCli(['--all'], deps);
@@ -381,14 +387,14 @@ describe('INT-SYNC-011: Daily resync: subscription 404', () => {
       },
     ];
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
             return { rows: members, rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       getPayjpSubscription: vi.fn(async () => null), // 404
     });
 
@@ -416,14 +422,14 @@ describe('INT-SYNC-012: Daily resync: does NOT clear inflight', () => {
       },
     ];
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
             return { rows: members, rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     await runResyncCli(['--all'], deps);
@@ -439,14 +445,14 @@ describe('INT-SYNC-029: CLI subscribe: offset>900 with has_more → fail-close',
   it('offset>900 → fail-close', async () => {
     let _callCount = 0;
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [MEMBER_WITH_INFLIGHT_SUBSCRIBE], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       listPayjpCharges: vi.fn(async () => {
         _callCount++;
         return { data: [], has_more: true }; // Always has_more
@@ -463,14 +469,14 @@ describe('INT-SYNC-030: CLI cancel: metadata absent + period_end mismatch → fa
   it('period_end mismatch → fail-close', async () => {
     const memberNoSubId = { ...MEMBER_WITH_INFLIGHT_CANCEL, payjp_subscription_id: null };
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [memberNoSubId], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       listPayjpSubscriptions: vi.fn(async () => ({
         data: [{ id: 'sub_found', status: 'active', current_period_end: 9999 }],
         has_more: false,
@@ -486,8 +492,8 @@ describe('INT-SYNC-030: CLI cancel: metadata absent + period_end mismatch → fa
 describe('INT-SYNC-031: CLI cancel: customer_id NULL → fail-close', () => {
   it('NULL customer_id → fail-close + impact log', async () => {
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return {
               rows: [{ ...MEMBER_WITH_INFLIGHT_CANCEL, payjp_customer_id: null }],
@@ -496,7 +502,7 @@ describe('INT-SYNC-031: CLI cancel: customer_id NULL → fail-close', () => {
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
     });
 
     const result = await runResyncCli(['--operation-id', 'op_1'], deps);
@@ -509,14 +515,14 @@ describe('INT-SYNC-032: CLI cancel: offset>900 → fail-close', () => {
   it('offset>900 with has_more → fail-close', async () => {
     const memberNoSubId = { ...MEMBER_WITH_INFLIGHT_CANCEL, payjp_subscription_id: null };
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [memberNoSubId], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       listPayjpSubscriptions: vi.fn(async () => ({
         data: [{ id: 'sub_x', status: 'active', metadata: { discord_user_id: 'user_1' } }],
         has_more: true,
@@ -536,14 +542,14 @@ describe('INT-SYNC-033: Inflight 30min threshold detection', () => {
       inflight_operation_started_at: new Date('2026-04-06T11:00:00Z'), // 60 min ago
     };
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [oldMember], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       getPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'active' })),
     });
 
@@ -560,14 +566,14 @@ describe('INT-SYNC-034: Inflight 6h escalation', () => {
       inflight_operation_started_at: new Date('2026-04-06T05:00:00Z'), // 7 hours ago
     };
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('inflight_operation_id')) {
             return { rows: [veryOldMember], rowCount: 1 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       getPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'active' })),
     });
 
@@ -627,14 +633,14 @@ describe('INT-SYNC-037: Daily resync: individual member error → continue', () 
     ];
     const _callIdx = 0;
     const deps = createMockDeps({
-      db: {
-        query: vi.fn(async (text: string) => {
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
           if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
             return { rows: members, rowCount: 2 };
           }
           return { rows: [], rowCount: 0 };
         }),
-      } as DbPool,
+      ),
       getPayjpSubscription: vi.fn(async (subId: string) => {
         if (subId === 'sub_1') throw new Error('PAY.JP error');
         return { id: 'sub_2', status: 'active' };

@@ -28,8 +28,14 @@ function clientErrorMessageForStatus(statusCode: number): string | undefined {
       return 'Forbidden';
     case 404:
       return 'Not Found';
+    case 405:
+      return 'Method Not Allowed';
     case 409:
       return 'Conflict';
+    case 413:
+      return 'Payload Too Large';
+    case 415:
+      return 'Unsupported Media Type';
     case 422:
       return 'Unprocessable Entity';
     case 429:
@@ -75,14 +81,13 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
           method: request.method,
           url: request.url,
           error: safeMessage,
+          stack: error.stack?.replace(UUID_PATTERN, '[REDACTED]'),
           timestamp: new Date().toISOString(),
         }),
       );
       reply.status(statusCode).send({ error: 'Internal Server Error' });
     } else {
-      const byStatus = clientErrorMessageForStatus(statusCode);
-      const KNOWN_4XX = ['Bad Request', 'Unauthorized', 'Forbidden', 'Not Found', 'Too Many Requests'];
-      const clientMessage = byStatus ?? (KNOWN_4XX.includes(safeMessage) ? safeMessage : 'Bad Request');
+      const clientMessage = clientErrorMessageForStatus(statusCode) ?? 'Bad Request';
       reply.status(statusCode).send({ error: clientMessage });
     }
   });

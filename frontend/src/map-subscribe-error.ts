@@ -8,6 +8,13 @@ export function mapSubscribeError(err: unknown): BillingError {
       message: 'リクエストがタイムアウトしました。処理が完了している可能性があるため、自動再試行は行われません。',
     };
   }
+  if (err instanceof TypeError) {
+    return {
+      kind: 'inflight',
+      message:
+        'ネットワークエラーが発生しました。処理が完了している可能性があるため、自動再試行は行われません。しばらく経ってからページを再読み込みしてください。',
+    };
+  }
   if (!(err instanceof SubscribeError)) {
     return { kind: 'server_error', message: '予期しないエラーが発生しました。' };
   }
@@ -35,6 +42,8 @@ export function mapSubscribeError(err: unknown): BillingError {
       return { kind: 'three_ds_failed', message: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
     case 'INFLIGHT_OPERATION':
       return { kind: 'inflight', message: '処理中の操作があります。', operationId: err.operationId };
+    case 'PAYJP_TOKEN_INVALID':
+      return { kind: 'card_invalid', message: '決済トークンの取得に失敗しました。再度カード情報を入力してください。' };
     case 'LOCK_UNAVAILABLE':
     case 'DISCORD_ROLE_CAPABILITY':
       return {

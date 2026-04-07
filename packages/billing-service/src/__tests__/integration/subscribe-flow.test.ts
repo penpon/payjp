@@ -121,7 +121,7 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     first_trial_granted_at: NOW,
     access_end_at: new Date(makePayjpSubscription().current_period_end * 1000),
     next_billing_at: new Date(makePayjpSubscription().current_period_end * 1000),
-    role_state: 'granted',
+    role_state: 'unknown',
     // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、step 7 の値がそのまま残る
     inflight_operation_id: OPERATION_ID,
     inflight_operation_type: 'subscribe',
@@ -149,6 +149,7 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     updateMemberChargeId: vi.fn().mockResolvedValue(undefined),
     updateMemberAfterSubscribe: vi.fn().mockResolvedValue(updatedMember),
     updateMemberAfterCancel: vi.fn().mockResolvedValue(undefined as never),
+    updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
@@ -851,7 +852,22 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.errorCode).toBe('DB_UPDATE_FAILED');
         expect(result.operationId).toBe(OPERATION_ID);
       }
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledTimes(1);
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('P-09: returns 503 + operationId when updateMemberRoleState fails after subscribe and role sync (does not call clearInflightOperation)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.updateMemberRoleState as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
 
     it('F-10: privacy_consented_at passed to updateMemberAfterSubscribe', async () => {

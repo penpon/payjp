@@ -280,8 +280,13 @@ describe('PROP-AUTH-016: session response includes CORS headers', () => {
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-017: start Set-Cookie for __Host-oauth_session has exact attributes', () => {
   it('handleAuthRequest for start returns Set-Cookie with Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=600; no Domain', async () => {
-    const frontendBaseUrl = 'https://frontend.example.com';
-    const response = await handleAuthRequest('/v1/auth/discord/start', {}, frontendBaseUrl);
+    const config = {
+      frontendBaseUrl: 'https://frontend.example.com',
+      discordClientId: 'test-client-id',
+      discordClientSecret: 'test-client-secret',
+      discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+    };
+    const response = await handleAuthRequest({ endpoint: '/v1/auth/discord/start' }, config);
     const setCookie = response.headers['Set-Cookie'];
     expect(setCookie).toContain('Secure');
     expect(setCookie).toContain('HttpOnly');
@@ -359,8 +364,13 @@ describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact a
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-019: start Discord authorization URL has scope=identify', () => {
   it('handleAuthRequest for start returns 302 Location with scope=identify', async () => {
-    const frontendBaseUrl = 'https://frontend.example.com';
-    const response = await handleAuthRequest('/v1/auth/discord/start', {}, frontendBaseUrl);
+    const config = {
+      frontendBaseUrl: 'https://frontend.example.com',
+      discordClientId: 'test-client-id',
+      discordClientSecret: 'test-client-secret',
+      discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+    };
+    const response = await handleAuthRequest({ endpoint: '/v1/auth/discord/start' }, config);
     expect(response.statusCode).toBe(302);
     const locationUrl = response.headers.Location;
     expect(locationUrl).toBeDefined();

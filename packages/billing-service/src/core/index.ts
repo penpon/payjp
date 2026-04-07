@@ -65,8 +65,9 @@ export function calculateCancelAcceptanceStart(accessEndAt: Date, jstOffsetMinut
 }
 
 // PROP-BILL-007: REQ-BILL-020
-export function isCancelAcceptable(nowJst: Date, acceptanceStartJst: Date): boolean {
-  return nowJst >= acceptanceStartJst;
+/** Both arguments are UTC `Date` instants on the same timeline (e.g. `now` from the request and `acceptanceStart` from {@link calculateCancelAcceptanceStart}). Do not apply extra JST conversion here. */
+export function isCancelAcceptable(now: Date, acceptanceStart: Date): boolean {
+  return now >= acceptanceStart;
 }
 
 // PROP-BILL-008: REQ-BILL-013
@@ -229,6 +230,7 @@ export function getCorsPreflight(frontendBaseUrl: string): Record<string, string
 
 // PROP-BILL-018: REQ-BILL-015
 export function shouldGrantRole(status: string | null): boolean {
+  if (status === null) return false;
   return status === 'active' || status === 'trial' || status === 'canceled';
 }
 

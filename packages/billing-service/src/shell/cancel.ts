@@ -86,10 +86,10 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     }
 
     // Step 7: Acceptance boundary check
+    // calculateCancelAcceptanceStart returns a UTC Date; isCancelAcceptable is a simple >= comparison,
+    // so both sides can stay in UTC without further conversion.
     const acceptanceStart = calculateCancelAcceptanceStart(member.access_end_at, JST_OFFSET_MINUTES);
-    const nowJst = new Date(now.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
-    const acceptanceStartJst = new Date(acceptanceStart.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
-    if (!isCancelAcceptable(nowJst, acceptanceStartJst)) {
+    if (!isCancelAcceptable(now, acceptanceStart)) {
       return { ok: false, statusCode: 409, errorCode: 'BEFORE_ACCEPTANCE_BOUNDARY', message: 'Too early to cancel' };
     }
 
@@ -114,6 +114,11 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     } catch (err) {
       // Uncertain failure — retain inflight
       if (isUncertainError(err)) {
+        slog('error', 'PAY.JP cancelSubscription uncertain failure', {
+          discordUserId,
+          operationId,
+          error: String(err),
+        });
         return {
           ok: false,
           statusCode: 503,
@@ -123,20 +128,40 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         };
       }
       // Definite failure after write attempt — try reconcile by checking actual state
+      slog('error', 'PAY.JP cancelSubscription definite failure, attempting reconciliation', {
+        discordUserId,
+        operationId,
+        error: String(err),
+      });
       try {
         const refetched = await payjp.fetchSubscription(member.payjp_subscription_id);
         if (refetched.status !== 'canceled') {
-          // Cancel was not actually applied — retain inflight for CLI resolution
+          // Cancel was not actually applied — definite 4xx + reconcile confirms no cancel → clear inflight
+          try {
+            await db.clearInflightOperation(member.id);
+          } catch (clearErr) {
+            slog('error', 'clearInflightOperation failed after definite cancel failure', {
+              discordUserId,
+              operationId,
+              error: String(clearErr),
+            });
+          }
           return {
             ok: false,
-            statusCode: 503,
-            errorCode: 'PAYJP_CANCEL_NOT_CONFIRMED',
-            message: 'Cancel not confirmed after reconciliation',
+            statusCode: 422,
+            errorCode: 'PAYJP_CANCEL_FAILED',
+            message: 'Cancel not applied (confirmed by reconciliation)',
             operationId,
           };
         }
         canceledSubscription = refetched;
-      } catch (_reconcileErr) {
+      } catch (reconcileErr) {
+        slog('error', 'PAY.JP cancel reconciliation failed', {
+          discordUserId,
+          operationId,
+          reconcileErr: String(reconcileErr),
+          originalErr: String(err),
+        });
         return {
           ok: false,
           statusCode: 503,
@@ -149,9 +174,10 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
 
     // Step 12: State update + clear inflight
     // PAY.JP cancel is complete — DB update failure retains inflight for CLI resolution
-    const accessEndAt = canceledSubscription.current_period_end
-      ? new Date(canceledSubscription.current_period_end * 1000)
-      : member.access_end_at;
+    const accessEndAt =
+      canceledSubscription.current_period_end != null && canceledSubscription.current_period_end !== 0
+        ? new Date(canceledSubscription.current_period_end * 1000)
+        : member.access_end_at;
 
     let updatedMember: Awaited<ReturnType<typeof db.updateMemberAfterCancel>>;
     try {

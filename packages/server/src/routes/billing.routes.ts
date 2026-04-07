@@ -15,6 +15,7 @@ const CLEAR_LINK_SESSION_COOKIE = {
   httpOnly: true,
   sameSite: 'lax' as const,
   maxAge: 0,
+  expires: new Date(0),
 };
 
 function extractRequestContext(request: FastifyRequest): {
@@ -69,7 +70,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         }
         return sendBillingResponse(reply, result);
       } catch (err) {
-        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscribe handler threw unexpectedly');
+        request.log.error({ err }, 'subscribe handler threw unexpectedly');
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 503,
@@ -155,7 +156,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         }
         return sendBillingResponse(reply, result);
       } catch (err) {
-        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'cancel handler threw unexpectedly');
+        request.log.error({ err }, 'cancel handler threw unexpectedly');
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 503,

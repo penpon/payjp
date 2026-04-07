@@ -4,6 +4,7 @@ vi.mock('../api.js', () => ({
   checkSession: vi.fn(),
   fetchSubscriptionStatus: vi.fn(),
   createSubscription: vi.fn(),
+  cancelSubscription: vi.fn(),
   startOAuth: vi.fn(),
   SessionCheckError: class SessionCheckError extends Error {
     status: number;
@@ -35,7 +36,13 @@ vi.mock('../api.js', () => ({
   },
 }));
 
-import { checkSession, fetchSubscriptionStatus, SessionCheckError, SubscriptionStatusError } from '../api.js';
+import {
+  cancelSubscription,
+  checkSession,
+  fetchSubscriptionStatus,
+  SessionCheckError,
+  SubscriptionStatusError,
+} from '../api.js';
 
 describe('main init()', () => {
   let appDiv: HTMLDivElement;
@@ -52,6 +59,8 @@ describe('main init()', () => {
     appDiv.remove();
     vi.mocked(checkSession).mockReset();
     vi.mocked(fetchSubscriptionStatus).mockReset();
+    vi.mocked(cancelSubscription).mockReset();
+    sessionStorage.clear();
     consoleSpy.mockClear();
   });
 
@@ -114,6 +123,26 @@ describe('main init()', () => {
 
     expect(appDiv.querySelector('.discord-button')).not.toBeNull();
     expect(appDiv.textContent).toContain('Discordアカウントとの連携が必要です');
+  });
+
+  it('should clear cancelPending session flag when OAuth returns unlinked session', async () => {
+    sessionStorage.setItem('cancelPending', '1');
+    vi.mocked(checkSession).mockResolvedValue({ linked: false });
+
+    await runInit();
+
+    expect(sessionStorage.getItem('cancelPending')).toBeNull();
+    expect(vi.mocked(cancelSubscription)).not.toHaveBeenCalled();
+  });
+
+  it('should clear cancelPending on SessionCheckError 401 (unlinked)', async () => {
+    sessionStorage.setItem('cancelPending', '1');
+    vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(401, 'Session check failed: 401'));
+
+    await runInit();
+
+    expect(sessionStorage.getItem('cancelPending')).toBeNull();
+    expect(vi.mocked(cancelSubscription)).not.toHaveBeenCalled();
   });
 
   it('should show not_linked state on 401 (unauthenticated)', async () => {

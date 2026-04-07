@@ -13,14 +13,19 @@ export async function syncRoutes(app: FastifyInstance, opts: { syncDeps: SyncDep
     '/v1/payjp/webhook',
     { config: { rateLimit: { max: 100, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const req: WebhookRequest = {
-        headers: extractWebhookHeaders(request.headers),
-        body: request.body,
-        remoteIp: request.ip,
-      };
+      try {
+        const req: WebhookRequest = {
+          headers: extractWebhookHeaders(request.headers),
+          body: request.body,
+          remoteIp: request.ip,
+        };
 
-      const result = await handleWebhook(req, webhookDeps);
-      return reply.status(result.status).send(result.body);
+        const result = await handleWebhook(req, webhookDeps);
+        return reply.status(result.status).send(result.body);
+      } catch (err) {
+        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'webhook handler threw unexpectedly');
+        return reply.status(503).send({ error: 'Service Unavailable' });
+      }
     },
   );
 }
