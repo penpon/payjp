@@ -208,7 +208,13 @@ async function queryClearInflightOperation(q: Queryable, memberId: string): Prom
 }
 
 async function queryUpdateMemberRoleState(q: Queryable, memberId: string, roleState: string): Promise<void> {
-  await q.query('UPDATE members SET role_state = $2, updated_at = now() WHERE id = $1', [memberId, roleState]);
+  const result = await q.query('UPDATE members SET role_state = $2, updated_at = now() WHERE id = $1', [
+    memberId,
+    roleState,
+  ]);
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error(`Member not found: ${memberId}`);
+  }
 }
 
 async function queryUpdateMemberCustomerId(q: Queryable, memberId: string, payjpCustomerId: string): Promise<void> {

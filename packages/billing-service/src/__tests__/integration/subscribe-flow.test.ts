@@ -852,7 +852,22 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.errorCode).toBe('DB_UPDATE_FAILED');
         expect(result.operationId).toBe(OPERATION_ID);
       }
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledTimes(1);
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('P-09: returns 503 + operationId when updateMemberRoleState fails after subscribe and role sync (does not call clearInflightOperation)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.updateMemberRoleState as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
 
     it('F-10: privacy_consented_at passed to updateMemberAfterSubscribe', async () => {

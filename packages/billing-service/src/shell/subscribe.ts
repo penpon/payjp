@@ -533,14 +533,23 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     let memberForResponse = updatedMember;
     try {
       await db.updateMemberRoleState(updatedMember.id, 'granted');
-      await db.clearInflightOperation(updatedMember.id);
-      memberForResponse = {
-        ...updatedMember,
-        role_state: 'granted',
-        inflight_operation_id: null,
-        inflight_operation_type: null,
-        inflight_operation_started_at: null,
+    } catch (err) {
+      slog('error', 'updateMemberRoleState failed after successful subscribe and role sync', {
+        discordUserId,
+        operationId,
+        memberId: updatedMember.id,
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to finalize subscription state',
+        operationId,
       };
+    }
+    try {
+      await db.clearInflightOperation(updatedMember.id);
     } catch (err) {
       slog('error', 'clearInflightOperation failed after successful subscribe and role sync', {
         discordUserId,
@@ -556,6 +565,13 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         operationId,
       };
     }
+    memberForResponse = {
+      ...updatedMember,
+      role_state: 'granted',
+      inflight_operation_id: null,
+      inflight_operation_type: null,
+      inflight_operation_started_at: null,
+    };
 
     slog('info', 'subscribe completed', {
       discordUserId,

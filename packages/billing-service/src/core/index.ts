@@ -65,8 +65,9 @@ export function calculateCancelAcceptanceStart(accessEndAt: Date, jstOffsetMinut
 }
 
 // PROP-BILL-007: REQ-BILL-020
-export function isCancelAcceptable(nowJst: Date, acceptanceStartJst: Date): boolean {
-  return nowJst >= acceptanceStartJst;
+/** Both arguments are UTC `Date` instants on the same timeline (e.g. `now` from the request and `acceptanceStart` from {@link calculateCancelAcceptanceStart}). Do not apply extra JST conversion here. */
+export function isCancelAcceptable(now: Date, acceptanceStart: Date): boolean {
+  return now >= acceptanceStart;
 }
 
 // PROP-BILL-008: REQ-BILL-013
