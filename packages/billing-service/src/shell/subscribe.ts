@@ -26,6 +26,27 @@ function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<str
   console[level](JSON.stringify({ level, service: 'billing-subscribe', message, ...ctx }));
 }
 
+/** F-02 確定失敗パス: inflight 解除はベストエフォート。DB 失敗で PAY.JP エラー応答（operationId 付き）を潰さない */
+async function clearInflightOnDefinitePayjpFailure(
+  db: BillingDeps['db'],
+  memberId: string,
+  discordUserId: string,
+  operationId: string,
+  payjpStep: 'createCustomer' | 'createCharge' | 'createSubscription',
+): Promise<void> {
+  try {
+    await db.clearInflightOperation(memberId);
+  } catch (err) {
+    slog('error', 'clearInflightOperation failed on definite PAY.JP failure path', {
+      discordUserId,
+      operationId,
+      memberId,
+      payjpStep,
+      error: String(err),
+    });
+  }
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps): Promise<SubscribeResult> {
@@ -183,7 +204,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         }
         // F-02: 4xx確定失敗 + 既存顧客なし → inflightクリアして503
         slog('error', 'PAY.JP createCustomer definite failure', { discordUserId, operationId, error: String(err) });
-        await db.clearInflightOperation(member.id);
+        await clearInflightOnDefinitePayjpFailure(db, member.id, discordUserId, operationId, 'createCustomer');
         return {
           ok: false,
           statusCode: 503,
@@ -245,7 +266,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         } else {
           // F-02: 4xx確定失敗 + 既存charge_idなし → inflightクリアして503
           slog('error', 'PAY.JP createCharge definite failure', { discordUserId, operationId, error: String(err) });
-          await db.clearInflightOperation(member.id);
+          await clearInflightOnDefinitePayjpFailure(db, member.id, discordUserId, operationId, 'createCharge');
           return { ok: false, statusCode: 503, errorCode: 'PAYJP_ERROR', message: 'Charge failed', operationId };
         }
       }
@@ -306,7 +327,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       } else {
         // F-02: 4xx確定失敗 + 既存sub_idなし → inflightクリアして503
         slog('error', 'PAY.JP createSubscription definite failure', { discordUserId, operationId, error: String(err) });
-        await db.clearInflightOperation(member.id);
+        await clearInflightOnDefinitePayjpFailure(db, member.id, discordUserId, operationId, 'createSubscription');
         return {
           ok: false,
           statusCode: 503,

@@ -305,6 +305,22 @@ describe('Failure Handling — Integration', () => {
         expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
       }
     });
+
+    it('definite failure: still returns PAYJP_ERROR + operationId when clearInflightOperation throws', async () => {
+      const deps = makeSubscribeDeps();
+      const definiteError = Object.assign(new Error('definite customer creation error'), { status: 402 });
+      (deps.payjp.createCustomer as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
+      (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe('PAYJP_ERROR');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
   });
 
   // -------------------------------------------------------------------------
