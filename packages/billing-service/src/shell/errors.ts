@@ -38,6 +38,11 @@ export function isUncertainError(err: unknown): boolean {
     if (status >= 400) return false;
   }
 
+  // JavaScript runtime errors are programming bugs, not I/O failures
+  if (err instanceof TypeError || err instanceof RangeError || err instanceof SyntaxError) {
+    return false;
+  }
+
   // Unknown error shape → treat as uncertain (safe side)
   return true;
 }

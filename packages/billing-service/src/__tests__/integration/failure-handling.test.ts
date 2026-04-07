@@ -299,9 +299,9 @@ describe('Failure Handling — Integration', () => {
       expect(customerCreated).toBe(true);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.statusCode).toBe(503);
+        expect(result.statusCode).toBe(422);
         expect(result.operationId).toBe(OPERATION_ID);
-        // F-02: 4xx確定失敗 + 既存顧客なし → inflightをクリアして503を返す
+        // F-02: 4xx確定失敗 + 既存顧客なし → inflightをクリアして422を返す
         expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
       }
     });

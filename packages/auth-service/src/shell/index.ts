@@ -142,6 +142,24 @@ export async function fetchDiscordUserId(accessToken: string): Promise<string> {
   return data.id;
 }
 
+// REQ-AUTH-016: Discord access_token の即時無効化（ベストエフォート）
+export async function revokeDiscordToken(accessToken: string, clientId: string, clientSecret: string): Promise<void> {
+  const params = new URLSearchParams({
+    token: accessToken,
+    token_type_hint: 'access_token',
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  const response = await fetch('https://discord.com/api/oauth2/token/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+  if (!response.ok) {
+    throw new Error(`Discord token revoke failed: ${response.status}`);
+  }
+}
+
 // REQ-AUTH-010: 構造化ログ出力（機密マスク適用後）
 export function structuredLog(entry: Record<string, unknown>): void {
   const masked = maskSensitiveLogFields(entry);
@@ -306,12 +324,28 @@ async function handleStructuredAuthRequest(
     }
 
     // Discord code → access_token → discord_user_id
-    const accessToken = await exchangeDiscordCode(code, {
-      clientId: discordClientId,
-      clientSecret: discordClientSecret,
-      redirectUri: discordRedirectUri,
-    });
-    const discordUserId = await fetchDiscordUserId(accessToken);
+    let discordUserId: string;
+    try {
+      const accessToken = await exchangeDiscordCode(code, {
+        clientId: discordClientId,
+        clientSecret: discordClientSecret,
+        redirectUri: discordRedirectUri,
+      });
+      discordUserId = await fetchDiscordUserId(accessToken);
+      // Revoke Discord access_token immediately — no longer needed
+      revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch(() => {
+        // Best-effort revocation; failure is non-critical
+      });
+    } catch (err) {
+      structuredLog({
+        service: 'auth-service',
+        endpoint: '/v1/auth/discord/callback',
+        result: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
+      const locationUrl = buildCallbackRedirectUrl(frontendBaseUrl);
+      return { statusCode: 302, headers: { ...secHeaders, Location: locationUrl } };
+    }
 
     // link session を発行
     const linkToken = await generateSecureRandomToken();

@@ -76,6 +76,10 @@ function makeMockDb(
     query: vi.fn().mockImplementation((sql: string, _params?: unknown[]) => {
       if (shouldThrow) throw new Error('DB connection failed');
 
+      // Transaction control
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+        return { rows: [], rowCount: 0 };
+      }
       // pg_advisory_xact_lock
       if (sql.includes('pg_advisory_xact_lock')) {
         return { rows: [], rowCount: 0 };
@@ -83,6 +87,10 @@ function makeMockDb(
       // Duplicate check
       if (sql.includes('FROM payjp_events WHERE id')) {
         return { rows: findEventResult ? [findEventResult] : [], rowCount: findEventResult ? 1 : 0 };
+      }
+      // Member by id (re-fetch under lock)
+      if (sql.includes('FROM members WHERE id')) {
+        return { rows: findMemberResult ? [findMemberResult] : [], rowCount: findMemberResult ? 1 : 0 };
       }
       // Member by discord_user_id
       if (sql.includes('FROM members WHERE discord_user_id')) {
@@ -152,42 +160,42 @@ describe('POST /v1/payjp/webhook', () => {
     expect(res.json().error).toBe('Unauthorized');
   });
 
-  it('returns 200 with status=processed on valid event', async () => {
+  it('returns 200 with ok:true on valid event', async () => {
     const app = createApp();
     const res = await app.inject(webhookInject(makeEvent(), WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('processed');
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=ignored for non-allowed event type', async () => {
+  it('returns 200 with ok:true for non-allowed event type', async () => {
     const app = createApp();
     const event = makeEvent({ type: 'charge.succeeded' });
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('ignored');
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=ignored for livemode mismatch', async () => {
+  it('returns 200 with ok:true for livemode mismatch', async () => {
     const app = createApp();
     const event = makeEvent({ livemode: false });
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('ignored');
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=ignored for non-subscription data.object', async () => {
+  it('returns 200 with ok:true for non-subscription data.object', async () => {
     const app = createApp();
     const event = makeEvent({ data: { object: 'charge', id: 'ch_1', status: 'active' } });
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('ignored');
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=duplicate for already-processed event', async () => {
+  it('returns 200 with ok:true for already-processed event', async () => {
     const deps = makeSyncDeps({
       findEventResult: {
         id: EVENT_ID,
@@ -200,19 +208,19 @@ describe('POST /v1/payjp/webhook', () => {
     const res = await app.inject(webhookInject(makeEvent(), WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('duplicate');
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=ignored for subscription.created', async () => {
+  it('returns 200 with ok:true for subscription.created', async () => {
     const app = createApp();
     const event = makeEvent({ type: 'subscription.created' });
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: 'ignored', reason: 'subscription_created' });
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=ignored for stale event', async () => {
+  it('returns 200 with ok:true for stale event', async () => {
     const deps = makeSyncDeps({
       findMemberResult: makeMember({ last_payjp_event_created_at: NOW_UNIX + 100 }),
     });
@@ -220,10 +228,10 @@ describe('POST /v1/payjp/webhook', () => {
     const res = await app.inject(webhookInject(makeEvent(), WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: 'ignored', reason: 'stale_event' });
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=failed for unknown status', async () => {
+  it('returns 200 with ok:true for unknown status', async () => {
     const deps = makeSyncDeps();
     const app = createApp(deps);
     const event = makeEvent({
@@ -237,8 +245,7 @@ describe('POST /v1/payjp/webhook', () => {
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('failed');
-    expect(res.json().reason).toBe('unknown_status');
+    expect(res.json()).toEqual({ ok: true });
   });
 
   it('revokes role on unknown status (safe-side)', async () => {
@@ -257,14 +264,13 @@ describe('POST /v1/payjp/webhook', () => {
     expect(deps.webhookDeps.syncRole).toHaveBeenCalledWith(DISCORD_USER_ID, 'revoke');
   });
 
-  it('returns 200 with status=failed when member not found', async () => {
+  it('returns 200 with ok:true when member not found', async () => {
     const deps = makeSyncDeps({ findMemberResult: null });
     const app = createApp(deps);
     const res = await app.inject(webhookInject(makeEvent(), WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('failed');
-    expect(res.json().reason).toBe('member_not_found');
+    expect(res.json()).toEqual({ ok: true });
   });
 
   it('returns 503 on DB error', async () => {
@@ -304,10 +310,10 @@ describe('POST /v1/payjp/webhook', () => {
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('processed');
+    expect(res.json()).toEqual({ ok: true });
   });
 
-  it('returns 200 with status=failed for missing required fields', async () => {
+  it('returns 200 with ok:true for missing required fields', async () => {
     const app = createApp();
     const event = {
       id: EVENT_ID,
@@ -319,7 +325,6 @@ describe('POST /v1/payjp/webhook', () => {
     const res = await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('failed');
-    expect(res.json().reason).toBe('missing_required_fields');
+    expect(res.json()).toEqual({ ok: true });
   });
 });

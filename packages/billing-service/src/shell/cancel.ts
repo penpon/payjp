@@ -114,6 +114,11 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     } catch (err) {
       // Uncertain failure — retain inflight
       if (isUncertainError(err)) {
+        slog('error', 'PAY.JP cancelSubscription uncertain failure', {
+          discordUserId,
+          operationId,
+          error: String(err),
+        });
         return {
           ok: false,
           statusCode: 503,
@@ -123,6 +128,11 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         };
       }
       // Definite failure after write attempt — try reconcile by checking actual state
+      slog('error', 'PAY.JP cancelSubscription definite failure, attempting reconciliation', {
+        discordUserId,
+        operationId,
+        error: String(err),
+      });
       try {
         const refetched = await payjp.fetchSubscription(member.payjp_subscription_id);
         if (refetched.status !== 'canceled') {
@@ -136,7 +146,13 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
           };
         }
         canceledSubscription = refetched;
-      } catch (_reconcileErr) {
+      } catch (reconcileErr) {
+        slog('error', 'PAY.JP cancel reconciliation failed', {
+          discordUserId,
+          operationId,
+          reconcileErr: String(reconcileErr),
+          originalErr: String(err),
+        });
         return {
           ok: false,
           statusCode: 503,
