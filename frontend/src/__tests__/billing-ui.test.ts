@@ -215,6 +215,34 @@ describe('billing-ui', () => {
 
       expect(container.querySelector('.success-icon-large')).not.toBeNull();
     });
+
+    it('should show trial period only without duplicate next renewal row when trial applied', () => {
+      renderBilling(
+        container,
+        defaultFormState({ step: 'success', result: successResult }),
+        createMockCallbacks(),
+        null,
+        PLANS,
+      );
+
+      expect(container.textContent).toContain('トライアル期間');
+      expect(container.textContent).toContain('2026/07/07');
+      expect(container.textContent).not.toContain('次回更新日');
+    });
+
+    it('should show next renewal row when trial was not applied', () => {
+      const noTrial = { ...successResult, trialApplied: false, subscriptionStatus: 'active' as const };
+      renderBilling(
+        container,
+        defaultFormState({ step: 'success', result: noTrial }),
+        createMockCallbacks(),
+        null,
+        PLANS,
+      );
+
+      expect(container.textContent).toContain('次回更新日');
+      expect(container.textContent).not.toContain('トライアル期間');
+    });
   });
 
   describe('error step - inflight', () => {

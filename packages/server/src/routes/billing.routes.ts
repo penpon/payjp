@@ -52,9 +52,16 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     }
 
     try {
+      const now = billingDeps.clock();
       const tokenHash = linkSessionTokenHash(linkSessionToken);
       const linkSession = await billingDeps.db.findLinkSession(tokenHash);
       if (!linkSession) {
+        return reply.status(200).send({ subscription: null });
+      }
+      if (linkSession.expires_at < now) {
+        return reply.status(200).send({ subscription: null });
+      }
+      if (linkSession.used_at !== null) {
         return reply.status(200).send({ subscription: null });
       }
 

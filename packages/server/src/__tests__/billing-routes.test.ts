@@ -1,6 +1,6 @@
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import type { LinkSessionRecord, Member } from '@hayane/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
 // ---------------------------------------------------------------------------
@@ -378,6 +378,79 @@ describe('GET /v1/subscriptions/status', () => {
     const body = res.json();
     expect(body.ok).toBe(false);
     expect(body.errorCode).toBe('STATUS_UNAVAILABLE');
+  });
+
+  it('returns 200 subscription null when link session is expired without loading member', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeLinkSession({ expires_at: new Date('2025-01-01T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+    expect(deps.db.findMemberByDiscordUserId).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 subscription null when link session is consumed without loading member', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeLinkSession({ used_at: new Date('2025-03-15T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+    expect(deps.db.findMemberByDiscordUserId).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 with subscription when link session is valid', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { subscription: { status: string; planId: string; accessEndAt: string } };
+    expect(body.subscription).toMatchObject({
+      status: 'active',
+      planId: PLAN_ID,
+    });
+    expect(body.subscription.accessEndAt).toMatch(/2025-06-01/);
   });
 });
 

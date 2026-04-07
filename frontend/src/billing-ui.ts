@@ -318,11 +318,12 @@ function renderSuccess(result: SubscribeResponse, plans: PlanDef[], callbacks: B
               el('span', { class: 'result-value' }, [`${formatDate(result.accessEndAt)} まで`]),
             ]),
           ]
-        : []),
-      el('div', { class: 'result-row' }, [
-        el('span', { class: 'result-label' }, ['次回更新日']),
-        el('span', { class: 'result-value' }, [formatDate(result.accessEndAt)]),
-      ]),
+        : [
+            el('div', { class: 'result-row' }, [
+              el('span', { class: 'result-label' }, ['次回更新日']),
+              el('span', { class: 'result-value' }, [formatDate(result.accessEndAt)]),
+            ]),
+          ]),
     ]),
     backBtn,
   ]);
