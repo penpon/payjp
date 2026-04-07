@@ -30,7 +30,7 @@ export function hasActiveSubscription(status: string | null, accessEndAt: Date |
 }
 
 // PROP-BILL-004: REQ-BILL-006
-export function hasInflightOperation(inflightOperationId: string | null): boolean {
+export function hasInflightOperation(inflightOperationId: string | null): inflightOperationId is string {
   return inflightOperationId !== null;
 }
 

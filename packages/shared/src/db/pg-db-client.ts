@@ -334,9 +334,10 @@ export class PgDbClient implements DbClient {
     }
     const client = await this.pool.connect();
     try {
-      const result = await client.query<{ pg_try_advisory_lock: boolean }>('SELECT pg_try_advisory_lock($1::bigint)', [
-        discordUserId,
-      ]);
+      const result = await client.query<{ pg_try_advisory_lock: boolean }>(
+        'SELECT pg_try_advisory_lock(0, hashtext($1))',
+        [discordUserId],
+      );
       if (result.rows[0].pg_try_advisory_lock) {
         this.lockClients.set(discordUserId, client);
         return true;
@@ -360,7 +361,7 @@ export class PgDbClient implements DbClient {
     }
     this.lockClients.delete(discordUserId);
     try {
-      await client.query('SELECT pg_advisory_unlock($1::bigint)', [discordUserId]);
+      await client.query('SELECT pg_advisory_unlock(0, hashtext($1))', [discordUserId]);
     } finally {
       client.release();
     }
@@ -370,7 +371,7 @@ export class PgDbClient implements DbClient {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [discordUserId]);
+      await client.query('SELECT pg_advisory_xact_lock(0, hashtext($1))', [discordUserId]);
       const txDb = new PgTransactionClient(client);
       const result = await fn(txDb);
       await client.query('COMMIT');

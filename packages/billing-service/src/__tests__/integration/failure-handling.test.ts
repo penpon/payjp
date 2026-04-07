@@ -257,9 +257,9 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-052: Definite failure before PAY.JP write
   // -------------------------------------------------------------------------
   describe('PROP-BILL-052: Definite failure before PAY.JP write', () => {
-    it('inflight retained on pre-write failure; operationId returned for CLI resolution', async () => {
+    it('inflight cleared on pre-write (READ-only) failure; operationId still returned', async () => {
       const deps = makeSubscribeDeps();
-      // 3DS 検証失敗は PAY.JP write 前の definite failure
+      // 3DS 検証失敗は PAY.JP write 前の READ-only failure — inflight をクリアする
       (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'tok_001',
         used: false,
@@ -272,8 +272,8 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.statusCode).toBe(422);
-        // inflight は自動解除しない — 手動 CLI で解除する
-        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+        // READ-only failure — PAY.JP write は発生していないため inflight をクリアする
+        expect(deps.db.clearInflightOperation).toHaveBeenCalledOnce();
         expect(result.operationId).toBe(OPERATION_ID);
       }
     });

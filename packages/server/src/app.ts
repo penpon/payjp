@@ -1,5 +1,6 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
+import fastifyRateLimit from '@fastify/rate-limit';
 import type { BillingDeps } from '@hayane/billing-service';
 import Fastify, { type FastifyError } from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
@@ -27,9 +28,16 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
     credentials: true,
   });
 
+  // Rate limiting — global: false means per-route opt-in via config.rateLimit
+  app.register(fastifyRateLimit, { global: false });
+
   app.addHook('onSend', (_request, reply, payload, done) => {
     reply.header('Cache-Control', 'no-store');
     reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+    reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     done(null, payload);
   });
 

@@ -35,14 +35,15 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
   app.post(
     '/v1/subscriptions',
     {
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
       schema: {
         body: {
           type: 'object',
           required: ['planId', 'email', 'payjpToken', 'privacyConsented'],
           properties: {
-            planId: { type: 'string' },
-            email: { type: 'string' },
-            payjpToken: { type: 'string' },
+            planId: { type: 'string', maxLength: 50 },
+            email: { type: 'string', maxLength: 254 },
+            payjpToken: { type: 'string', maxLength: 100 },
             privacyConsented: { type: 'boolean' },
           },
           additionalProperties: false,
@@ -132,30 +133,34 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     }
   });
 
-  app.post('/v1/subscriptions/cancel', async (request, reply) => {
-    const { origin, linkSessionToken } = extractRequestContext(request);
+  app.post(
+    '/v1/subscriptions/cancel',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const { origin, linkSessionToken } = extractRequestContext(request);
 
-    const req: CancelRequest = {
-      origin,
-      linkSessionToken,
-    };
+      const req: CancelRequest = {
+        origin,
+        linkSessionToken,
+      };
 
-    try {
-      const result = await handleCancel(req, billingDeps);
-      if (result.ok) {
-        reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+      try {
+        const result = await handleCancel(req, billingDeps);
+        if (result.ok) {
+          reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+        }
+        return sendBillingResponse(reply, result);
+      } catch (err) {
+        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'cancel handler threw unexpectedly');
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
+        });
       }
-      return sendBillingResponse(reply, result);
-    } catch (err) {
-      request.log.error({ message: (err as Error)?.message ?? String(err) }, 'cancel handler threw unexpectedly');
-      return sendBillingResponse(reply, {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
-      });
-    }
-  });
+    },
+  );
 }
 
 function sendBillingResponse(

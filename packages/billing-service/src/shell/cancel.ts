@@ -62,7 +62,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         statusCode: 503,
         errorCode: 'INFLIGHT_OPERATION',
         message: 'Another operation is in progress',
-        operationId: member.inflight_operation_id!,
+        operationId: member.inflight_operation_id,
       };
     }
 

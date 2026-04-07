@@ -105,7 +105,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         statusCode: 503,
         errorCode: 'INFLIGHT_OPERATION',
         message: 'Another operation is in progress',
-        operationId: member.inflight_operation_id!,
+        operationId: member.inflight_operation_id,
       };
     }
 
@@ -145,6 +145,16 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
     } catch (err) {
       slog('error', 'PAY.JP token fetch failed', { discordUserId, operationId, error: String(err) });
+      // READ-only failure — no PAY.JP writes occurred; clear inflight (best-effort)
+      try {
+        await db.clearInflightOperation(member.id);
+      } catch (clearErr) {
+        slog('error', 'clearInflightOperation failed after fetchToken error', {
+          discordUserId,
+          operationId,
+          error: String(clearErr),
+        });
+      }
       return {
         ok: false,
         statusCode: 503,
@@ -155,8 +165,17 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     }
 
     // REQ-BILL-009: used=false AND three_d_secure_status=verified
-    // Token validation failures retain inflight; operator resolves via CLI
+    // Token validation is READ-only — no PAY.JP writes occurred; clear inflight before returning
     if (payjpTokenData.used) {
+      try {
+        await db.clearInflightOperation(member.id);
+      } catch (clearErr) {
+        slog('error', 'clearInflightOperation failed after TOKEN_ALREADY_USED', {
+          discordUserId,
+          operationId,
+          error: String(clearErr),
+        });
+      }
       return {
         ok: false,
         statusCode: 422,
@@ -167,6 +186,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     }
 
     if (!isThreeDSecureVerified(payjpTokenData.three_d_secure_status)) {
+      try {
+        await db.clearInflightOperation(member.id);
+      } catch (clearErr) {
+        slog('error', 'clearInflightOperation failed after THREE_D_SECURE_REQUIRED', {
+          discordUserId,
+          operationId,
+          error: String(clearErr),
+        });
+      }
       return {
         ok: false,
         statusCode: 422,
@@ -213,11 +241,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
           operationId,
         };
       }
-      if (!customerId) {
-        customerId = customer!.id;
-        // Persist customer id immediately — survives subsequent failure
-        await db.updateMemberCustomerId(member.id, customerId);
-      }
+      customerId = customer.id;
+      // Persist customer id immediately — survives subsequent failure
+      await db.updateMemberCustomerId(member.id, customerId);
     }
 
     // Step 12 (first-time only): Initial charge (spec §5.1 step 12)
