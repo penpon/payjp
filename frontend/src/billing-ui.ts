@@ -148,6 +148,7 @@ function renderBillingForm(
       }
       card.classList.add('plan-card--selected');
       card.setAttribute('aria-checked', 'true');
+      updateSubmitState();
     });
 
     card.addEventListener('keydown', (e) => {

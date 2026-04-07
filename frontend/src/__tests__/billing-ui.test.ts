@@ -145,6 +145,40 @@ describe('billing-ui', () => {
       expect(planCards[0].classList.contains('plan-card--selected')).toBe(false);
     });
 
+    it('should update submit enabled state when selecting a plan after initial selectedPlanId was empty', async () => {
+      const payjp = createMockPayjpAdapter();
+      renderBilling(
+        container,
+        defaultFormState({
+          selectedPlanId: '',
+          email: 'a@b.co',
+          cardholderName: 'TARO YAMADA',
+          privacyConsented: true,
+        }),
+        createMockCallbacks(),
+        payjp,
+        PLANS,
+      );
+
+      await Promise.resolve();
+
+      const mockElement = vi.mocked(payjp.createCardElement).mock.results[0]?.value as {
+        on: (ev: string, cb: (e: { complete: boolean }) => void) => void;
+      };
+      const changeCb = vi.mocked(mockElement.on).mock.calls.find((c) => c[0] === 'change')?.[1] as (e: {
+        complete: boolean;
+      }) => void;
+      expect(changeCb).toBeDefined();
+      changeCb({ complete: true });
+
+      const btn = container.querySelector('.submit-button') as HTMLButtonElement;
+      expect(btn.hasAttribute('disabled')).toBe(true);
+
+      (container.querySelectorAll('.plan-card')[0] as HTMLElement).click();
+
+      expect(btn.hasAttribute('disabled')).toBe(false);
+    });
+
     it('should have plan cards with radiogroup role for accessibility', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 

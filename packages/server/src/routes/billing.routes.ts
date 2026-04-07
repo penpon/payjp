@@ -109,10 +109,9 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         if (linkSession.expires_at < now) {
           return reply.status(200).send({ subscription: null });
         }
-        if (linkSession.used_at !== null) {
-          return reply.status(200).send({ subscription: null });
-        }
 
+        // used_at が立っていても Discord ユーザーに紐づく購読は返す。subscribe 失敗後も Cookie が残るケースで
+        // 実際に作成済みのサブスクリプションをフロントが取得できるようにする（POST は consume で二重利用不可）。
         const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
         if (!member?.subscription_status || member.subscription_status === 'deleted') {
           return reply.status(200).send({ subscription: null });

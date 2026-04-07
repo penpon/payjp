@@ -426,7 +426,7 @@ describe('GET /v1/subscriptions/status', () => {
     expect(deps.db.findMemberByDiscordUserId).not.toHaveBeenCalled();
   });
 
-  it('returns 200 subscription null when link session is consumed without loading member', async () => {
+  it('returns 200 with subscription when link session is consumed but member has active subscription', async () => {
     const deps = makeMockDeps({
       subscription_status: 'active',
       payjp_plan_id: PLAN_ID,
@@ -447,8 +447,35 @@ describe('GET /v1/subscriptions/status', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    const body = res.json() as { subscription: { status: string; planId: string; accessEndAt: string } };
+    expect(body.subscription).toMatchObject({
+      status: 'active',
+      planId: PLAN_ID,
+    });
+    expect(body.subscription.accessEndAt).toMatch(/2025-06-01/);
+    expect(deps.db.findMemberByDiscordUserId).toHaveBeenCalledWith(DISCORD_USER_ID);
+  });
+
+  it('returns 200 subscription null when link session is consumed and member has no subscription', async () => {
+    const deps = makeMockDeps({
+      subscription_status: null,
+      payjp_plan_id: null,
+    });
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeLinkSession({ used_at: new Date('2025-03-15T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ subscription: null });
-    expect(deps.db.findMemberByDiscordUserId).not.toHaveBeenCalled();
+    expect(deps.db.findMemberByDiscordUserId).toHaveBeenCalledWith(DISCORD_USER_ID);
   });
 
   it('returns 200 with subscription when link session is valid', async () => {
