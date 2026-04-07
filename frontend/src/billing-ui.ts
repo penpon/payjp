@@ -346,6 +346,9 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
     children.push(reAuthBtn);
   } else if (error.kind === 'already_subscribed') {
     children.push(el('div', { class: 'info-banner', role: 'status' }, ['すでにプランに加入済みです。']));
+    const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
+    topBtn.addEventListener('click', callbacks.onBackToTop);
+    children.push(topBtn);
   } else {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
     const retryBtn = el('button', { type: 'button', class: 'submit-button' }, ['もう一度試す']);
@@ -384,5 +387,5 @@ function createCopyButton(text: string): HTMLButtonElement {
 function formatDate(isoString: string): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return isoString;
-  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+  return `${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${String(date.getUTCDate()).padStart(2, '0')}`;
 }
