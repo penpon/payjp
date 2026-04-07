@@ -78,10 +78,12 @@ export interface PayjpElements {
   create(type: 'card', options?: Record<string, unknown>): PayjpCardElement;
 }
 
-export interface PayjpTokenResponse {
-  id: string;
+/** PAY.JP.js `createToken` の解決値 */
+export type PayjpCreateTokenResult = {
+  error?: { code: string; message: string };
+  id?: string;
   card?: { three_d_secure_status?: string };
-}
+};
 
 export interface PayjpInstance {
   elements(options?: { locale?: string }): PayjpElements;
@@ -89,7 +91,7 @@ export interface PayjpInstance {
     element: PayjpCardElement,
     data?: { three_d_secure?: boolean; card?: { name?: string; email?: string } },
     options?: { threeDSecureDialogOptions?: { timeout?: number } },
-  ): Promise<{ error?: { code: string; message: string }; id?: string; card?: { three_d_secure_status?: string } }>;
+  ): Promise<PayjpCreateTokenResult>;
 }
 
 declare global {

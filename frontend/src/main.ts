@@ -4,6 +4,7 @@ import {
   fetchSubscriptionStatus,
   SessionCheckError,
   SubscribeError,
+  SubscriptionStatusError,
   startOAuth,
 } from './api.js';
 import type { BillingCallbacks } from './billing-ui.js';
@@ -252,8 +253,20 @@ async function init(): Promise<void> {
   try {
     const session = await checkSession();
     if (session.linked) {
-      // Check if user already has a subscription
-      const subscription = await fetchSubscriptionStatus();
+      let subscription: Awaited<ReturnType<typeof fetchSubscriptionStatus>>;
+      try {
+        subscription = await fetchSubscriptionStatus();
+      } catch (err) {
+        if (err instanceof SubscriptionStatusError) {
+          console.error('[init] Subscription status unavailable:', err);
+          renderState(app, 'error', startOAuth, {
+            errorMessage: '購読状況を確認できませんでした。しばらく経ってから再度お試しください。',
+          });
+          return;
+        }
+        throw err;
+      }
+
       if (subscription) {
         renderState(app, 'linked', startOAuth, {
           subscribed: { subscription, plans: PLANS },

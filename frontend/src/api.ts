@@ -36,10 +36,25 @@ export function startOAuth(): void {
 
 // --- Subscription status ---
 
+export class SubscriptionStatusError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SubscriptionStatusError';
+  }
+}
+
 export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null> {
   const res = await fetch('/v1/subscriptions/status', {
     credentials: 'include',
   });
+  if (res.status === 503) {
+    const body: unknown = await res.json().catch(() => ({}));
+    const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+    throw new SubscriptionStatusError(res.status, (obj.message as string) ?? '購読状況を確認できませんでした。');
+  }
   if (!res.ok) return null;
   const data = (await res.json()) as { subscription: SubscriptionInfo | null };
   return data.subscription ?? null;

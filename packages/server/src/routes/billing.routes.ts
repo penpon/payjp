@@ -38,8 +38,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       planId: body?.planId ?? '',
     };
 
-    reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
     const result = await handleSubscribe(req, billingDeps);
+    if (result.ok) {
+      reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+    }
     return sendBillingResponse(reply, result);
   });
 
@@ -68,8 +70,13 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           accessEndAt: member.access_end_at ? member.access_end_at.toISOString().replace(/\.\d{3}Z$/, 'Z') : null,
         },
       });
-    } catch {
-      return reply.status(200).send({ subscription: null });
+    } catch (err) {
+      request.log.error({ err }, 'subscription status lookup failed');
+      return reply.status(503).send({
+        ok: false,
+        errorCode: 'STATUS_UNAVAILABLE',
+        message: 'Could not load subscription status',
+      });
     }
   });
 
@@ -82,8 +89,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       discordUserId: body?.discordUserId ?? '',
     };
 
-    reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
     const result = await handleCancel(req, billingDeps);
+    if (result.ok) {
+      reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+    }
     return sendBillingResponse(reply, result);
   });
 }

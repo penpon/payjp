@@ -74,10 +74,12 @@ function renderLinked(onStartBilling?: () => void): HTMLDivElement {
   return createCard(children);
 }
 
-function renderError(onConnect: () => void): HTMLDivElement {
+function renderError(onConnect: () => void, message?: string): HTMLDivElement {
   return createCard([
     el('h1', { class: 'heading' }, ['Discord連携']),
-    el('div', { class: 'badge error-badge', role: 'alert' }, ['連携状態の確認に失敗しました。再度お試しください。']),
+    el('div', { class: 'badge error-badge', role: 'alert' }, [
+      message ?? '連携状態の確認に失敗しました。再度お試しください。',
+    ]),
     createDiscordButton(onConnect),
   ]);
 }
@@ -104,6 +106,7 @@ export function renderState(
     onStartBilling?: () => void;
     billing?: BillingContext;
     subscribed?: SubscribedContext;
+    errorMessage?: string;
   },
 ): void {
   container.replaceChildren();
@@ -122,7 +125,7 @@ export function renderState(
       }
       break;
     case 'error':
-      container.appendChild(renderError(onConnect));
+      container.appendChild(renderError(onConnect, extra?.errorMessage));
       break;
     case 'billing':
       if (extra?.billing) {

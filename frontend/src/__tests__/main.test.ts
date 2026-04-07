@@ -25,9 +25,17 @@ vi.mock('../api.js', () => ({
       this.operationId = operationId;
     }
   },
+  SubscriptionStatusError: class SubscriptionStatusError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.name = 'SubscriptionStatusError';
+      this.status = status;
+    }
+  },
 }));
 
-import { checkSession, fetchSubscriptionStatus, SessionCheckError } from '../api.js';
+import { checkSession, fetchSubscriptionStatus, SessionCheckError, SubscriptionStatusError } from '../api.js';
 
 describe('main init()', () => {
   let appDiv: HTMLDivElement;
@@ -87,6 +95,16 @@ describe('main init()', () => {
 
     expect(appDiv.querySelector('.subscribed-status')).not.toBeNull();
     expect(appDiv.textContent).toContain('購読状況');
+  });
+
+  it('should show error when subscription status endpoint is unavailable', async () => {
+    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(fetchSubscriptionStatus).mockRejectedValue(new SubscriptionStatusError(503, 'down'));
+
+    await runInit();
+
+    expect(appDiv.textContent).toContain('購読状況を確認できませんでした');
+    expect(appDiv.querySelector('.error-badge')).not.toBeNull();
   });
 
   it('should show not_linked state when session returns linked: false', async () => {

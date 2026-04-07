@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSubscription, fetchSubscriptionStatus, SubscribeError } from '../api.js';
+import { createSubscription, fetchSubscriptionStatus, SubscribeError, SubscriptionStatusError } from '../api.js';
 
 describe('billing api', () => {
   const originalFetch = globalThis.fetch;
@@ -133,6 +133,23 @@ describe('billing api', () => {
 
       const result = await fetchSubscriptionStatus();
       expect(result).toBeNull();
+    });
+
+    it('should throw SubscriptionStatusError on 503', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            errorCode: 'STATUS_UNAVAILABLE',
+            message: 'Could not load subscription status',
+          }),
+          { status: 503 },
+        ),
+      );
+
+      const err = await fetchSubscriptionStatus().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(SubscriptionStatusError);
+      expect((err as SubscriptionStatusError).status).toBe(503);
     });
   });
 });

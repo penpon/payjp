@@ -287,14 +287,12 @@ describe('POST /v1/subscriptions', () => {
     expect(setCookie).toContain('Max-Age=0');
   });
 
-  it('clears __Host-link_session cookie on error', async () => {
+  it('does not clear __Host-link_session cookie on subscribe error', async () => {
     const app = createApp();
     const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }));
 
     expect(res.statusCode).toBe(403);
-    const setCookie = res.headers['set-cookie'] as string;
-    expect(setCookie).toContain('__Host-link_session=');
-    expect(setCookie).toContain('Max-Age=0');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('includes security headers', async () => {
@@ -351,6 +349,39 @@ describe('POST /v1/subscriptions', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /v1/subscriptions/status
+// ---------------------------------------------------------------------------
+
+describe('GET /v1/subscriptions/status', () => {
+  const STATUS_URL = '/v1/subscriptions/status';
+
+  it('returns 200 subscription null when no link_session cookie', async () => {
+    const app = createApp();
+    const res = await app.inject({ method: 'GET', url: STATUS_URL });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
+
+  it('returns 503 when database lookup throws', async () => {
+    const deps = makeMockDeps();
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.ok).toBe(false);
+    expect(body.errorCode).toBe('STATUS_UNAVAILABLE');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /v1/subscriptions/cancel
 // ---------------------------------------------------------------------------
 
@@ -399,6 +430,7 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('returns 409 when no active subscription', async () => {
@@ -410,6 +442,7 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().errorCode).toBe('NO_SUBSCRIPTION');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('returns 409 when before acceptance boundary', async () => {

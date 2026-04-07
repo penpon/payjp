@@ -318,5 +318,15 @@ describe('billing-ui', () => {
       expect(container.textContent).toContain('次回更新日');
       expect(container.textContent).toContain('2026/05/07');
     });
+
+    it('should format access end date in Asia/Tokyo (not UTC calendar day)', () => {
+      renderSubscribed(
+        container,
+        { status: 'active', planId: 'plan_starter', accessEndAt: '2026-05-06T15:00:00.000Z' },
+        PLANS,
+      );
+
+      expect(container.textContent).toContain('2026/05/07');
+    });
   });
 });
