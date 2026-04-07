@@ -51,49 +51,54 @@ function createPayjpAdapter(): PayjpAdapter | null {
     return null;
   }
 
-  const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'subwindow' });
-  const elements = payjp.elements({ locale: 'ja' });
+  try {
+    const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'subwindow' });
+    const elements = payjp.elements({ locale: 'ja' });
 
-  return {
-    createCardElement(mountTarget) {
-      const card = elements.create('card', {
-        style: {
-          base: {
-            color: '#061b31',
-            fontSize: '16px',
-            fontFamily: 'Inter, "Noto Sans JP", sans-serif',
-            '::placeholder': { color: '#64748d' },
+    return {
+      createCardElement(mountTarget) {
+        const card = elements.create('card', {
+          style: {
+            base: {
+              color: '#061b31',
+              fontSize: '16px',
+              fontFamily: 'Inter, "Noto Sans JP", sans-serif',
+              '::placeholder': { color: '#64748d' },
+            },
+            invalid: { color: '#ea2261' },
           },
-          invalid: { color: '#ea2261' },
-        },
-      });
-      card.mount(mountTarget);
-      return card;
-    },
-    async createToken(cardElement, data) {
-      try {
-        const result = await payjp.createToken(
-          cardElement,
-          { three_d_secure: true, card: { name: data.name, email: data.email } },
-          { threeDSecureDialogOptions: { timeout: 1800000 } },
-        );
-        if (result.error) {
-          return { error: result.error.message };
+        });
+        card.mount(mountTarget);
+        return card;
+      },
+      async createToken(cardElement, data) {
+        try {
+          const result = await payjp.createToken(
+            cardElement,
+            { three_d_secure: true, card: { name: data.name, email: data.email } },
+            { threeDSecureDialogOptions: { timeout: 1800000 } },
+          );
+          if (result.error) {
+            return { error: result.error.message };
+          }
+          if (!result.id) {
+            return { error: 'トークンの取得に失敗しました。' };
+          }
+          // CLAUDE.md: 3DS verified のみ許可（attempted も非許容）
+          if (result.card?.three_d_secure_status !== 'verified') {
+            return { error: '3Dセキュア認証が完了していません。もう一度お試しください。' };
+          }
+          return { tokenId: result.id };
+        } catch (err) {
+          console.error('[billing] PAY.JP createToken failed:', err);
+          return { error: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
         }
-        if (!result.id) {
-          return { error: 'トークンの取得に失敗しました。' };
-        }
-        // CLAUDE.md: 3DS verified のみ許可（attempted も非許容）
-        if (result.card?.three_d_secure_status !== 'verified') {
-          return { error: '3Dセキュア認証が完了していません。もう一度お試しください。' };
-        }
-        return { tokenId: result.id };
-      } catch (err) {
-        console.error('[billing] PAY.JP createToken failed:', err);
-        return { error: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
-      }
-    },
-  };
+      },
+    };
+  } catch (err) {
+    console.error('[billing] PAY.JP initialization failed:', err);
+    return null;
+  }
 }
 
 // --- Billing flow ---

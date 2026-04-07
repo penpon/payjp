@@ -175,4 +175,30 @@ describe('main init()', () => {
     expect(appDiv.querySelector('.subscribed-status')).toBeNull();
     expect(appDiv.querySelector('.start-billing-button')).not.toBeNull();
   });
+
+  it('shows error state when PAY.JP SDK initialization throws', async () => {
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
+    vi.stubEnv('VITE_PAYJP_PUBLIC_KEY', 'pk_test_valid_like');
+
+    const payjpInitError = new Error('invalid key format');
+    const originalPayjp = window.Payjp;
+    window.Payjp = vi.fn(() => {
+      throw payjpInitError;
+    });
+
+    try {
+      await runInit();
+
+      const startBillingButton = appDiv.querySelector('.start-billing-button') as HTMLButtonElement;
+      expect(startBillingButton).not.toBeNull();
+      startBillingButton.click();
+
+      expect(appDiv.textContent).toContain('カード入力機能を読み込めませんでした');
+      expect(consoleSpy).toHaveBeenCalledWith('[billing] PAY.JP initialization failed:', payjpInitError);
+    } finally {
+      window.Payjp = originalPayjp;
+      vi.unstubAllEnvs();
+    }
+  });
 });

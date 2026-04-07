@@ -52,31 +52,24 @@ export class SubscriptionStatusError extends Error {
   }
 }
 
+async function readSubscriptionStatusErrorMessage(res: Response, fallbackMessage: string): Promise<string> {
+  const body: unknown = await res.json().catch((parseErr) => {
+    console.warn('[api] Failed to parse subscription status error body:', parseErr);
+    return {};
+  });
+  const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+  return typeof obj.message === 'string' ? obj.message : fallbackMessage;
+}
+
 export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null> {
   const res = await fetch('/v1/subscriptions/status', {
     credentials: 'include',
   });
-  if (res.status === 503) {
-    const body: unknown = await res.json().catch((parseErr) => {
-      console.warn('[api] Failed to parse subscription status error body:', parseErr);
-      return {};
-    });
-    const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-    throw new SubscriptionStatusError(
-      res.status,
-      typeof obj.message === 'string' ? obj.message : '購読状況を確認できませんでした。',
-    );
-  }
   if (!res.ok) {
-    const body: unknown = await res.json().catch((parseErr) => {
-      console.warn('[api] Failed to parse subscription status error body:', parseErr);
-      return {};
-    });
-    const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-    throw new SubscriptionStatusError(
-      res.status,
-      typeof obj.message === 'string' ? obj.message : `Subscription status check failed: ${res.status}`,
-    );
+    const fallbackMessage =
+      res.status === 503 ? '購読状況を確認できませんでした。' : `Subscription status check failed: ${res.status}`;
+    const message = await readSubscriptionStatusErrorMessage(res, fallbackMessage);
+    throw new SubscriptionStatusError(res.status, message);
   }
   const data: unknown = await res.json();
   if (!isSubscriptionStatusResponse(data)) {
