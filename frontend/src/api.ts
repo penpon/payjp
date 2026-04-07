@@ -55,7 +55,14 @@ export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null
     const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
     throw new SubscriptionStatusError(res.status, (obj.message as string) ?? '購読状況を確認できませんでした。');
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => ({}));
+    const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+    throw new SubscriptionStatusError(
+      res.status,
+      (obj.message as string) ?? `Subscription status check failed: ${res.status}`,
+    );
+  }
   const data = (await res.json()) as { subscription: SubscriptionInfo | null };
   return data.subscription ?? null;
 }
@@ -75,11 +82,15 @@ export class SubscribeError extends Error {
 }
 
 function isSubscribeResponse(data: unknown): data is SubscribeResponse {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
   return (
-    typeof data === 'object' &&
-    data !== null &&
-    (data as Record<string, unknown>).ok === true &&
-    typeof (data as Record<string, unknown>).memberId === 'string'
+    obj.ok === true &&
+    typeof obj.memberId === 'string' &&
+    typeof obj.subscriptionStatus === 'string' &&
+    typeof obj.planId === 'string' &&
+    typeof obj.trialApplied === 'boolean' &&
+    typeof obj.accessEndAt === 'string'
   );
 }
 

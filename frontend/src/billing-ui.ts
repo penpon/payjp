@@ -12,7 +12,12 @@ import type {
 // --- Callbacks interface ---
 
 export interface BillingCallbacks {
-  onSubmit: (data: { planId: string; email: string; cardholderName: string; privacyConsented: boolean }) => void;
+  onSubmit: (data: {
+    planId: string;
+    email: string;
+    cardholderName: string;
+    privacyConsented: boolean;
+  }) => void | Promise<void>;
   onRetry: () => void;
   onBackToTop: () => void;
   onCardElementReady?: (element: PayjpCardElement) => void;
@@ -205,12 +210,14 @@ function renderBillingForm(
 
   submitBtn.addEventListener('click', () => {
     if (submitBtn.hasAttribute('disabled')) return;
-    callbacks.onSubmit({
-      planId: selectedPlanId,
-      email: email.trim(),
-      cardholderName: cardholderName.trim(),
-      privacyConsented: consented,
-    });
+    Promise.resolve(
+      callbacks.onSubmit({
+        planId: selectedPlanId,
+        email: email.trim(),
+        cardholderName: cardholderName.trim(),
+        privacyConsented: consented,
+      }),
+    ).catch((err) => console.error('[billing] onSubmit rejected:', err));
   });
 
   // Error banner (if returning from error)
@@ -360,6 +367,12 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
     children.push(topBtn);
   } else if (error.kind === 'already_subscribed') {
     children.push(el('div', { class: 'info-banner', role: 'status' }, ['すでにプランに加入済みです。']));
+    const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
+    topBtn.addEventListener('click', callbacks.onBackToTop);
+    children.push(topBtn);
+  } else if (error.kind === 'discord_not_member') {
+    children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
+    children.push(el('p', { class: 'body-text' }, ['Discordサーバーに参加後、再度お試しください。']));
     const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
     topBtn.addEventListener('click', callbacks.onBackToTop);
     children.push(topBtn);

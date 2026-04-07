@@ -88,7 +88,8 @@ function createPayjpAdapter(): PayjpAdapter | null {
           return { error: '3Dセキュア認証が完了していません。もう一度お試しください。' };
         }
         return { tokenId: result.id };
-      } catch {
+      } catch (err) {
+        console.error('[billing] PAY.JP createToken failed:', err);
         return { error: '3Dセキュア認証に失敗しました。もう一度お試しください。' };
       }
     },
@@ -133,6 +134,12 @@ function mapSubscribeError(err: unknown): BillingError {
 
 function startBillingFlow(app: HTMLElement): void {
   const payjpAdapter = createPayjpAdapter();
+  if (!payjpAdapter) {
+    renderState(app, 'error', startOAuth, {
+      errorMessage: 'カード入力機能を読み込めませんでした。ページを再読み込みしてください。',
+    });
+    return;
+  }
 
   let billingState: BillingFormState = {
     step: 'form',
@@ -183,56 +190,56 @@ function startBillingFlow(app: HTMLElement): void {
       if (isSubmitting) return;
       isSubmitting = true;
 
-      // Save form data WITHOUT re-rendering (preserves PAY.JP card iframe)
-      billingState = {
-        ...billingState,
-        email: data.email,
-        cardholderName: data.cardholderName,
-        selectedPlanId: data.planId,
-        privacyConsented: data.privacyConsented,
-      };
-
-      // Disable submit button inline instead of destroying DOM
-      const submitBtn = app.querySelector('.submit-button') as HTMLButtonElement | null;
-      if (submitBtn) {
-        submitBtn.setAttribute('disabled', 'true');
-        submitBtn.textContent = '処理中...';
-      }
-
-      // 1. Create PAY.JP token with 3DS (card iframe must remain mounted)
-      const tokenResult = await payjpAdapter.createToken(currentCardElement, {
-        name: data.cardholderName,
-        email: data.email,
-      });
-
-      if (tokenResult.error || !tokenResult.tokenId) {
-        isSubmitting = false;
-        update({
-          step: 'form',
-          selectedPlanId: data.planId,
+      try {
+        // Save form data WITHOUT re-rendering (preserves PAY.JP card iframe)
+        billingState = {
+          ...billingState,
           email: data.email,
           cardholderName: data.cardholderName,
-          error: { kind: 'three_ds_failed', message: tokenResult.error ?? '3Dセキュア認証に失敗しました。' },
+          selectedPlanId: data.planId,
+          privacyConsented: data.privacyConsented,
+        };
+
+        // Disable submit button inline instead of destroying DOM
+        const submitBtn = app.querySelector('.submit-button') as HTMLButtonElement | null;
+        if (submitBtn) {
+          submitBtn.setAttribute('disabled', 'true');
+          submitBtn.textContent = '処理中...';
+        }
+
+        // 1. Create PAY.JP token with 3DS (card iframe must remain mounted)
+        const tokenResult = await payjpAdapter.createToken(currentCardElement, {
+          name: data.cardholderName,
+          email: data.email,
         });
-        return;
-      }
 
-      // Now safe to destroy DOM — card data is captured in token
-      update({ step: 'submitting' });
+        if (tokenResult.error || !tokenResult.tokenId) {
+          update({
+            step: 'form',
+            selectedPlanId: data.planId,
+            email: data.email,
+            cardholderName: data.cardholderName,
+            error: { kind: 'three_ds_failed', message: tokenResult.error ?? '3Dセキュア認証に失敗しました。' },
+          });
+          return;
+        }
 
-      // 2. POST /v1/subscriptions
-      try {
+        // Now safe to destroy DOM — card data is captured in token
+        update({ step: 'submitting' });
+
+        // 2. POST /v1/subscriptions
         const result = await createSubscription({
           planId: data.planId,
           email: data.email,
           payjpToken: tokenResult.tokenId,
         });
 
-        isSubmitting = false;
         update({ step: 'success', result });
       } catch (err) {
-        isSubmitting = false;
+        console.error('[billing] onSubmit failed:', err);
         update({ step: 'error', error: mapSubscribeError(err) });
+      } finally {
+        isSubmitting = false;
       }
     },
 
@@ -296,4 +303,8 @@ async function init(): Promise<void> {
   }
 }
 
-init();
+init().catch((err) => {
+  console.error('[init] Unhandled error:', err);
+  const app = document.getElementById('app');
+  if (app) app.textContent = '予期しないエラーが発生しました。ページを再読み込みしてください。';
+});

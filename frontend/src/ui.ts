@@ -136,6 +136,9 @@ export function renderState(
           extra.billing.payjpAdapter,
           extra.billing.plans,
         );
+      } else {
+        console.error('[ui] renderState("billing") called without billing context');
+        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
   }

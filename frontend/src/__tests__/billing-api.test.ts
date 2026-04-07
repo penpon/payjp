@@ -128,11 +128,12 @@ describe('billing api', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null on fetch error', async () => {
+    it('should throw SubscriptionStatusError on server error', async () => {
       vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 500 }));
 
-      const result = await fetchSubscriptionStatus();
-      expect(result).toBeNull();
+      const err = await fetchSubscriptionStatus().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(SubscriptionStatusError);
+      expect((err as SubscriptionStatusError).status).toBe(500);
     });
 
     it('should throw SubscriptionStatusError on 503', async () => {

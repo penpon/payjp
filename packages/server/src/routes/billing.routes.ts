@@ -38,11 +38,20 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       planId: body?.planId ?? '',
     };
 
-    const result = await handleSubscribe(req, billingDeps);
-    if (result.ok) {
-      reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+    try {
+      const result = await handleSubscribe(req, billingDeps);
+      if (result.ok) {
+        reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+      }
+      return sendBillingResponse(reply, result);
+    } catch (err) {
+      request.log.error({ err }, 'subscribe handler threw unexpectedly');
+      return reply.status(503).send({
+        ok: false,
+        errorCode: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+      });
     }
-    return sendBillingResponse(reply, result);
   });
 
   app.get('/v1/subscriptions/status', async (request, reply) => {
@@ -96,11 +105,20 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       discordUserId: body?.discordUserId ?? '',
     };
 
-    const result = await handleCancel(req, billingDeps);
-    if (result.ok) {
-      reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+    try {
+      const result = await handleCancel(req, billingDeps);
+      if (result.ok) {
+        reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
+      }
+      return sendBillingResponse(reply, result);
+    } catch (err) {
+      request.log.error({ err }, 'cancel handler threw unexpectedly');
+      return reply.status(503).send({
+        ok: false,
+        errorCode: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+      });
     }
-    return sendBillingResponse(reply, result);
   });
 }
 
