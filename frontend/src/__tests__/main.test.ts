@@ -134,12 +134,12 @@ describe('main init()', () => {
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
-  it('should use cached subscription from sessionStorage', async () => {
+  it('should ignore sessionStorage subscription cache and use API after OAuth', async () => {
     sessionStorage.setItem(
       'hayane_subscription_result',
       JSON.stringify({
         ok: true,
-        memberId: 'uuid-123',
+        memberId: 'uuid-other-user',
         subscriptionStatus: 'trial',
         planId: 'plan_starter',
         trialApplied: true,
@@ -147,10 +147,14 @@ describe('main init()', () => {
       }),
     );
 
+    vi.mocked(checkSession).mockResolvedValue({ linked: true });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
+
     await runInit();
 
-    // Should NOT call checkSession when cache exists
-    expect(checkSession).not.toHaveBeenCalled();
-    expect(appDiv.querySelector('.subscribed-status')).not.toBeNull();
+    expect(checkSession).toHaveBeenCalled();
+    expect(fetchSubscriptionStatus).toHaveBeenCalled();
+    expect(appDiv.querySelector('.subscribed-status')).toBeNull();
+    expect(appDiv.querySelector('.start-billing-button')).not.toBeNull();
   });
 });

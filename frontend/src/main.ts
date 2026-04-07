@@ -42,8 +42,6 @@ const PLANS: PlanDef[] = [
 
 const PAYJP_PUBLIC_KEY = import.meta.env.VITE_PAYJP_PUBLIC_KEY as string | undefined;
 
-const SESSION_STORAGE_KEY = 'hayane_subscription_result';
-
 // --- PAY.JP adapter ---
 
 function createPayjpAdapter(): PayjpAdapter | null {
@@ -223,13 +221,6 @@ function startBillingFlow(app: HTMLElement): void {
           payjpToken: tokenResult.tokenId,
         });
 
-        // Cache result in sessionStorage
-        try {
-          sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(result));
-        } catch {
-          /* ignore storage errors */
-        }
-
         isSubmitting = false;
         update({ step: 'success', result });
       } catch (err) {
@@ -255,29 +246,6 @@ function startBillingFlow(app: HTMLElement): void {
 async function init(): Promise<void> {
   const app = document.getElementById('app');
   if (!app) return;
-
-  // Check sessionStorage for cached subscription
-  try {
-    const cached = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (cached) {
-      const result = JSON.parse(cached);
-      if (result?.ok && result?.subscriptionStatus) {
-        renderState(app, 'linked', startOAuth, {
-          subscribed: {
-            subscription: {
-              status: result.subscriptionStatus,
-              planId: result.planId,
-              accessEndAt: result.accessEndAt,
-            },
-            plans: PLANS,
-          },
-        });
-        return;
-      }
-    }
-  } catch {
-    /* ignore parse errors */
-  }
 
   renderState(app, 'loading', startOAuth);
 

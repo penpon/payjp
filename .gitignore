@@ -54,3 +54,6 @@ feature/
 # Docker / DB volume
 postgres-data/
 docker-data/
+
+# Serena
+.serena/
