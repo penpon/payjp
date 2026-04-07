@@ -4,8 +4,8 @@ import type { BillingError } from './types.js';
 export function mapSubscribeError(err: unknown): BillingError {
   if (err instanceof DOMException && err.name === 'TimeoutError') {
     return {
-      kind: 'server_error',
-      message: 'リクエストがタイムアウトしました。処理が完了している可能性があります。サポートにお問い合わせください。',
+      kind: 'inflight',
+      message: 'リクエストがタイムアウトしました。処理が完了している可能性があるため、自動再試行は行われません。',
     };
   }
   if (!(err instanceof SubscribeError)) {

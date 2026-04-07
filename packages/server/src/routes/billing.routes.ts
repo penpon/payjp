@@ -85,7 +85,8 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     { config: { rateLimit: { max: 15, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
-      if (!origin || !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+      // Same-origin GET requests may omit Origin in browsers.
+      if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 403,

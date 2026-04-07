@@ -549,6 +549,20 @@ describe('POST /v1/subscriptions — Integration', () => {
       // updateMemberCustomerId が呼ばれたことを確認
       expect(deps.db.updateMemberCustomerId).toHaveBeenCalledWith(MEMBER_ID, PAYJP_CUSTOMER_ID);
     });
+
+    it('returns 503 + operationId when customer id persistence fails', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.updateMemberCustomerId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -567,6 +581,20 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.trialApplied).toBe(true);
+      }
+    });
+
+    it('returns 503 + operationId when initial charge id persistence fails', async () => {
+      const deps = makeSuccessfulDeps({ first_trial_granted_at: null });
+      (deps.db.updateMemberChargeId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
       }
     });
   });
@@ -798,11 +826,16 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
 
-    it('P-09: returns success when clearInflightOperation fails after subscribe and role sync', async () => {
+    it('P-09: returns 503 + operationId when clearInflightOperation fails after subscribe and role sync', async () => {
       const deps = makeSuccessfulDeps();
       (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(true);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
 

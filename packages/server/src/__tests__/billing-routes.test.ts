@@ -364,11 +364,12 @@ describe('POST /v1/subscriptions', () => {
 describe('GET /v1/subscriptions/status', () => {
   const STATUS_URL = '/v1/subscriptions/status';
 
-  it('returns 403 when no origin header', async () => {
+  it('allows request when origin header is omitted (same-origin browser GET)', async () => {
     const app = createApp();
     const res = await app.inject({ method: 'GET', url: STATUS_URL });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
   });
 
   it('returns 200 subscription null when no link_session cookie', async () => {

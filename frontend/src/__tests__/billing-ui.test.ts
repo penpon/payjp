@@ -83,7 +83,9 @@ describe('billing-ui', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 
       expect(container.querySelector('#billing-consent')).not.toBeNull();
-      expect(container.querySelector('.consent-link')?.getAttribute('href')).toBe('/privacy.html');
+      const link = container.querySelector('.consent-link');
+      expect(link?.getAttribute('href')).toBe('/privacy.html');
+      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
     });
 
     it('should have submit button disabled by default', () => {

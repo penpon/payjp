@@ -266,7 +266,9 @@ function renderBillingForm(
     el('div', { class: 'consent-row' }, [
       checkbox,
       el('label', { class: 'consent-label', for: 'billing-consent' }, [
-        el('a', { href: '/privacy.html', target: '_blank', class: 'consent-link' }, ['個人情報の取り扱い']),
+        el('a', { href: '/privacy.html', target: '_blank', rel: 'noopener noreferrer', class: 'consent-link' }, [
+          '個人情報の取り扱い',
+        ]),
         'に同意する',
       ]),
     ]),

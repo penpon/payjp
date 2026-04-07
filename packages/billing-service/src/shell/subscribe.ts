@@ -243,7 +243,23 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
       customerId = customer.id;
       // Persist customer id immediately — survives subsequent failure
-      await db.updateMemberCustomerId(member.id, customerId);
+      try {
+        await db.updateMemberCustomerId(member.id, customerId);
+      } catch (err) {
+        slog('error', 'Failed to persist customer id after PAY.JP customer creation', {
+          discordUserId,
+          operationId,
+          customerId,
+          error: String(err),
+        });
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'DB_UPDATE_FAILED',
+          message: 'DB update failed after customer creation',
+          operationId,
+        };
+      }
     }
 
     // Step 12 (first-time only): Initial charge (spec §5.1 step 12)
@@ -310,7 +326,23 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         initialChargeId = charge.id;
       }
       // REQ-BILL-013: immediately persist charge_id before subscription creation
-      await db.updateMemberChargeId(member.id, initialChargeId, now);
+      try {
+        await db.updateMemberChargeId(member.id, initialChargeId, now);
+      } catch (err) {
+        slog('error', 'Failed to persist initial charge id after PAY.JP charge creation', {
+          discordUserId,
+          operationId,
+          chargeId: initialChargeId,
+          error: String(err),
+        });
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'DB_UPDATE_FAILED',
+          message: 'DB update failed after charge creation',
+          operationId,
+        };
+      }
     }
 
     // Step 13: Subscription creation (spec §5.1 step 13)
@@ -462,8 +494,8 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // P-09: ロール同期成功後に inflight をクリア。決済・Discord は完了済みのため、
-    // ここでの DB 失敗はユーザーに 503 を返さずログのみ（従来は UPDATE 内で原子的にクリアしていた）。
+    // P-09: ロール同期成功後に inflight をクリア。
+    // ここで失敗した場合は不整合な成功レスポンスを避けるため 503 + operationId を返し、CLI で解決可能にする。
     let memberForResponse = updatedMember;
     try {
       await db.clearInflightOperation(updatedMember.id);
@@ -480,6 +512,13 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         memberId: updatedMember.id,
         error: String(err),
       });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to finalize subscription state',
+        operationId,
+      };
     }
 
     slog('info', 'subscribe completed', {

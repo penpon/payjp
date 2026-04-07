@@ -3,6 +3,14 @@ import { SubscribeError } from '../api.js';
 import { mapSubscribeError } from '../map-subscribe-error.js';
 
 describe('mapSubscribeError', () => {
+  it('maps TimeoutError to inflight to avoid automatic retry', () => {
+    const err = new DOMException('timeout', 'TimeoutError');
+    expect(mapSubscribeError(err)).toEqual({
+      kind: 'inflight',
+      message: 'リクエストがタイムアウトしました。処理が完了している可能性があるため、自動再試行は行われません。',
+    });
+  });
+
   it('maps CONSENT_REQUIRED (422) to server_error, not card_invalid', () => {
     const err = new SubscribeError(422, 'CONSENT_REQUIRED', undefined, 'Privacy consent is required');
     expect(mapSubscribeError(err)).toEqual({
