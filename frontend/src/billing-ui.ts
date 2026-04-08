@@ -1,4 +1,11 @@
 import { el } from './dom.js';
+import {
+  createBackToTopButton,
+  renderInflightSection,
+  renderOperationIdBox,
+  renderSessionExpiredSection,
+  renderWarningBanner,
+} from './error-ui.js';
 import { formatDate } from './format.js';
 import type {
   BillingError,
@@ -9,7 +16,6 @@ import type {
   SubscribeResponse,
   SubscriptionInfo,
 } from './types.js';
-import { createCopyButton } from './widgets.js';
 
 // --- Callbacks interface ---
 
@@ -397,52 +403,26 @@ function renderError(error: BillingError, callbacks: BillingCallbacks): HTMLDivE
   const children: (Node | string)[] = [el('h1', { class: 'heading' }, ['エラーが発生しました'])];
 
   if (error.kind === 'inflight') {
-    const bannerText = error.operationId
-      ? '処理中の操作があります。以下のIDをサポートにお知らせください。'
-      : '処理中の操作があります。サポートまでお問い合わせください。';
-    children.push(el('div', { class: 'error-banner', role: 'alert' }, [bannerText]));
-    if (error.operationId) {
-      children.push(
-        el('div', { class: 'operation-id-box' }, [
-          el('code', { class: 'operation-id-value' }, [error.operationId]),
-          createCopyButton(error.operationId),
-        ]),
-      );
-    }
-    children.push(el('p', { class: 'body-text' }, ['自動再試行は行われません。サポートにて状況を確認いたします。']));
+    children.push(...renderInflightSection(error));
   } else if (error.kind === 'session_expired') {
-    children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
-    const reAuthBtn = el('button', { type: 'button', class: 'discord-button' }, ['再度Discordで連携する']);
-    reAuthBtn.addEventListener('click', callbacks.onReAuth);
-    children.push(reAuthBtn);
+    children.push(...renderSessionExpiredSection(error.message, callbacks.onReAuth));
   } else if (error.kind === 'forbidden_origin') {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
-    const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
-    topBtn.addEventListener('click', callbacks.onBackToTop);
-    children.push(topBtn);
+    children.push(createBackToTopButton(callbacks.onBackToTop));
   } else if (error.kind === 'already_subscribed') {
-    children.push(el('div', { class: 'info-banner', role: 'status' }, ['すでにプランに加入済みです。']));
-    const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
-    topBtn.addEventListener('click', callbacks.onBackToTop);
-    children.push(topBtn);
+    children.push(renderWarningBanner(error.message));
+    children.push(createBackToTopButton(callbacks.onBackToTop));
   } else if (error.kind === 'discord_not_member') {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
     children.push(el('p', { class: 'body-text' }, ['Discordサーバーに参加後、再度お試しください。']));
-    const topBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
-    topBtn.addEventListener('click', callbacks.onBackToTop);
-    children.push(topBtn);
+    children.push(createBackToTopButton(callbacks.onBackToTop));
   } else if (error.kind === 'three_ds_failed' && error.operationId) {
     children.push(
       el('div', { class: 'error-banner', role: 'alert' }, [
         '3Dセキュア認証または決済トークンの検証に失敗しました。すぐに再試行すると別のエラーになる場合があります。以下のIDをサポートにお知らせください。',
       ]),
     );
-    children.push(
-      el('div', { class: 'operation-id-box' }, [
-        el('code', { class: 'operation-id-value' }, [error.operationId]),
-        createCopyButton(error.operationId),
-      ]),
-    );
+    children.push(renderOperationIdBox(error.operationId));
     children.push(el('p', { class: 'body-text' }, ['自動再試行は行われません。サポートにて状況を確認いたします。']));
   } else {
     children.push(el('div', { class: 'error-banner', role: 'alert' }, [error.message]));
