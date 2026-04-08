@@ -1,0 +1,10 @@
+node_modules
+frontend
+!frontend/package.json
+feature
+.vcsdd
+.git
+*.md
+.env
+.env.*
+!.env.example
