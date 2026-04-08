@@ -33,7 +33,6 @@ services:
       PAYJP_WEBHOOK_TOKEN: ${PAYJP_WEBHOOK_TOKEN}
       PAYJP_LIVEMODE: ${PAYJP_LIVEMODE}
       PAYJP_PLAN_IDS: ${PAYJP_PLAN_IDS}
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
     depends_on:
       db:
         condition: service_healthy
