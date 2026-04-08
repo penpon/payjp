@@ -24,8 +24,8 @@ services:
     env_file:
       - .env
     environment:
-      # Override DATABASE_URL to use Docker internal hostname
-      DATABASE_URL: postgres://hayane:hayane@db:5432/hayane
+      # Override DATABASE_URL to use Docker internal hostname (sslmode=disable: no SSL cert on local PG)
+      DATABASE_URL: postgres://hayane:hayane@db:5432/hayane?sslmode=disable
     depends_on:
       db:
         condition: service_healthy

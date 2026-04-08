@@ -59,7 +59,10 @@ if (!Number.isFinite(port) || port < 1 || port > 65535) {
 
 // ---- 2. DB setup ----
 
-const pool = createPool(env.DATABASE_URL);
+// Respect ?sslmode=disable in the DATABASE_URL (e.g. Docker Compose local setup).
+// pool.ts auto-enables ssl:true for non-localhost hosts; this overrides that for dev.
+const sslDisabled = env.DATABASE_URL.includes('sslmode=disable');
+const pool = createPool(env.DATABASE_URL, sslDisabled ? { ssl: false } : undefined);
 
 try {
   await runMigrations(pool);
