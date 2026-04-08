@@ -65,7 +65,6 @@ const REQUIRED_ENV = [
   'DISCORD_GUILD_ID',
   'DISCORD_PAID_ROLE_ID',
   'PAYJP_SECRET_KEY',
-  'PAYJP_WEBHOOK_TOKEN',
   'PAYJP_LIVEMODE',
   'PAYJP_PLAN_IDS',
   'FRONTEND_BASE_URL',
@@ -301,7 +300,7 @@ const billingDeps: BillingDeps = {
 
 const webhookDeps: WebhookHandlerDeps = {
   db: dbPool,
-  payjpWebhookToken: env.PAYJP_WEBHOOK_TOKEN,
+  payjpWebhookToken: process.env.PAYJP_WEBHOOK_TOKEN ?? '',
   expectedLivemode: env.PAYJP_LIVEMODE === 'true',
   discordGuildId: env.DISCORD_GUILD_ID,
   discordRoleId: env.DISCORD_PAID_ROLE_ID,
