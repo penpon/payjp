@@ -51,8 +51,13 @@ try {
   process.exit(1);
 }
 
+if (env.PAYJP_LIVEMODE !== 'true' && env.PAYJP_LIVEMODE !== 'false') {
+  process.stderr.write(`[startup] PAYJP_LIVEMODE must be "true" or "false", got: "${env.PAYJP_LIVEMODE}"\n`);
+  process.exit(1);
+}
+
 const port = Number(process.env.PORT ?? '3000');
-if (!Number.isFinite(port) || port < 1 || port > 65535) {
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
   process.stderr.write(`[startup] Invalid PORT: ${process.env.PORT}\n`);
   process.exit(1);
 }
@@ -68,7 +73,11 @@ try {
   await runMigrations(pool);
 } catch (err) {
   process.stderr.write(`[startup] DB migration failed: ${err instanceof Error ? err.message : String(err)}\n`);
-  await closePool(pool);
+  try {
+    await closePool(pool);
+  } catch {
+    // ignore cleanup error during startup failure
+  }
   process.exit(1);
 }
 console.log('[startup] DB migrations applied.');
@@ -182,6 +191,10 @@ const dbPool = createPgPool(pool);
 const allowedPlanIds = env.PAYJP_PLAN_IDS.split(',')
   .map((s) => s.trim())
   .filter(Boolean);
+if (allowedPlanIds.length === 0) {
+  process.stderr.write('[startup] PAYJP_PLAN_IDS must contain at least one plan ID\n');
+  process.exit(1);
+}
 
 const billingDeps: BillingDeps = {
   db: dbClient,
@@ -234,13 +247,20 @@ try {
 }
 
 // Graceful shutdown
+let shuttingDown = false;
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
-    void (async () => {
-      console.log(`[shutdown] Received ${signal}, shutting down...`);
-      await app.close();
-      await closePool(pool);
-      process.exit(0);
-    })();
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[shutdown] Received ${signal}, shutting down...`);
+    app
+      .close()
+      .then(() => closePool(pool))
+      .catch((err) => {
+        console.error('[shutdown] Error during shutdown:', err);
+      })
+      .finally(() => {
+        process.exit(0);
+      });
   });
 }
