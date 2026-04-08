@@ -279,6 +279,7 @@ const allowedPlanIds = env.PAYJP_PLAN_IDS.split(',')
   .filter(Boolean);
 if (allowedPlanIds.length === 0) {
   process.stderr.write('[startup] PAYJP_PLAN_IDS must contain at least one plan ID\n');
+  await closePoolIgnoringStartupErrors();
   process.exit(1);
 }
 
