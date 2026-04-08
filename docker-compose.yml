@@ -21,11 +21,19 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    env_file:
-      - .env
     environment:
-      # Override DATABASE_URL to use Docker internal hostname (sslmode=disable: no SSL cert on local PG)
       DATABASE_URL: postgres://hayane:hayane@db:5432/hayane?sslmode=disable
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+      DISCORD_PAID_ROLE_ID: ${DISCORD_PAID_ROLE_ID}
+      PAYJP_SECRET_KEY: ${PAYJP_SECRET_KEY}
+      PAYJP_WEBHOOK_TOKEN: ${PAYJP_WEBHOOK_TOKEN}
+      PAYJP_LIVEMODE: ${PAYJP_LIVEMODE}
+      PAYJP_PLAN_IDS: ${PAYJP_PLAN_IDS}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
     depends_on:
       db:
         condition: service_healthy
