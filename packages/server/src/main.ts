@@ -73,7 +73,6 @@ console.log('[startup] DB migrations applied.');
 // ---- 3. Create clients ----
 
 // PAY.JP client (payjp uses export= pattern; cast required for ESM interop)
-// biome-ignore lint/suspicious/noExplicitAny: payjp uses export= CJS pattern incompatible with ESM typed import
 const payjpApi = (
   Payjp as unknown as (key: string) => Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>
 )(env.PAYJP_SECRET_KEY);
