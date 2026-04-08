@@ -1,0 +1,9 @@
+node_modules
+frontend
+feature
+.vcsdd
+.git
+*.md
+.env
+.env.*
+!.env.example
