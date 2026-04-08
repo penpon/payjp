@@ -9,6 +9,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/auth-service/package.json packages/auth-service/
 COPY packages/billing-service/package.json packages/billing-service/
 COPY packages/sync-service/package.json packages/sync-service/
+COPY frontend/package.json frontend/
 
 RUN npm ci
 
