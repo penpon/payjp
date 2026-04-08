@@ -116,15 +116,19 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const sslDisabled = env.DATABASE_URL.includes('sslmode=disable');
 const pool = createPool(env.DATABASE_URL, sslDisabled ? { ssl: false } : undefined);
 
-try {
-  await runMigrations(pool);
-} catch (err) {
-  process.stderr.write(`[startup] DB migration failed: ${err instanceof Error ? err.message : String(err)}\n`);
+async function closePoolIgnoringStartupErrors(): Promise<void> {
   try {
     await closePool(pool);
   } catch {
     // ignore cleanup error during startup failure
   }
+}
+
+try {
+  await runMigrations(pool);
+} catch (err) {
+  process.stderr.write(`[startup] DB migration failed: ${err instanceof Error ? err.message : String(err)}\n`);
+  await closePoolIgnoringStartupErrors();
   process.exit(1);
 }
 console.log('[startup] DB migrations applied.');
@@ -213,7 +217,7 @@ try {
   process.stderr.write(
     `[startup] Failed to resolve Discord bot identity: ${err instanceof Error ? err.message : String(err)}\n`,
   );
-  await closePool(pool);
+  await closePoolIgnoringStartupErrors();
   process.exit(1);
 }
 
@@ -324,7 +328,7 @@ try {
   console.log(`[startup] Server listening on port ${port}`);
 } catch (err) {
   console.error('[startup] Failed to start server:', err);
-  await closePool(pool);
+  await closePoolIgnoringStartupErrors();
   process.exit(1);
 }
 
