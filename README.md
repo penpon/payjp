@@ -16,10 +16,70 @@ PAY.JP 定期課金の状態に応じて Discord ロールを自動付与/剥奪
 | `packages/sync-service` | Webhook・ロール同期・手動CLI | R6-R8 |
 | `frontend` | 購読UI | — |
 
-## セットアップ
+## ローカル起動手順
+
+### 前提条件
+
+- Node.js 22+、Docker（Docker Compose）
+
+### 1. 環境変数の設定
+
+```bash
+cp .env.example .env
+```
+
+`.env` を編集して以下を入力：
+
+| 変数 | 取得場所 |
+|---|---|
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | [Discord Developer Portal](https://discord.com/developers/applications) → OAuth2 |
+| `DISCORD_REDIRECT_URI` | ローカルは `http://localhost:3000/v1/auth/discord/callback` のまま |
+| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Bot |
+| `DISCORD_GUILD_ID` | DiscordサーバーID（開発者モードで右クリックコピー）|
+| `DISCORD_PAID_ROLE_ID` | 付与対象ロールのID |
+| `PAYJP_SECRET_KEY` | [PAY.JP ダッシュボード](https://pay.jp/) → APIキー → 秘密鍵 |
+| `PAYJP_WEBHOOK_TOKEN` | PAY.JP → Webhook → トークン |
+| `PAYJP_PLAN_IDS` | PAY.JP → 定期課金プランID（カンマ区切り） |
+| `VITE_PAYJP_PUBLIC_KEY` | PAY.JP → APIキー → 公開鍵 |
+
+### 2-A. Docker Compose で起動（推奨）
+
+API サーバー（ポート 3000）+ PostgreSQL をまとめて起動。**DBマイグレーションは自動実行**。
+
+```bash
+docker compose up --build
+```
+
+### 2-B. ローカル開発（フロントエンドのホットリロードあり）
+
+**ターミナル 1 — DB のみ Docker で起動：**
+
+```bash
+docker compose up db
+```
+
+**ターミナル 2 — API サーバー（DBマイグレーション自動）：**
 
 ```bash
 npm install
+cd packages/server && npm run start
+```
+
+**ターミナル 3 — フロントエンド（`/v1/*` を自動でポート 3000 にプロキシ）：**
+
+```bash
+cd frontend && npm run dev
+# → http://localhost:5173 で起動
+```
+
+### 動作確認
+
+```bash
+# セッション確認（401 が返れば API は起動している）
+curl http://localhost:3000/v1/auth/discord/session
+
+# フロントエンド（2-B の場合）
+open http://localhost:5173
 ```
 
 ## 技術スタック
