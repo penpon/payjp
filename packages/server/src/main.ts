@@ -7,6 +7,53 @@ import Payjp from 'payjp';
 import { buildApp } from './app.js';
 import type { SyncDeps } from './routes/sync.routes.js';
 
+/** Discord permission bits (https://discord.com/developers/docs/topics/permissions) */
+const PERM_ADMINISTRATOR = 1n << 3n;
+const PERM_MANAGE_ROLES = 1n << 28n;
+
+type DiscordApiRole = { id: string; position: number; permissions: string };
+type DiscordApiMember = { roles: string[] };
+
+function mergeGuildPermissions(memberRoleIds: readonly string[], allRoles: DiscordApiRole[], guildId: string): bigint {
+  const byId = new Map(allRoles.map((r) => [r.id, r]));
+  let perms = 0n;
+  const everyone = byId.get(guildId);
+  if (everyone) perms |= BigInt(everyone.permissions);
+  for (const id of memberRoleIds) {
+    const r = byId.get(id);
+    if (r) perms |= BigInt(r.permissions);
+  }
+  return perms;
+}
+
+function highestRolePosition(roleIds: readonly string[], allRoles: DiscordApiRole[]): number {
+  const byId = new Map(allRoles.map((r) => [r.id, r]));
+  let max = -1;
+  for (const id of roleIds) {
+    const r = byId.get(id);
+    if (r && r.position > max) max = r.position;
+  }
+  return max;
+}
+
+function canBotAssignRole(params: {
+  allRoles: DiscordApiRole[];
+  botMember: DiscordApiMember;
+  guildId: string;
+  paidRoleId: string;
+}): boolean {
+  const { allRoles, botMember, guildId, paidRoleId } = params;
+  const paidRole = allRoles.find((r) => r.id === paidRoleId);
+  if (!paidRole) return false;
+
+  const perms = mergeGuildPermissions(botMember.roles, allRoles, guildId);
+  if ((perms & PERM_ADMINISTRATOR) === PERM_ADMINISTRATOR) return true;
+  if ((perms & PERM_MANAGE_ROLES) !== PERM_MANAGE_ROLES) return false;
+
+  const botTop = highestRolePosition(botMember.roles, allRoles);
+  return botTop > paidRole.position;
+}
+
 // ---- 1. Env validation ----
 
 const REQUIRED_ENV = [
@@ -158,11 +205,22 @@ const payjpClient: PayjpClient = {
 // Discord REST client
 const discordRest = new REST({ version: '10' }).setToken(env.DISCORD_BOT_TOKEN);
 
+let discordBotUserId: string;
+try {
+  const me = (await discordRest.get('/users/@me')) as { id: string };
+  discordBotUserId = me.id;
+} catch (err) {
+  process.stderr.write(
+    `[startup] Failed to resolve Discord bot identity: ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+  await closePool(pool);
+  process.exit(1);
+}
+
 const discordClient: DiscordClient = {
   async checkMembership(guildId, discordUserId) {
     try {
       await discordRest.get(`/guilds/${guildId}/members/${discordUserId}`);
-      return { isMember: true, canAssignRole: true };
     } catch (err: unknown) {
       const status = (err as Record<string, unknown>)?.status;
       if (status === 404) {
@@ -170,6 +228,30 @@ const discordClient: DiscordClient = {
       }
       throw err;
     }
+
+    const paidRoleId = env.DISCORD_PAID_ROLE_ID;
+    let rolesRaw: DiscordApiRole[];
+    let botMemberRaw: DiscordApiMember;
+    try {
+      [rolesRaw, botMemberRaw] = await Promise.all([
+        discordRest.get(`/guilds/${guildId}/roles`) as Promise<DiscordApiRole[]>,
+        discordRest.get(`/guilds/${guildId}/members/${discordBotUserId}`) as Promise<DiscordApiMember>,
+      ]);
+    } catch (err: unknown) {
+      const status = (err as Record<string, unknown>)?.status;
+      if (status === 404) {
+        return { isMember: true, canAssignRole: false };
+      }
+      throw err;
+    }
+
+    const canAssignRole = canBotAssignRole({
+      allRoles: rolesRaw,
+      botMember: botMemberRaw,
+      guildId,
+      paidRoleId,
+    });
+    return { isMember: true, canAssignRole };
   },
   async assignRole(guildId, discordUserId, roleId) {
     await discordRest.put(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
@@ -246,21 +328,33 @@ try {
   process.exit(1);
 }
 
-// Graceful shutdown
+// Graceful shutdown — always close the DB pool; surface partial failures via exit code
+async function shutdownGracefully(): Promise<void> {
+  let exitCode = 0;
+  try {
+    await app.close();
+  } catch (err) {
+    console.error('[shutdown] Error closing HTTP server:', err);
+    exitCode = 1;
+  }
+  try {
+    await closePool(pool);
+  } catch (err) {
+    console.error('[shutdown] Error closing database pool:', err);
+    exitCode = 1;
+  }
+  process.exit(exitCode);
+}
+
 let shuttingDown = false;
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`[shutdown] Received ${signal}, shutting down...`);
-    app
-      .close()
-      .then(() => closePool(pool))
-      .catch((err) => {
-        console.error('[shutdown] Error during shutdown:', err);
-      })
-      .finally(() => {
-        process.exit(0);
-      });
+    void shutdownGracefully().catch((err) => {
+      console.error('[shutdown] Unexpected shutdown failure:', err);
+      process.exit(1);
+    });
   });
 }
