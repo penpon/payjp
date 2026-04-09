@@ -292,6 +292,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
         data: {
           id: 'sub_test_e2e',
           object: 'subscription',
+          status: undefined,
           metadata: { discord_user_id: discordUserId },
           // status intentionally omitted
         },
@@ -522,6 +523,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           id: subId, // metadata なし → data.id で逆引き
           object: 'subscription',
           status: 'active',
+          metadata: undefined,
           // metadata omitted intentionally
         },
       });
@@ -554,6 +556,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           id: 'sub_nonexistent_xyz', // DB に存在しない subscription_id
           object: 'subscription',
           status: 'active',
+          metadata: undefined,
           // metadata.discord_user_id も指定しない
         },
       });
@@ -734,6 +737,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           object: 'subscription',
           status: 'active',
           metadata: { discord_user_id: discordUserId },
+          plan: undefined,
           // plan intentionally omitted
         },
       });
