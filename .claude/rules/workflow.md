@@ -9,25 +9,12 @@
 | ツール | 用途 | 適するIssue |
 |---|---|---|
 | `/feature-dev` | 設計判断が必要な新機能（7フェーズ構造化開発） | #16 退会フロー, #20 E2Eハーネス |
-| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #17 共通エラーUI, #21-#22 E2Eシナリオ |
+| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #17 共通エラーUI, #21-#22・#37-#43・#46-#49 E2Eシナリオ |
 | `/ui-ux-pro-max` | UI/UX品質基準（アクセシビリティ・配色・フォントペアリング） | #16, #17 frontend |
 | `/frontend-design` | ビジュアル美学・創造的デザイン方向性（「AI slop」回避） | #16, #17 frontend |
+| 手動検証 | リリース判定・文書最終化（コード実装なし） | #44 Go-Live検証, #45 運用文書 |
 
 フロントエンド実装・修正時は `/ui-ux-pro-max` + `/frontend-design` を**併用必須**。
-
-## Issue 別推奨モデル
-
-| Issue | 推奨モデル | 理由 |
-|---|---|---|
-| #16 退会フロー | opus high effort | 多コンポーネントUI＋詳細デザイン仕様を同時参照 |
-| #17 共通エラーUI | sonnet high effort | 仕様確定済みリファクタ |
-| #18 Docker Compose | sonnet high effort | インフラ設定・構成確認 |
-| #19 Cloudflare Pages | sonnet high effort | デプロイ設定確認 |
-| #20 E2Eハーネス | opus medium effort | 複数サービス統合アーキテクチャ設計 |
-| #21 Webhook E2E | sonnet high effort | #20 パターンへの追加 |
-| #22 Cancel E2E | sonnet high effort | 同上 |
-| #23 T-P0 Go-Live検証 | opus medium effort | T-P0-01〜07 仕様横断検証 |
-| #24 運用文書 | sonnet high effort | 文書整理 |
 
 ## レビューフェーズ — 実装完了後に必ず順次実行
 
