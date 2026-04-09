@@ -1,6 +1,14 @@
 // --- App state machine ---
 
-export type AppState = 'loading' | 'not_linked' | 'linked' | 'error' | 'billing' | 'cancel_complete' | 'cancel_error';
+export type AppState =
+  | 'loading'
+  | 'not_linked'
+  | 'linked'
+  | 'error'
+  | 'billing'
+  | 'register_complete'
+  | 'cancel_complete'
+  | 'cancel_error';
 
 export interface SessionResponse {
   linked: boolean;
@@ -69,7 +77,7 @@ export interface CancelResponse {
   roleRemovalAt: string;
 }
 
-export type CancelErrorKind = 'not_in_period' | 'no_subscription' | 'session_expired' | 'inflight' | 'server_error';
+export type CancelErrorKind = 'no_subscription' | 'session_expired' | 'inflight' | 'server_error';
 
 export interface CancelUIError {
   kind: CancelErrorKind;

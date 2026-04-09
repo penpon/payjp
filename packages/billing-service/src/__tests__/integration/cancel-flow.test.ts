@@ -257,42 +257,6 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // PROP-BILL-045: Cancel acceptance boundary
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-045: Cancel acceptance boundary', () => {
-    it('returns 409 when now_jst < acceptance_start', async () => {
-      // access_end_at = 5/1 → acceptanceStart = 4/1 00:00 JST = 3/31 15:00 UTC
-      // now = 3/25 UTC (JST でも 3/26 → 受付開始前)
-      const earlyNow = new Date('2025-03-25T00:00:00Z');
-      const deps = makeSuccessfulDeps();
-      deps.clock = () => earlyNow;
-      const result = await handleCancel(makeCancelRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(409);
-        expect(result.errorCode).toBe('BEFORE_ACCEPTANCE_BOUNDARY');
-      }
-    });
-
-    it('proceeds when now_jst == acceptance_start (inclusive)', async () => {
-      // access_end_at = 5/1 00:00 UTC → acceptanceStart UTC = 3/31 15:00:00 UTC (JST 4/1 00:00)
-      // now を acceptanceStart ちょうどに設定
-      const acceptanceStartUtc = new Date('2025-03-31T15:00:00Z');
-      const deps = makeSuccessfulDeps();
-      deps.clock = () => acceptanceStartUtc;
-      const result = await handleCancel(makeCancelRequest(), deps);
-      expect(result.ok).toBe(true);
-    });
-
-    it('proceeds when now_jst > acceptance_start', async () => {
-      // NOW = 4/1 10:00 UTC (JST 4/1 19:00) → 受付開始後
-      const deps = makeSuccessfulDeps();
-      const result = await handleCancel(makeCancelRequest(), deps);
-      expect(result.ok).toBe(true);
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // PROP-BILL-046: Cancel link session consumption
   // -------------------------------------------------------------------------
   describe('PROP-BILL-046: Cancel link session consumption', () => {

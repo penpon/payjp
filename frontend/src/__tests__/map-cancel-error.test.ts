@@ -3,14 +3,6 @@ import { CancelError } from '../api.js';
 import { mapCancelError } from '../map-cancel-error.js';
 
 describe('mapCancelError', () => {
-  it('maps BEFORE_ACCEPTANCE_BOUNDARY to not_in_period', () => {
-    const err = new CancelError(409, 'BEFORE_ACCEPTANCE_BOUNDARY', undefined, 'Too early to cancel');
-    expect(mapCancelError(err)).toEqual({
-      kind: 'not_in_period',
-      message: '現在は退会申請の受付期間外です。受付は次回更新日の1ヶ月前から開始されます。',
-    });
-  });
-
   it('maps INFLIGHT_OPERATION to inflight with operationId', () => {
     const err = new CancelError(503, 'INFLIGHT_OPERATION', 'op-123', 'In progress');
     expect(mapCancelError(err)).toEqual({

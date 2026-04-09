@@ -39,37 +39,6 @@ export function isThreeDSecureVerified(threeDSecureStatus: string | null): boole
   return threeDSecureStatus === 'verified';
 }
 
-// PROP-BILL-006: REQ-BILL-020
-export function calculateCancelAcceptanceStart(accessEndAt: Date, jstOffsetMinutes: number = 540): Date {
-  // Convert accessEndAt to JST
-  const jstMs = accessEndAt.getTime() + jstOffsetMinutes * 60 * 1000;
-  const jst = new Date(jstMs);
-
-  // Subtract 1 month in JST
-  let year = jst.getUTCFullYear();
-  let month = jst.getUTCMonth() - 1; // 0-indexed
-  const day = jst.getUTCDate();
-
-  if (month < 0) {
-    month = 11;
-    year -= 1;
-  }
-
-  // Month-end rollup: clamp day to last day of target month
-  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const clampedDay = Math.min(day, lastDayOfTargetMonth);
-
-  // Build result as 00:00:00 JST on the target date, then convert back to UTC
-  const jstResult = Date.UTC(year, month, clampedDay, 0, 0, 0, 0);
-  return new Date(jstResult - jstOffsetMinutes * 60 * 1000);
-}
-
-// PROP-BILL-007: REQ-BILL-020
-/** Both arguments are UTC `Date` instants on the same timeline (e.g. `now` from the request and `acceptanceStart` from {@link calculateCancelAcceptanceStart}). Do not apply extra JST conversion here. */
-export function isCancelAcceptable(now: Date, acceptanceStart: Date): boolean {
-  return now >= acceptanceStart;
-}
-
 // PROP-BILL-008: REQ-BILL-013
 export function calculateTrialEnd(now: Date): Date {
   const result = new Date(now);

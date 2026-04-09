@@ -12,14 +12,12 @@ import {
   buildCancelResponse,
   buildSubscriptionMetadata,
   buildSubscriptionResponse,
-  calculateCancelAcceptanceStart,
   calculateTrialEnd,
   determineSubscriptionStatus,
   formatRfc3339Utc,
   getCorsHeaders,
   hasActiveSubscription,
   hasInflightOperation,
-  isCancelAcceptable,
   isFirstTimeUser,
   isSameOrigin,
   isThreeDSecureVerified,
@@ -157,76 +155,6 @@ describe('PROP-BILL-005: isThreeDSecureVerified', () => {
     { status: '', expected: false },
   ])('status=$status → $expected', ({ status, expected }) => {
     expect(isThreeDSecureVerified(status)).toBe(expected);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// PROP-BILL-006: calculateCancelAcceptanceStart
-// ---------------------------------------------------------------------------
-describe('PROP-BILL-006: calculateCancelAcceptanceStart', () => {
-  // JST = UTC+9. 00:00:00 JST = 15:00:00 UTC (前日)
-
-  it('standard month: 2026-05-15 → 2026-04-15 00:00:00 JST', () => {
-    const accessEndAt = new Date('2026-05-15T00:00:00Z');
-    const result = calculateCancelAcceptanceStart(accessEndAt);
-    // 2026-04-15 00:00:00 JST = 2026-04-14T15:00:00Z
-    expect(result).toEqual(new Date('2026-04-14T15:00:00Z'));
-  });
-
-  it('month-end rollup: 2026-03-31 → 2026-02-28 00:00:00 JST (non-leap)', () => {
-    const accessEndAt = new Date('2026-03-31T00:00:00Z');
-    const result = calculateCancelAcceptanceStart(accessEndAt);
-    // 2026-02-28 00:00:00 JST = 2026-02-27T15:00:00Z
-    expect(result).toEqual(new Date('2026-02-27T15:00:00Z'));
-  });
-
-  it('month-end rollup: 2026-05-31 → 2026-04-30 00:00:00 JST', () => {
-    const accessEndAt = new Date('2026-05-31T00:00:00Z');
-    const result = calculateCancelAcceptanceStart(accessEndAt);
-    // 2026-04-30 00:00:00 JST = 2026-04-29T15:00:00Z
-    expect(result).toEqual(new Date('2026-04-29T15:00:00Z'));
-  });
-
-  it('leap year: 2028-03-31 → 2028-02-29 00:00:00 JST', () => {
-    const accessEndAt = new Date('2028-03-31T00:00:00Z');
-    const result = calculateCancelAcceptanceStart(accessEndAt);
-    // 2028-02-29 00:00:00 JST = 2028-02-28T15:00:00Z
-    expect(result).toEqual(new Date('2028-02-28T15:00:00Z'));
-  });
-
-  it('Jan 31 → Dec 31 (previous year) 00:00:00 JST', () => {
-    const accessEndAt = new Date('2027-01-31T00:00:00Z');
-    const result = calculateCancelAcceptanceStart(accessEndAt);
-    // 2026-12-31 00:00:00 JST = 2026-12-30T15:00:00Z
-    expect(result).toEqual(new Date('2026-12-30T15:00:00Z'));
-  });
-
-  it('no rollup needed: 2026-08-30 → 2026-07-30 00:00:00 JST', () => {
-    const accessEndAt = new Date('2026-08-30T00:00:00Z');
-    const result = calculateCancelAcceptanceStart(accessEndAt);
-    // 2026-07-30 00:00:00 JST = 2026-07-29T15:00:00Z
-    expect(result).toEqual(new Date('2026-07-29T15:00:00Z'));
-  });
-});
-
-// ---------------------------------------------------------------------------
-// PROP-BILL-007: isCancelAcceptable
-// ---------------------------------------------------------------------------
-describe('PROP-BILL-007: isCancelAcceptable', () => {
-  const acceptanceStart = new Date('2026-04-14T15:00:00Z'); // 2026-04-15 00:00 JST
-
-  it('before acceptance start → false', () => {
-    const before = new Date('2026-04-14T14:59:59Z');
-    expect(isCancelAcceptable(before, acceptanceStart)).toBe(false);
-  });
-
-  it('exactly at acceptance start → true (inclusive)', () => {
-    expect(isCancelAcceptable(acceptanceStart, acceptanceStart)).toBe(true);
-  });
-
-  it('after acceptance start → true', () => {
-    const after = new Date('2026-04-14T15:00:01Z');
-    expect(isCancelAcceptable(after, acceptanceStart)).toBe(true);
   });
 });
 

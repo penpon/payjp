@@ -41,25 +41,6 @@ describe('cancelSubscription', () => {
     expect(result.roleRemovalAt).toBe('2026-05-07T00:00:00Z');
   });
 
-  it('should throw CancelError on 409 BEFORE_ACCEPTANCE_BOUNDARY', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          ok: false,
-          errorCode: 'BEFORE_ACCEPTANCE_BOUNDARY',
-          message: 'Too early to cancel',
-        }),
-        { status: 409 },
-      ),
-    );
-
-    const err = await cancelSubscription().catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(CancelError);
-    expect((err as CancelError).status).toBe(409);
-    expect((err as CancelError).errorCode).toBe('BEFORE_ACCEPTANCE_BOUNDARY');
-    expect((err as CancelError).operationId).toBeUndefined();
-  });
-
   it('should throw CancelError on 503 with operationId', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(

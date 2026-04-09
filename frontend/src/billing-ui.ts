@@ -61,7 +61,7 @@ export function renderBilling(
           ),
         );
       } else {
-        container.appendChild(renderSuccess(state.result, plans, callbacks));
+        container.appendChild(renderSuccess(state.result, plans, callbacks.onBackToTop));
       }
       break;
     case 'error':
@@ -355,14 +355,14 @@ function renderSubmitting(): HTMLDivElement {
 
 // --- Success step ---
 
-function renderSuccess(result: SubscribeResponse, plans: PlanDef[], callbacks: BillingCallbacks): HTMLDivElement {
+export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBackToTop: () => void): HTMLDivElement {
   const plan = plans.find((p) => p.id === result.planId);
   const planName = plan?.name ?? result.planId;
 
   const statusLabel = result.trialApplied ? 'トライアル' : '有効';
 
   const backBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
-  backBtn.addEventListener('click', callbacks.onBackToTop);
+  backBtn.addEventListener('click', onBackToTop);
 
   return el('div', { class: 'card' }, [
     el('div', { class: 'success-container' }, [

@@ -1,5 +1,5 @@
 import type { BillingCallbacks } from './billing-ui.js';
-import { renderBilling, renderSubscribed } from './billing-ui.js';
+import { renderBilling, renderSubscribed, renderSuccess } from './billing-ui.js';
 import { renderCancelComplete, renderCancelError } from './cancel-ui.js';
 import { el } from './dom.js';
 import type {
@@ -9,6 +9,7 @@ import type {
   CancelUIError,
   PayjpAdapter,
   PlanDef,
+  SubscribeResponse,
   SubscriptionInfo,
 } from './types.js';
 import { createDiscordLogoSvg } from './widgets.js';
@@ -102,6 +103,7 @@ export function renderState(
     billing?: BillingContext;
     subscribed?: SubscribedContext;
     errorMessage?: string;
+    registerComplete?: { result: SubscribeResponse; plans: PlanDef[]; onBackToTop: () => void };
     cancelComplete?: { result: CancelResponse };
     cancelError?: CancelUIError;
   },
@@ -140,6 +142,20 @@ export function renderState(
         );
       } else {
         console.error('[ui] renderState("billing") called without billing context');
+        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+      }
+      break;
+    case 'register_complete':
+      if (extra?.registerComplete) {
+        container.appendChild(
+          renderSuccess(
+            extra.registerComplete.result,
+            extra.registerComplete.plans,
+            extra.registerComplete.onBackToTop,
+          ),
+        );
+      } else {
+        console.error('[ui] renderState("register_complete") called without registerComplete context');
         container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;

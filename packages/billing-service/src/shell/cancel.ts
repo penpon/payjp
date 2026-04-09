@@ -6,10 +6,8 @@
  */
 import {
   buildCancelResponse,
-  calculateCancelAcceptanceStart,
   hasActiveSubscription,
   hasInflightOperation,
-  isCancelAcceptable,
   isSameOrigin,
   linkSessionTokenHash,
 } from '../core/index.js';
@@ -23,7 +21,6 @@ function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<str
 export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promise<CancelResult> {
   const { db, payjp, config, clock, generateOperationId } = deps;
   const now = clock();
-  const JST_OFFSET_MINUTES = 540;
 
   // Step 1: Origin validation
   if (!isSameOrigin(req.origin, config.frontendBaseUrl)) {
@@ -85,15 +82,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       };
     }
 
-    // Step 7: Acceptance boundary check
-    // calculateCancelAcceptanceStart returns a UTC Date; isCancelAcceptable is a simple >= comparison,
-    // so both sides can stay in UTC without further conversion.
-    const acceptanceStart = calculateCancelAcceptanceStart(member.access_end_at, JST_OFFSET_MINUTES);
-    if (!isCancelAcceptable(now, acceptanceStart)) {
-      return { ok: false, statusCode: 409, errorCode: 'BEFORE_ACCEPTANCE_BOUNDARY', message: 'Too early to cancel' };
-    }
-
-    // Step 8: Link session consumption (validation already done at step 1b)
+    // Step 7: Link session consumption (validation already done at step 1b)
     // REQ-BILL-022: link session is consumed even on idempotent path
     await db.consumeLinkSession(tokenHash, now);
 

@@ -1,10 +1,5 @@
 import { el } from './dom.js';
-import {
-  createBackToTopButton,
-  renderInflightSection,
-  renderSessionExpiredSection,
-  renderWarningBanner,
-} from './error-ui.js';
+import { createBackToTopButton, renderInflightSection, renderSessionExpiredSection } from './error-ui.js';
 import { formatDate } from './format.js';
 import type { CancelResponse, CancelUIError } from './types.js';
 import { createDiscordLogoSvg } from './widgets.js';
@@ -108,10 +103,7 @@ export function renderCancelError(
 ): void {
   const children: (Node | string)[] = [el('h1', { class: 'heading' }, ['退会できませんでした'])];
 
-  if (error.kind === 'not_in_period') {
-    children.push(renderWarningBanner(error.message));
-    children.push(createBackToTopButton(callbacks.onBackToTop));
-  } else if (error.kind === 'session_expired') {
+  if (error.kind === 'session_expired') {
     children.push(...renderSessionExpiredSection(error.message, callbacks.onReAuth));
   } else if (error.kind === 'inflight') {
     children.push(...renderInflightSection(error));

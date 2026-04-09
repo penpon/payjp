@@ -239,7 +239,15 @@ function startBillingFlow(app: HTMLElement): void {
           privacyConsented: data.privacyConsented,
         });
 
-        update({ step: 'success', result });
+        renderState(app, 'register_complete', startOAuth, {
+          registerComplete: {
+            result,
+            plans: PLANS,
+            onBackToTop: () => {
+              void init();
+            },
+          },
+        });
       } catch (err) {
         console.error('[billing] onSubmit failed:', err);
         update({ step: 'error', error: mapSubscribeError(err) });

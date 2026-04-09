@@ -571,23 +571,6 @@ describe('POST /v1/subscriptions/cancel', () => {
     expect(res.headers['set-cookie']).toBeUndefined();
   });
 
-  it('returns 409 when before acceptance boundary', async () => {
-    const deps = makeCancelDeps();
-    const member = makeMember({
-      subscription_status: 'active',
-      access_end_at: new Date('2026-12-01T00:00:00Z'),
-      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
-      payjp_customer_id: PAYJP_CUSTOMER_ID,
-    });
-    (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValue(member);
-    const app = createApp(deps);
-
-    const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload()));
-
-    expect(res.statusCode).toBe(409);
-    expect(res.json().errorCode).toBe('BEFORE_ACCEPTANCE_BOUNDARY');
-  });
-
   it('returns 200 idempotently when already canceled', async () => {
     const deps = makeCancelDeps();
     const member = makeMember({

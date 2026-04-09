@@ -22,11 +22,6 @@ export function mapCancelError(err: unknown): CancelUIError {
     case 'EXPIRED_LINK_SESSION':
     case 'CONSUMED_LINK_SESSION':
       return { kind: 'session_expired', message: 'セッションが無効です。再度Discordでログインしてください。' };
-    case 'BEFORE_ACCEPTANCE_BOUNDARY':
-      return {
-        kind: 'not_in_period',
-        message: '現在は退会申請の受付期間外です。受付は次回更新日の1ヶ月前から開始されます。',
-      };
     case 'NO_SUBSCRIPTION':
     case 'NO_PAYJP_SUBSCRIPTION':
     case 'ACCESS_END_AT_NULL':
