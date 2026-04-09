@@ -22,10 +22,11 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - api
-      - frontend
 
   api:
     build:
@@ -49,23 +50,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    expose:
-      - "5173"
-    volumes:
-      - ./frontend/src:/app/frontend/src
-      - ./frontend/index.html:/app/frontend/index.html
-      - ./frontend/public:/app/frontend/public
-      - ./.certs:/app/.certs:ro
-    environment:
-      VITE_PAYJP_PUBLIC_KEY: ${VITE_PAYJP_PUBLIC_KEY}
-      API_PROXY_TARGET: http://api:3000
-    depends_on:
-      - api
 
 volumes:
   postgres_data:
