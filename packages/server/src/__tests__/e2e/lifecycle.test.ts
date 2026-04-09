@@ -740,6 +740,16 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
       const discordUserId = `lc-rate-${i}-${randomUUID().slice(0, 8)}`;
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       // payjpMock の mock を毎回セット（重複呼び出しに備える）
+      (payjpMock.createCustomer as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: `cus_rate_${i}`,
+        metadata: {},
+      });
+      (payjpMock.createCharge as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: `ch_rate_${i}`,
+        amount: 1000,
+        paid: true,
+        metadata: {},
+      });
       (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: `sub_rate_${i}`,
         status: 'trial',
