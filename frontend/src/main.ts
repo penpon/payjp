@@ -71,30 +71,37 @@ const PAYJP_PUBLIC_KEY = import.meta.env.VITE_PAYJP_PUBLIC_KEY as string | undef
 // --- PAY.JP adapter ---
 
 function createPayjpAdapter(): PayjpAdapter | null {
-  if (typeof window.Payjp !== 'function' || !PAYJP_PUBLIC_KEY) {
-    console.error('[billing] PAY.JP.js not available or public key not configured');
+  if (typeof window.Payjp !== 'function') {
+    console.error('[billing] PAY.JP.js (pay.js) が読み込まれていません');
+    return null;
+  }
+  if (!PAYJP_PUBLIC_KEY || PAYJP_PUBLIC_KEY === 'pk_test_') {
+    console.error('[billing] VITE_PAYJP_PUBLIC_KEY が未設定です。.env を確認してください');
     return null;
   }
 
   try {
     const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'subwindow' });
     const elements = payjp.elements({ locale: 'ja' });
+    let cachedCard: ReturnType<typeof elements.create> | null = null;
 
     return {
       createCardElement(selector) {
-        const card = elements.create('card', {
-          style: {
-            base: {
-              color: '#061b31',
-              fontSize: '16px',
-              fontFamily: 'Inter, "Noto Sans JP", sans-serif',
-              '::placeholder': { color: '#64748d' },
+        if (!cachedCard) {
+          cachedCard = elements.create('card', {
+            style: {
+              base: {
+                color: '#061b31',
+                fontSize: '16px',
+                fontFamily: 'Inter, "Noto Sans JP", sans-serif',
+                '::placeholder': { color: '#64748d' },
+              },
+              invalid: { color: '#ea2261' },
             },
-            invalid: { color: '#ea2261' },
-          },
-        });
-        card.mount(selector);
-        return card;
+          });
+        }
+        cachedCard.mount(selector);
+        return cachedCard;
       },
       async createToken(cardElement, data) {
         try {
