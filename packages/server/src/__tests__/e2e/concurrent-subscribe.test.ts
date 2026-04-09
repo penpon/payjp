@@ -110,9 +110,16 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
         postSubscribe(app, session2.rawToken),
       ]);
 
-      // 両リクエストとも 200（片方は新規作成、もう片方は既存を返す）
-      expect(res1.statusCode).toBe(200);
-      expect(res2.statusCode).toBe(200);
+      // non-blocking advisory lock のため、成功は 1 件のみで残りは LOCK_UNAVAILABLE(503)
+      const responses = [res1, res2];
+      const successResponses = responses.filter((res) => res.statusCode === 200);
+      const lockUnavailableResponses = responses.filter((res) => res.statusCode === 503);
+
+      expect(successResponses).toHaveLength(1);
+      expect(lockUnavailableResponses).toHaveLength(1);
+      for (const res of lockUnavailableResponses) {
+        expect(res.json()).toMatchObject({ ok: false, errorCode: 'LOCK_UNAVAILABLE' });
+      }
 
       // PAY.JP 課金・サブスクリプション作成はそれぞれ 1 回のみ
       expect(payjpMock.createCharge).toHaveBeenCalledOnce();
@@ -159,9 +166,15 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
         postSubscribe(app, session3.rawToken),
       ]);
 
-      expect(res1.statusCode).toBe(200);
-      expect(res2.statusCode).toBe(200);
-      expect(res3.statusCode).toBe(200);
+      const responses = [res1, res2, res3];
+      const successResponses = responses.filter((res) => res.statusCode === 200);
+      const lockUnavailableResponses = responses.filter((res) => res.statusCode === 503);
+
+      expect(successResponses).toHaveLength(1);
+      expect(lockUnavailableResponses).toHaveLength(2);
+      for (const res of lockUnavailableResponses) {
+        expect(res.json()).toMatchObject({ ok: false, errorCode: 'LOCK_UNAVAILABLE' });
+      }
 
       expect(payjpMock.createCharge).toHaveBeenCalledOnce();
       expect(payjpMock.createSubscription).toHaveBeenCalledOnce();
