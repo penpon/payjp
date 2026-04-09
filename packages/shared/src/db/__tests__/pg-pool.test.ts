@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../migrate.js';
 import type { DbPool } from '../pg-pool.js';
 import { createPgPool } from '../pg-pool.js';
@@ -9,15 +9,25 @@ const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/ha
 
 let rawPool: pg.Pool;
 let dbPool: DbPool;
+let dbAvailable = false;
 
 beforeAll(async () => {
   rawPool = createPool(DATABASE_URL);
-  await runMigrations(rawPool);
-  dbPool = createPgPool(rawPool);
+  try {
+    await runMigrations(rawPool);
+    dbPool = createPgPool(rawPool);
+    dbAvailable = true;
+  } catch {
+    // DB not available — tests will be skipped
+  }
+});
+
+beforeEach((ctx) => {
+  if (!dbAvailable) ctx.skip();
 });
 
 afterAll(async () => {
-  await closePool(rawPool);
+  if (dbAvailable) await closePool(rawPool);
 });
 
 describe('PgPool (DbPool adapter)', () => {

@@ -1,18 +1,29 @@
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../migrate.js';
 import { closePool, createPool } from '../pool.js';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/hayane_test';
 
 let pool: pg.Pool;
+let dbAvailable = false;
 
 beforeAll(async () => {
   pool = createPool(DATABASE_URL);
+  try {
+    await pool.query('SELECT 1');
+    dbAvailable = true;
+  } catch {
+    // DB not available — tests will be skipped
+  }
+});
+
+beforeEach((ctx) => {
+  if (!dbAvailable) ctx.skip();
 });
 
 afterAll(async () => {
-  await closePool(pool);
+  if (dbAvailable) await closePool(pool);
 });
 
 describe('runMigrations', () => {

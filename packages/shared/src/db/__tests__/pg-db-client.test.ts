@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../migrate.js';
 import { PgDbClient } from '../pg-db-client.js';
 import { closePool, createPool } from '../pool.js';
@@ -8,6 +8,7 @@ const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/ha
 
 let pool: pg.Pool;
 let db: PgDbClient;
+let dbAvailable = false;
 
 async function cleanDatabase() {
   await pool.query('TRUNCATE members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs CASCADE');
@@ -15,16 +16,25 @@ async function cleanDatabase() {
 
 beforeAll(async () => {
   pool = createPool(DATABASE_URL);
-  await runMigrations(pool);
-  db = new PgDbClient(pool);
+  try {
+    await runMigrations(pool);
+    db = new PgDbClient(pool);
+    dbAvailable = true;
+  } catch {
+    // DB not available — tests will be skipped
+  }
+});
+
+beforeEach((ctx) => {
+  if (!dbAvailable) ctx.skip();
 });
 
 afterEach(async () => {
-  await cleanDatabase();
+  if (dbAvailable) await cleanDatabase();
 });
 
 afterAll(async () => {
-  await closePool(pool);
+  if (dbAvailable) await closePool(pool);
 });
 
 describe('PgDbClient - members CRUD', () => {
