@@ -6,10 +6,10 @@
  * - Discord OAuth HTTP 呼び出しは呼び出し元で vi.spyOn(globalThis, 'fetch') を使用
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { BillingConfig, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
-import type { WebhookHandlerDeps } from '@hayane/sync-service';
+import type { CliDeps, WebhookHandlerDeps } from '@hayane/sync-service';
 import type pg from 'pg';
 import { vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -109,7 +109,7 @@ export function makeMockDiscordClient(): DiscordClient {
 
 export const E2E_BILLING_CONFIG: BillingConfig = {
   frontendBaseUrl: 'https://example.com',
-  allowedPlanIds: ['plan_e2e'],
+  allowedPlanIds: ['plan_e2e', 'plan_e2e_standard', 'plan_e2e_premium'],
   discordGuildId: 'guild-e2e-test',
   discordPaidRoleId: 'role-e2e-test',
   initialChargeAmount: 1000,
@@ -134,31 +134,179 @@ export function buildSyncDepsForE2E(
   return { webhookDeps };
 }
 
-export function buildE2EApp(
-  pgDb: PgDbClient,
-  overrides: { payjp?: PayjpClient; discord?: DiscordClient; syncDeps?: SyncDeps } = {},
-) {
+export const E2E_AUTH_CONFIG = {
+  frontendBaseUrl: 'https://example.com',
+  discordClientId: 'test-client-id',
+  discordClientSecret: 'test-client-secret',
+  discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+};
+
+export interface E2EAppOverrides {
+  payjp?: PayjpClient;
+  discord?: DiscordClient;
+  syncDeps?: SyncDeps;
+  clock?: () => Date;
+  generateOperationId?: () => string;
+  billingConfig?: Partial<BillingConfig>;
+}
+
+export function buildE2EApp(pgDb: PgDbClient, overrides: E2EAppOverrides = {}) {
+  const config = { ...E2E_BILLING_CONFIG, ...overrides.billingConfig };
   const billingDeps: BillingDeps = {
     db: pgDb,
     payjp: overrides.payjp ?? makeMockPayjpClient(),
     discord: overrides.discord ?? makeMockDiscordClient(),
-    config: E2E_BILLING_CONFIG,
-    clock: () => new Date(),
-    generateOperationId: () => randomUUID(),
+    config,
+    clock: overrides.clock ?? (() => new Date()),
+    generateOperationId: overrides.generateOperationId ?? (() => randomUUID()),
   };
 
-  // PgDbClient は AuthDb インターフェースを構造的型付けで満たす
-  return buildApp(
-    {
-      frontendBaseUrl: 'https://example.com',
-      discordClientId: 'test-client-id',
-      discordClientSecret: 'test-client-secret',
-      discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
-      db: pgDb,
-    },
-    billingDeps,
-    overrides.syncDeps,
-  );
+  return buildApp({ ...E2E_AUTH_CONFIG, db: pgDb }, billingDeps, overrides.syncDeps);
 }
 
-export { closePool, PgDbClient };
+// ---------------------------------------------------------------------------
+// セッション・フローヘルパー
+// ---------------------------------------------------------------------------
+
+/** link_session を DB に直接挿入（OAuth 完了後の状態を再現） */
+export async function insertLinkedSession(
+  pgDb: PgDbClient,
+  discordUserId: string,
+  rawToken?: string,
+  expiresIn = 3600_000,
+): Promise<{ rawToken: string; tokenHash: string }> {
+  const token = rawToken ?? `e2e-link-${randomUUID()}`;
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  await pgDb.insertDiscordLinkSession({
+    linkSessionTokenHash: tokenHash,
+    discordUserId,
+    expiresAt: new Date(Date.now() + expiresIn),
+  });
+  return { rawToken: token, tokenHash };
+}
+
+/** OAuth 3 ステップを実行し link_session Cookie の raw トークンを返す */
+export async function completeOAuthFlow(
+  app: ReturnType<typeof buildApp>,
+  discordUserId: string,
+  // biome-ignore lint/suspicious/noExplicitAny: vitest spyOn type is complex
+): Promise<{ linkSessionToken: string; mockFetch: any }> {
+  const mockFetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: 'mock_discord_token' }),
+    } as Response)
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: discordUserId }),
+    } as Response);
+
+  // Step 1: start
+  const startRes = await app.inject({ method: 'GET', url: '/v1/auth/discord/start' });
+  const setCookie = startRes.headers['set-cookie'] as string;
+  const oauthSessionToken = setCookie.match(/__Host-oauth_session=([^;]+)/)![1];
+  const stateToken = new URL(startRes.headers.location as string).searchParams.get('state')!;
+
+  // Step 2: callback
+  const callbackRes = await app.inject({
+    method: 'GET',
+    url: `/v1/auth/discord/callback?code=mock-code&state=${stateToken}`,
+    cookies: { '__Host-oauth_session': oauthSessionToken },
+  });
+  const linkMatch = (callbackRes.headers['set-cookie'] as string).match(/__Host-link_session=([^;]+)/)!;
+
+  return { linkSessionToken: linkMatch[1], mockFetch };
+}
+
+/** 購読完了状態の member を作成して返す（OAuth → Subscribe のフルフロー） */
+export async function subscribeUser(
+  app: ReturnType<typeof buildApp>,
+  pgDb: PgDbClient,
+  discordUserId: string,
+  overrides: { planId?: string; payjpMock?: PayjpClient; discordMock?: DiscordClient } = {},
+): Promise<{ memberId: string; linkSessionToken: string }> {
+  const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+  const planId = overrides.planId ?? E2E_BILLING_CONFIG.allowedPlanIds[0];
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/subscriptions',
+    headers: { 'content-type': 'application/json', origin: 'https://example.com' },
+    cookies: { '__Host-link_session': rawToken },
+    body: JSON.stringify({
+      planId,
+      email: `${discordUserId}@e2e-test.example.com`,
+      payjpToken: 'tok_test_e2e',
+      privacyConsented: true,
+    }),
+  });
+
+  if (res.statusCode !== 200) {
+    throw new Error(`subscribeUser failed: ${res.statusCode} ${res.body}`);
+  }
+
+  const member = await pgDb.findMemberByDiscordUserId(discordUserId);
+  return { memberId: member!.id, linkSessionToken: rawToken };
+}
+
+// ---------------------------------------------------------------------------
+// Webhook テストフィクスチャ
+// ---------------------------------------------------------------------------
+
+const DEFAULT_EVENT_CREATED = Math.floor(new Date('2025-04-01T10:00:00Z').getTime() / 1000);
+
+export function makeWebhookEvent(
+  overrides: { id?: string; type?: string; livemode?: boolean; created?: number; data?: Record<string, unknown> } = {},
+): Record<string, unknown> {
+  const {
+    id = `evnt_e2e_${randomUUID().slice(0, 8)}`,
+    type = 'subscription.updated',
+    livemode = false,
+    created = DEFAULT_EVENT_CREATED,
+    data: dataOverrides = {},
+  } = overrides;
+
+  return {
+    id,
+    type,
+    livemode,
+    created,
+    data: {
+      id: 'sub_test_e2e',
+      object: 'subscription',
+      status: 'active',
+      metadata: { discord_user_id: 'discord-e2e-user' },
+      plan: { id: 'plan_e2e' },
+      current_period_end: created + 30 * 86400,
+      ...dataOverrides,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CLI テストヘルパー
+// ---------------------------------------------------------------------------
+
+export function makeCliDeps(pool: pg.Pool, overrides: Partial<CliDeps> = {}): CliDeps {
+  return {
+    db: createPgPool(pool),
+    getPayjpSubscription: vi.fn().mockResolvedValue({
+      id: 'sub_test_e2e',
+      status: 'active',
+      metadata: { discord_user_id: 'discord-e2e-user' },
+      current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+    }),
+    listPayjpCharges: vi.fn().mockResolvedValue({ data: [], has_more: false }),
+    listPayjpSubscriptions: vi.fn().mockResolvedValue({ data: [], has_more: false }),
+    createPayjpCharge: vi.fn().mockResolvedValue({ id: 'ch_cli_e2e' }),
+    createPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_e2e', status: 'active' }),
+    cancelPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_e2e', status: 'canceled' }),
+    syncRole: vi.fn().mockResolvedValue(undefined),
+    log: vi.fn(),
+    now: () => new Date(),
+    ...overrides,
+  };
+}
+
+export { closePool, createPgPool, PgDbClient };
