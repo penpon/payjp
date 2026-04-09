@@ -15,7 +15,7 @@ export async function authRoutes(app: FastifyInstance, opts: { config: AuthConfi
   app.get(
     '/v1/auth/discord/start',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
-    async (request, reply) => {
+    async (_request, reply) => {
       try {
         const authReq: AuthRequest = {
           endpoint: '/v1/auth/discord/start',
