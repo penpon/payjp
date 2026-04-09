@@ -9,9 +9,10 @@
 | ツール | 用途 | 適するIssue |
 |---|---|---|
 | `/feature-dev` | 設計判断が必要な新機能（7フェーズ構造化開発） | #16 退会フロー, #20 E2Eハーネス |
-| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #17 共通エラーUI, #21-#22 E2Eシナリオ |
+| `/ralph-loop` | 仕様確定済み＋テスト全パスが完了条件（TDD自動反復） | #17 共通エラーUI, #21-#22・#37-#43・#46-#49 E2Eシナリオ |
 | `/ui-ux-pro-max` | UI/UX品質基準（アクセシビリティ・配色・フォントペアリング） | #16, #17 frontend |
 | `/frontend-design` | ビジュアル美学・創造的デザイン方向性（「AI slop」回避） | #16, #17 frontend |
+| 手動検証 | リリース判定・文書最終化（コード実装なし） | #44 Go-Live検証, #45 運用文書 |
 
 フロントエンド実装・修正時は `/ui-ux-pro-max` + `/frontend-design` を**併用必須**。
 
@@ -26,8 +27,19 @@
 | #20 E2Eハーネス | opus medium effort | 複数サービス統合アーキテクチャ設計 |
 | #21 Webhook E2E | sonnet high effort | #20 パターンへの追加 |
 | #22 Cancel E2E | sonnet high effort | 同上 |
-| #23 T-P0 Go-Live検証 | opus medium effort | T-P0-01〜07 仕様横断検証 |
-| #24 運用文書 | sonnet high effort | 文書整理 |
+| #37 OAuth E2E (T-P0-01) | sonnet high effort | #20 パターンへの追加 |
+| #38 Subscribe E2E (T-P0-02) | sonnet high effort | 同上 |
+| #39 並列ガード E2E (T-P0-03) | sonnet high effort | 同上 |
+| #40 503注入 E2E (T-P0-04) | sonnet high effort | 同上 |
+| #41 ロール剥奪 E2E (T-P0-06) | sonnet high effort | 同上 |
+| #42 防御検証 E2E | sonnet high effort | 全エンドポイント横断・セキュリティ確認 |
+| #43 ライフサイクル横断 E2E | sonnet high effort | 複数T-P0シナリオ連携 |
+| #44 T-P0 Go-Live検証 | opus medium effort | T-P0-01〜07 仕様横断検証（手動） |
+| #45 運用文書最終化 | sonnet high effort | 文書整理・ベンダー確認（手動） |
+| #46 Cancel詳細 E2E (T-P0-05) | sonnet high effort | #20 パターンへの追加 |
+| #47 Webhook詳細 E2E (T-P0-07) | sonnet high effort | 同上 |
+| #48 Webhookイベント E2E (T-P0-07補完) | sonnet high effort | 同上 |
+| #49 フロントエンド E2E (Playwright) | sonnet high effort | Playwright・フロント動作検証 |
 
 ## レビューフェーズ — 実装完了後に必ず順次実行
 
