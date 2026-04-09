@@ -23,7 +23,16 @@ export async function authRoutes(app: FastifyInstance, opts: { config: AuthConfi
         const result = await handleAuthRequest(authReq, config);
         return sendAuthResponse(reply, result);
       } catch (err) {
-        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'auth start handler threw unexpectedly');
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'auth-routes',
+            message: 'auth start handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
         return reply.status(503).send({ error: 'Service Unavailable' });
       }
     },
@@ -50,9 +59,15 @@ export async function authRoutes(app: FastifyInstance, opts: { config: AuthConfi
         const result = await handleAuthRequest(authReq, config);
         return sendAuthResponse(reply, result);
       } catch (err) {
-        request.log.error(
-          { message: (err as Error)?.message ?? String(err) },
-          'auth callback handler threw unexpectedly',
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'auth-routes',
+            message: 'auth callback handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
         );
         return reply.status(503).send({ error: 'Service Unavailable' });
       }
@@ -77,9 +92,15 @@ export async function authRoutes(app: FastifyInstance, opts: { config: AuthConfi
         const result = await handleAuthRequest(authReq, config);
         return sendAuthResponse(reply, result);
       } catch (err) {
-        request.log.error(
-          { message: (err as Error)?.message ?? String(err) },
-          'auth session handler threw unexpectedly',
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'auth-routes',
+            message: 'auth session handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
         );
         return reply.status(503).send({ error: 'Service Unavailable' });
       }

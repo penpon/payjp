@@ -70,7 +70,16 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         }
         return sendBillingResponse(reply, result);
       } catch (err) {
-        request.log.error({ err }, 'subscribe handler threw unexpectedly');
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'subscribe handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 503,
@@ -127,7 +136,16 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           },
         });
       } catch (err) {
-        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'subscription status lookup failed');
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'subscription status lookup failed',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 503,
@@ -156,7 +174,16 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         }
         return sendBillingResponse(reply, result);
       } catch (err) {
-        request.log.error({ err }, 'cancel handler threw unexpectedly');
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'cancel handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 503,

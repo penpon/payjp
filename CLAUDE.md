@@ -112,3 +112,11 @@ HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは Git
 - `__Host-` Cookie は §6 固定属性から変更不可
 - 3DS `verified` 未確認の payjpToken は拒否（`attempted` も非許容）
 - 不確定失敗は必ず `503 + operationId` を返し、クライアント自動再試行禁止
+
+## シークレット管理
+
+- `.env*` ファイルの読み取り禁止（`Read`, `cat`, `grep` 等すべて）
+- `printenv`, `env`, `docker exec ... printenv` 等の環境変数ダンプ禁止
+- シークレットを含むファイル（`.env.local` 等）の作成禁止
+- Docker Compose 起動は `op run --env-file=.env -- docker compose up -d` 経由
+- PAY.JP API 呼び出し等で秘密鍵が必要な場合は `op read` で個別取得

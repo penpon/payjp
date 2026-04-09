@@ -23,7 +23,16 @@ export async function syncRoutes(app: FastifyInstance, opts: { syncDeps: SyncDep
         const result = await handleWebhook(req, webhookDeps);
         return reply.status(result.status).send(result.body);
       } catch (err) {
-        request.log.error({ message: (err as Error)?.message ?? String(err) }, 'webhook handler threw unexpectedly');
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'sync-routes',
+            message: 'webhook handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
         return reply.status(503).send({ error: 'Service Unavailable' });
       }
     },
