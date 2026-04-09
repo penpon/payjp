@@ -289,14 +289,12 @@ describe('POST /v1/subscriptions', () => {
     expect(body.operationId).toBe('existing-op-id');
   });
 
-  it('clears __Host-link_session cookie on success', async () => {
+  it('does not clear __Host-link_session cookie on success (cookie expires naturally)', async () => {
     const app = createApp();
     const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(200);
-    const setCookie = res.headers['set-cookie'] as string;
-    expect(setCookie).toContain('__Host-link_session=');
-    expect(setCookie).toContain('Max-Age=0');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('does not clear __Host-link_session cookie on subscribe error', async () => {
@@ -608,13 +606,12 @@ describe('POST /v1/subscriptions/cancel', () => {
     expect(res.json().ok).toBe(true);
   });
 
-  it('clears __Host-link_session cookie on cancel', async () => {
+  it('does not clear __Host-link_session cookie on cancel success (cookie expires naturally)', async () => {
     const app = createApp(makeCancelDeps());
     const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload()));
 
-    const setCookie = res.headers['set-cookie'] as string;
-    expect(setCookie).toContain('__Host-link_session=');
-    expect(setCookie).toContain('Max-Age=0');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('includes security headers', async () => {

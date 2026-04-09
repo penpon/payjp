@@ -54,14 +54,19 @@ export function validateOAuthStateRecord(
 
 // PROP-AUTH-027, PROP-AUTH-028 対象: validateLinkSessionRecord
 // REQ-AUTH-004, REQ-AUTH-013: 3条件すべて成立時のみ ok: true
-export function validateLinkSessionRecord(record: LinkSessionRecord, tokenHash: string, now: Date): ValidationResult {
+export function validateLinkSessionRecord(
+  record: LinkSessionRecord,
+  tokenHash: string,
+  now: Date,
+  options?: { allowConsumed?: boolean },
+): ValidationResult {
   if (record.link_session_token_hash !== tokenHash) {
     return { ok: false, reason: 'link_session_token_hash mismatch' };
   }
   if (isExpired(record.expires_at, now)) {
     return { ok: false, reason: 'link session record expired' };
   }
-  if (isUsed(record.used_at)) {
+  if (!options?.allowConsumed && isUsed(record.used_at)) {
     return { ok: false, reason: 'link session record already used' };
   }
   return { ok: true };

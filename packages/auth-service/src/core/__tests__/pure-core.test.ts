@@ -402,6 +402,43 @@ describe('PROP-AUTH-027: validateLinkSessionRecord fails for each condition indi
     const result = validateLinkSessionRecord(usedRecord, 'correct-token-hash', NOW_BEFORE_EXPIRY);
     expect(result.ok).toBe(false);
   });
+
+  it('case 4: already used with allowConsumed: true → { ok: true }', () => {
+    const usedRecord: LinkSessionRecord = {
+      ...BASE_LINK_RECORD,
+      used_at: new Date('2099-01-01T00:01:00Z'),
+    };
+    const result = validateLinkSessionRecord(usedRecord, 'correct-token-hash', NOW_BEFORE_EXPIRY, {
+      allowConsumed: true,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('case 5: expired still fails even with allowConsumed: true', () => {
+    const expiredUsedRecord: LinkSessionRecord = {
+      ...BASE_LINK_RECORD,
+      expires_at: new Date('2000-01-01T00:00:00Z'),
+      used_at: new Date('2000-01-01T00:01:00Z'),
+    };
+    const result = validateLinkSessionRecord(
+      expiredUsedRecord,
+      'correct-token-hash',
+      new Date('2000-01-01T00:02:00Z'),
+      { allowConsumed: true },
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('case 6: token hash mismatch still fails even with allowConsumed: true', () => {
+    const usedRecord: LinkSessionRecord = {
+      ...BASE_LINK_RECORD,
+      used_at: new Date('2099-01-01T00:01:00Z'),
+    };
+    const result = validateLinkSessionRecord(usedRecord, 'WRONG-token-hash', NOW_BEFORE_EXPIRY, {
+      allowConsumed: true,
+    });
+    expect(result.ok).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

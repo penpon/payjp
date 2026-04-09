@@ -8,16 +8,6 @@ import {
 } from '@hayane/billing-service';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-/** Cookie attributes matching __Host- prefix requirements (§6 fixed) */
-const CLEAR_LINK_SESSION_COOKIE = {
-  path: '/' as const,
-  secure: true,
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  maxAge: 0,
-  expires: new Date(0),
-};
-
 function extractRequestContext(request: FastifyRequest): {
   body: Record<string, unknown> | null;
   origin: string;
@@ -65,9 +55,6 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
 
       try {
         const result = await handleSubscribe(req, billingDeps);
-        if (result.ok) {
-          reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
-        }
         return sendBillingResponse(reply, result);
       } catch (err) {
         console.error(
@@ -169,9 +156,6 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
 
       try {
         const result = await handleCancel(req, billingDeps);
-        if (result.ok) {
-          reply.setCookie('__Host-link_session', '', CLEAR_LINK_SESSION_COOKIE);
-        }
         return sendBillingResponse(reply, result);
       } catch (err) {
         console.error(

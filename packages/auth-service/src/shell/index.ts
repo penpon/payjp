@@ -348,7 +348,7 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
     }
 
     const now = new Date();
-    const validation = validateLinkSessionRecord(record, tokenHashVal, now);
+    const validation = validateLinkSessionRecord(record, tokenHashVal, now, { allowConsumed: true });
     if (!validation.ok) {
       return { statusCode: 401, headers: combinedHeaders };
     }
