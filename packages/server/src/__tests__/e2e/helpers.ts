@@ -8,10 +8,12 @@
 
 import { randomUUID } from 'node:crypto';
 import type { BillingConfig, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
-import { closePool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
+import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
+import type { WebhookHandlerDeps } from '@hayane/sync-service';
 import type pg from 'pg';
 import { vi } from 'vitest';
 import { buildApp } from '../../app.js';
+import type { SyncDeps } from '../../routes/sync.routes.js';
 
 // ---------------------------------------------------------------------------
 // DB セットアップ
@@ -114,7 +116,28 @@ export const E2E_BILLING_CONFIG: BillingConfig = {
   initialChargeAmountCurrency: 'jpy',
 };
 
-export function buildE2EApp(pgDb: PgDbClient, overrides: { payjp?: PayjpClient; discord?: DiscordClient } = {}) {
+export const E2E_WEBHOOK_TOKEN = 'whsec_e2e_test_token';
+
+export function buildSyncDepsForE2E(
+  pool: pg.Pool,
+  syncRole: (userId: string, action: 'grant' | 'revoke') => Promise<void> = vi.fn().mockResolvedValue(undefined),
+): SyncDeps {
+  const webhookDeps: WebhookHandlerDeps = {
+    db: createPgPool(pool),
+    payjpWebhookToken: E2E_WEBHOOK_TOKEN,
+    expectedLivemode: false,
+    discordGuildId: E2E_BILLING_CONFIG.discordGuildId,
+    discordRoleId: E2E_BILLING_CONFIG.discordPaidRoleId,
+    syncRole,
+    log: vi.fn(),
+  };
+  return { webhookDeps };
+}
+
+export function buildE2EApp(
+  pgDb: PgDbClient,
+  overrides: { payjp?: PayjpClient; discord?: DiscordClient; syncDeps?: SyncDeps } = {},
+) {
   const billingDeps: BillingDeps = {
     db: pgDb,
     payjp: overrides.payjp ?? makeMockPayjpClient(),
@@ -134,6 +157,7 @@ export function buildE2EApp(pgDb: PgDbClient, overrides: { payjp?: PayjpClient; 
       db: pgDb,
     },
     billingDeps,
+    overrides.syncDeps,
   );
 }
 

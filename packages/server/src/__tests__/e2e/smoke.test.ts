@@ -15,9 +15,11 @@ import type pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildE2EApp,
+  buildSyncDepsForE2E,
   closePool,
   createTestDb,
   E2E_BILLING_CONFIG,
+  E2E_WEBHOOK_TOKEN,
   makeMockDiscordClient,
   makeMockPayjpClient,
   type PgDbClient,
@@ -170,6 +172,144 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
       expect(payjpMock.fetchToken).toHaveBeenCalledWith('tok_test_e2e');
       expect(payjpMock.createCustomer).toHaveBeenCalledOnce();
       expect(payjpMock.createSubscription).toHaveBeenCalledOnce();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Scenarios 3-5: Webhook フロー
+  // 実 PostgreSQL を使い、Webhook 受信 → DB 更新 の E2E を検証
+  // ---------------------------------------------------------------------------
+  describe('Webhook flow — Scenarios 3-5', () => {
+    const WEBHOOK_DISCORD_USER_ID = '111222333444555010';
+    const WEBHOOK_SUB_ID = 'sub_e2e_webhook_001';
+    const NOW_UNIX = Math.floor(Date.now() / 1000);
+
+    async function insertTestMember(
+      overrides: { subscription_status?: string; last_payjp_event_created_at?: number } = {},
+    ) {
+      const { subscription_status = 'trial', last_payjp_event_created_at = NOW_UNIX - 1000 } = overrides;
+      await pool.query(
+        `INSERT INTO members (discord_user_id, email, subscription_status, payjp_subscription_id, last_payjp_event_created_at, role_state)
+         VALUES ($1, $2, $3, $4, $5, 'unknown')`,
+        [
+          WEBHOOK_DISCORD_USER_ID,
+          'webhook-e2e@example.com',
+          subscription_status,
+          WEBHOOK_SUB_ID,
+          last_payjp_event_created_at,
+        ],
+      );
+    }
+
+    function makeWebhookEvent(topOverrides: Record<string, unknown> = {}, dataOverrides: Record<string, unknown> = {}) {
+      return {
+        id: 'evnt_e2e_webhook_001',
+        type: 'subscription.updated',
+        livemode: false,
+        created: NOW_UNIX,
+        ...topOverrides,
+        data: {
+          id: WEBHOOK_SUB_ID,
+          object: 'subscription',
+          status: 'active',
+          metadata: { discord_user_id: WEBHOOK_DISCORD_USER_ID },
+          plan: { id: E2E_BILLING_CONFIG.allowedPlanIds[0] },
+          current_period_end: NOW_UNIX + 30 * 86400,
+          ...dataOverrides,
+        },
+      };
+    }
+
+    it('Scenario 3: subscription.updated → members が更新され payjp_events にレコードが挿入される', async () => {
+      await insertTestMember();
+      const syncRole = vi.fn().mockResolvedValue(undefined);
+      const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/payjp/webhook',
+        headers: {
+          'content-type': 'application/json',
+          'x-payjp-webhook-token': E2E_WEBHOOK_TOKEN,
+        },
+        payload: makeWebhookEvent(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      // payjp_events に processed レコードが挿入されている
+      const events = await pool.query("SELECT processing_result FROM payjp_events WHERE id = 'evnt_e2e_webhook_001'");
+      expect(events.rows).toHaveLength(1);
+      expect(events.rows[0].processing_result).toBe('processed');
+
+      // members の subscription_status が active に更新されている
+      const member = await pgDb.findMemberByDiscordUserId(WEBHOOK_DISCORD_USER_ID);
+      expect(member!.subscription_status).toBe('active');
+
+      // syncRole が trial→active のロール付与で呼ばれた
+      expect(syncRole).toHaveBeenCalledWith(WEBHOOK_DISCORD_USER_ID, 'grant');
+    });
+
+    it('Scenario 4: 同一 event.id の重複送信 → 二重処理なし（冪等）', async () => {
+      await insertTestMember();
+      const syncRole = vi.fn().mockResolvedValue(undefined);
+      const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
+
+      const payload = makeWebhookEvent();
+
+      const res1 = await app.inject({
+        method: 'POST',
+        url: '/v1/payjp/webhook',
+        headers: { 'content-type': 'application/json', 'x-payjp-webhook-token': E2E_WEBHOOK_TOKEN },
+        payload,
+      });
+      const res2 = await app.inject({
+        method: 'POST',
+        url: '/v1/payjp/webhook',
+        headers: { 'content-type': 'application/json', 'x-payjp-webhook-token': E2E_WEBHOOK_TOKEN },
+        payload,
+      });
+
+      expect(res1.statusCode).toBe(200);
+      expect(res2.statusCode).toBe(200);
+
+      // payjp_events に 1 件のみ（ON CONFLICT DO NOTHING）
+      const events = await pool.query(
+        "SELECT COUNT(*)::int AS cnt FROM payjp_events WHERE id = 'evnt_e2e_webhook_001'",
+      );
+      expect(events.rows[0].cnt).toBe(1);
+
+      // syncRole は 1 回のみ呼ばれた
+      expect(syncRole).toHaveBeenCalledOnce();
+    });
+
+    it('Scenario 5: 古い event.created → 無視（members 更新なし）', async () => {
+      await insertTestMember({ last_payjp_event_created_at: NOW_UNIX });
+      const syncRole = vi.fn().mockResolvedValue(undefined);
+      const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/payjp/webhook',
+        headers: { 'content-type': 'application/json', 'x-payjp-webhook-token': E2E_WEBHOOK_TOKEN },
+        payload: makeWebhookEvent({ id: 'evnt_e2e_stale_001', created: NOW_UNIX - 1000 }),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      // payjp_events に ignored レコードが挿入されている
+      const events = await pool.query("SELECT processing_result FROM payjp_events WHERE id = 'evnt_e2e_stale_001'");
+      expect(events.rows).toHaveLength(1);
+      expect(events.rows[0].processing_result).toBe('ignored');
+
+      // members の subscription_status は変更されていない
+      const member = await pgDb.findMemberByDiscordUserId(WEBHOOK_DISCORD_USER_ID);
+      expect(member!.subscription_status).toBe('trial');
+
+      // syncRole は呼ばれていない
+      expect(syncRole).not.toHaveBeenCalled();
     });
   });
 
