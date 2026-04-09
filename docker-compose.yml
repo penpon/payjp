@@ -25,6 +25,7 @@ services:
       - ./nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
       - api
 
@@ -53,3 +54,4 @@ services:
 
 volumes:
   postgres_data:
+  nginx_logs:
