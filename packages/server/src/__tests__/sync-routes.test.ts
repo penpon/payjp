@@ -1,3 +1,4 @@
+import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { DbPool } from '@hayane/shared';
 import type { WebhookHandlerDeps } from '@hayane/sync-service';
 import { describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,7 @@ const APP_CONFIG = {
   discordClientId: 'test-client-id',
   discordClientSecret: 'test-client-secret',
   discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+  db: createInMemoryAuthDb(),
 };
 
 // ---------------------------------------------------------------------------

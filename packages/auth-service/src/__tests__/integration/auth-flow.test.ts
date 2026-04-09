@@ -8,6 +8,7 @@
 import type { LinkSessionRecord } from '@hayane/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateLinkSessionRecord, validateStartupConfig } from '../../core/index.js';
+import type { AuthDb } from '../../shell/index.js';
 import {
   checkHealth,
   consumeOAuthState,
@@ -19,10 +20,12 @@ import {
   saveOAuthState,
   structuredLog,
 } from '../../shell/index.js';
-import { clearStores, getStoreCounts } from '../../shell/store.js';
+import { createInMemoryAuthDb } from '../../test-utils.js';
+
+let db: AuthDb;
 
 beforeEach(() => {
-  clearStores();
+  db = createInMemoryAuthDb();
 });
 
 // ---------------------------------------------------------------------------
@@ -34,13 +37,11 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-010: consumeOAuthState atomic — concurrent invocations return success exactly once', () => {
   it('concurrent calls with same stateHash: only one resolves non-null', async () => {
-    const db = null;
     const stateHashVal = 'test-state-hash-concurrent';
     const sessionHashVal = 'test-session-hash-concurrent';
 
     // レコードをストアに保存してから並行消費テスト
     await saveOAuthState(db, {
-      id: 'concurrent-test-id',
       stateHash: stateHashVal,
       oauthSessionHash: sessionHashVal,
       expiresAt: new Date('2099-01-01T01:00:00Z'),
@@ -63,10 +64,8 @@ describe('PROP-AUTH-010: consumeOAuthState atomic — concurrent invocations ret
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-011: callback 401 for all four verification failure modes', () => {
   it('state hash mismatch causes 401', async () => {
-    const db = null;
     // ストアに正しいレコードを保存
     await saveOAuthState(db, {
-      id: 'id-011-a',
       stateHash: 'correct-state-hash-011',
       oauthSessionHash: 'correct-session-hash-011',
       expiresAt: new Date('2099-01-01T01:00:00Z'),
@@ -77,9 +76,7 @@ describe('PROP-AUTH-011: callback 401 for all four verification failure modes', 
   });
 
   it('session hash mismatch causes 401', async () => {
-    const db = null;
     await saveOAuthState(db, {
-      id: 'id-011-b',
       stateHash: 'state-for-session-mismatch',
       oauthSessionHash: 'correct-session-hash-011b',
       expiresAt: new Date('2099-01-01T01:00:00Z'),
@@ -90,9 +87,7 @@ describe('PROP-AUTH-011: callback 401 for all four verification failure modes', 
   });
 
   it('expired state causes 401', async () => {
-    const db = null;
     await saveOAuthState(db, {
-      id: 'id-011-c',
       stateHash: 'expired-state-hash',
       oauthSessionHash: 'session-hash-011c',
       expiresAt: new Date('2000-01-01T00:00:00Z'), // 過去の日時
@@ -102,9 +97,7 @@ describe('PROP-AUTH-011: callback 401 for all four verification failure modes', 
   });
 
   it('already used state causes 401', async () => {
-    const db = null;
     await saveOAuthState(db, {
-      id: 'id-011-d',
       stateHash: 'reuse-state-hash',
       oauthSessionHash: 'session-hash-011d',
       expiresAt: new Date('2099-01-01T01:00:00Z'),
@@ -157,8 +150,7 @@ describe('PROP-AUTH-012: callback 302 Location contains no token in query or fra
     const { createHash } = await import('node:crypto');
     const stateHashVal = createHash('sha256').update(stateToken).digest('hex');
     const sessionHashVal = createHash('sha256').update(sessionToken).digest('hex');
-    await saveOAuthState(null, {
-      id: 'id-012-full',
+    await saveOAuthState(db, {
       stateHash: stateHashVal,
       oauthSessionHash: sessionHashVal,
       expiresAt: new Date('2099-01-01T01:00:00Z'),
@@ -181,6 +173,7 @@ describe('PROP-AUTH-012: callback 302 Location contains no token in query or fra
           discordClientId: 'test-client',
           discordClientSecret: 'test-secret',
           discordRedirectUri: 'https://api.example.com/callback',
+          db,
         },
       );
       expect(response.statusCode).toBe(302);
@@ -285,6 +278,7 @@ describe('PROP-AUTH-017: start Set-Cookie for __Host-oauth_session has exact att
       discordClientId: 'test-client-id',
       discordClientSecret: 'test-client-secret',
       discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+      db,
     };
     const response = await handleAuthRequest({ endpoint: '/v1/auth/discord/start' }, config);
     const setCookie = response.headers['Set-Cookie'];
@@ -311,8 +305,7 @@ describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact a
     const { createHash } = await import('node:crypto');
     const stateHashVal = createHash('sha256').update(stateToken).digest('hex');
     const sessionHashVal = createHash('sha256').update(sessionToken).digest('hex');
-    await saveOAuthState(null, {
-      id: 'id-018',
+    await saveOAuthState(db, {
       stateHash: stateHashVal,
       oauthSessionHash: sessionHashVal,
       expiresAt: new Date('2099-01-01T01:00:00Z'),
@@ -336,6 +329,7 @@ describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact a
           discordClientId: 'test-client',
           discordClientSecret: 'test-secret',
           discordRedirectUri: 'https://api.example.com/callback',
+          db,
         },
       );
     } finally {
@@ -369,6 +363,7 @@ describe('PROP-AUTH-019: start Discord authorization URL has scope=identify', ()
       discordClientId: 'test-client-id',
       discordClientSecret: 'test-client-secret',
       discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+      db,
     };
     const response = await handleAuthRequest({ endpoint: '/v1/auth/discord/start' }, config);
     expect(response.statusCode).toBe(302);
@@ -439,9 +434,7 @@ describe('PROP-AUTH-020: validateStartupConfig rejects missing env vars AND inva
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-021: callback 401 when state TTL expired', () => {
   it('expired state returns null → 401 (mocked clock)', async () => {
-    const db = null;
     await saveOAuthState(db, {
-      id: 'id-021',
       stateHash: 'expired-hash-021',
       oauthSessionHash: 'session-hash-021',
       expiresAt: new Date('2000-01-01T00:00:00Z'), // 過去の日時 = 期限切れ
@@ -459,7 +452,7 @@ describe('PROP-AUTH-022: session 401 when link session TTL expired', () => {
   it('expired link session record rejected by validateLinkSessionRecord (mocked clock)', async () => {
     // validateLinkSessionRecord を直接呼び出して期限切れlink sessionレコードが拒否されることを確認
     const expiredRecord: LinkSessionRecord = {
-      id: 'id-022',
+      id: 'expired-022',
       link_session_token_hash: 'token-hash-022',
       discord_user_id: '123456789012345678',
       expires_at: new Date('2000-01-01T00:00:00Z'), // 過去の日時 = 期限切れ
@@ -476,15 +469,13 @@ describe('PROP-AUTH-022: session 401 when link session TTL expired', () => {
 
   it('valid link session (not expired, not used) is accepted by validateLinkSessionRecord', async () => {
     // 比較: 有効なlink sessionは受け入れられる
-    const db = null;
     await saveDiscordLinkSession(db, {
-      id: 'id-022-valid',
       linkSessionTokenHash: 'valid-token-hash-022',
       discordUserId: '123456789012345678',
       expiresAt: new Date('2099-01-01T00:00:00Z'),
     });
     const validRecord: LinkSessionRecord = {
-      id: 'id-022-valid',
+      id: 'valid-022',
       link_session_token_hash: 'valid-token-hash-022',
       discord_user_id: '123456789012345678',
       expires_at: new Date('2099-01-01T00:00:00Z'),
@@ -558,67 +549,32 @@ describe('PROP-AUTH-023: log entries contain no raw sensitive values', () => {
 // NFR-AUTH-004
 // ---------------------------------------------------------------------------
 describe('PROP-AUTH-024: auth-service does not write to billing tables', () => {
-  it('after saveOAuthState, only oauthStates store has new entries', async () => {
-    const db = null;
-    // 初期状態のカウントを取得
-    const before = getStoreCounts();
-    expect(before.oauthStates).toBe(0);
-    expect(before.linkSessions).toBe(0);
+  it('saveOAuthState calls insertOAuthState, not insertDiscordLinkSession', async () => {
+    const oauthSpy = vi.spyOn(db, 'insertOAuthState');
+    const linkSpy = vi.spyOn(db, 'insertDiscordLinkSession');
 
     await saveOAuthState(db, {
-      id: 'id-024-a',
       stateHash: 'hash-024-a',
       oauthSessionHash: 'session-hash-024-a',
       expiresAt: new Date('2099-01-01T01:00:00Z'),
     });
 
-    const after = getStoreCounts();
-    // oauthStates のみ増加する
-    expect(after.oauthStates).toBe(1);
-    // linkSessions は変化しない（billing テーブルに相当するストアは存在しない）
-    expect(after.linkSessions).toBe(0);
+    expect(oauthSpy).toHaveBeenCalledOnce();
+    expect(linkSpy).not.toHaveBeenCalled();
   });
 
-  it('after saveDiscordLinkSession, only linkSessions store has new entries', async () => {
-    const db = null;
-    const before = getStoreCounts();
-    expect(before.oauthStates).toBe(0);
-    expect(before.linkSessions).toBe(0);
+  it('saveDiscordLinkSession calls insertDiscordLinkSession, not insertOAuthState', async () => {
+    const oauthSpy = vi.spyOn(db, 'insertOAuthState');
+    const linkSpy = vi.spyOn(db, 'insertDiscordLinkSession');
 
     await saveDiscordLinkSession(db, {
-      id: 'id-024-b',
       linkSessionTokenHash: 'hash-024-b',
       discordUserId: 'discord-123',
       expiresAt: new Date('2099-01-01T01:00:00Z'),
     });
 
-    const after = getStoreCounts();
-    // linkSessions のみ増加する
-    expect(after.linkSessions).toBe(1);
-    // oauthStates は変化しない
-    expect(after.oauthStates).toBe(0);
-  });
-
-  it('after both saves, total store count is exactly 2 (no billing store writes)', async () => {
-    const db = null;
-    await saveOAuthState(db, {
-      id: 'id-024-c',
-      stateHash: 'hash-024-c',
-      oauthSessionHash: 'session-hash-024-c',
-      expiresAt: new Date('2099-01-01T01:00:00Z'),
-    });
-    await saveDiscordLinkSession(db, {
-      id: 'id-024-d',
-      linkSessionTokenHash: 'hash-024-d',
-      discordUserId: 'discord-456',
-      expiresAt: new Date('2099-01-01T01:00:00Z'),
-    });
-
-    const counts = getStoreCounts();
-    // 合計2エントリのみ（oauthStates: 1, linkSessions: 1）
-    // members/payjp_events/member_impact_logs に相当するストアへの書き込みは存在しない
-    expect(counts.oauthStates).toBe(1);
-    expect(counts.linkSessions).toBe(1);
+    expect(linkSpy).toHaveBeenCalledOnce();
+    expect(oauthSpy).not.toHaveBeenCalled();
   });
 });
 

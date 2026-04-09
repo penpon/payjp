@@ -123,7 +123,7 @@ declare global {
 // --- PAY.JP adapter (for testability) ---
 
 export interface PayjpAdapter {
-  createCardElement(mountTarget: HTMLElement): PayjpCardElement;
+  createCardElement(selector: string): PayjpCardElement;
   createToken(
     cardElement: PayjpCardElement,
     data: { name: string; email: string },

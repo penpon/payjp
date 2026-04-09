@@ -10,9 +10,19 @@ import {
   maskSensitiveLogFields,
   serializeCookieAttributes,
   validateLinkSessionRecord,
-  validateOAuthStateRecord,
 } from '../core/index.js';
-import { getLinkSessionStore, getOAuthStore } from './store.js';
+
+/** DB operations required by auth-service */
+export interface AuthDb {
+  insertOAuthState(record: { stateHash: string; oauthSessionHash: string; expiresAt: Date }): Promise<OAuthStateRecord>;
+  consumeOAuthState(stateHash: string, sessionHash: string, now: Date): Promise<OAuthStateRecord | null>;
+  insertDiscordLinkSession(record: {
+    linkSessionTokenHash: string;
+    discordUserId: string;
+    expiresAt: Date;
+  }): Promise<LinkSessionRecord>;
+  findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
+}
 
 // REQ-AUTH-001: state_hash = SHA-256(rawState)
 // FIND-002: crypto 依存は pure core ではなく shell に配置する
@@ -35,69 +45,38 @@ export async function generateSecureRandomToken(): Promise<string> {
   return randomBytes(32).toString('hex');
 }
 
-// REQ-AUTH-001: oauth_states への INSERT（Green フェーズ: インメモリストア）
+// REQ-AUTH-001: oauth_states への INSERT（PostgreSQL）
 export async function saveOAuthState(
-  _db: unknown,
+  db: AuthDb,
   record: {
-    id: string;
     stateHash: string;
     oauthSessionHash: string;
     expiresAt: Date;
   },
 ): Promise<void> {
-  const storeRecord: OAuthStateRecord = {
-    id: record.id,
-    state_hash: record.stateHash,
-    oauth_session_hash: record.oauthSessionHash,
-    expires_at: record.expiresAt,
-    used_at: null,
-    created_at: new Date(),
-  };
-  getOAuthStore().set(record.stateHash, storeRecord);
+  await db.insertOAuthState(record);
 }
 
 // REQ-AUTH-002, REQ-AUTH-003: oauth_states の原子的検証・消費
-// NFR-AUTH-001: 並行呼び出しで成功は最大1回
+// NFR-AUTH-001: 並行呼び出しで成功は最大1回（DB の WHERE used_at IS NULL で保証）
 export async function consumeOAuthState(
-  _db: unknown,
+  db: AuthDb,
   stateHashVal: string,
   sessionHashVal: string,
 ): Promise<OAuthStateRecord | null> {
-  const store = getOAuthStore();
-  const record = store.get(stateHashVal);
-  if (!record) {
-    return null;
-  }
-  const now = new Date();
-  const validation = validateOAuthStateRecord(record, sessionHashVal, stateHashVal, now);
-  if (!validation.ok) {
-    return null;
-  }
-  // 原子的な消費: used_at を設定してから返す
-  record.used_at = now;
-  store.set(stateHashVal, record);
-  return record;
+  return db.consumeOAuthState(stateHashVal, sessionHashVal, new Date());
 }
 
-// REQ-AUTH-004: discord_link_sessions への INSERT（Green フェーズ: インメモリストア）
+// REQ-AUTH-004: discord_link_sessions への INSERT（PostgreSQL）
 export async function saveDiscordLinkSession(
-  _db: unknown,
+  db: AuthDb,
   record: {
-    id: string;
     linkSessionTokenHash: string;
     discordUserId: string;
     expiresAt: Date;
   },
 ): Promise<void> {
-  const storeRecord: LinkSessionRecord = {
-    id: record.id,
-    link_session_token_hash: record.linkSessionTokenHash,
-    discord_user_id: record.discordUserId,
-    expires_at: record.expiresAt,
-    used_at: null,
-    created_at: new Date(),
-  };
-  getLinkSessionStore().set(record.linkSessionTokenHash, storeRecord);
+  await db.insertDiscordLinkSession(record);
 }
 
 // REQ-AUTH-002: Discord code → access_token 交換
@@ -199,15 +178,15 @@ export interface AuthResponse {
   body?: unknown;
 }
 
-export async function handleAuthRequest(
-  request: AuthRequest,
-  config: {
-    frontendBaseUrl: string;
-    discordClientId: string;
-    discordClientSecret: string;
-    discordRedirectUri: string;
-  },
-): Promise<AuthResponse>;
+export interface AuthConfig {
+  frontendBaseUrl: string;
+  discordClientId: string;
+  discordClientSecret: string;
+  discordRedirectUri: string;
+  db: AuthDb;
+}
+
+export async function handleAuthRequest(request: AuthRequest, config: AuthConfig): Promise<AuthResponse>;
 
 // 後方互換性のためのオーバーロード（既存テストが3引数形式を使用）
 // FIND-006: startエンドポイントはハードコードなしで config から clientId/redirectUri を参照
@@ -219,9 +198,7 @@ export async function handleAuthRequest(
 
 export async function handleAuthRequest(
   requestOrEndpoint: AuthRequest | string,
-  headersOrConfig:
-    | Record<string, string>
-    | { frontendBaseUrl: string; discordClientId: string; discordClientSecret: string; discordRedirectUri: string },
+  headersOrConfig: Record<string, string> | AuthConfig,
   frontendBaseUrlParam?: string,
 ): Promise<{ statusCode: number; headers: Record<string, string>; body?: unknown }> {
   // オーバーロードの分岐
@@ -229,15 +206,7 @@ export async function handleAuthRequest(
     return handleLegacyAuthRequest(requestOrEndpoint, headersOrConfig as Record<string, string>, frontendBaseUrlParam!);
   }
 
-  return handleStructuredAuthRequest(
-    requestOrEndpoint,
-    headersOrConfig as {
-      frontendBaseUrl: string;
-      discordClientId: string;
-      discordClientSecret: string;
-      discordRedirectUri: string;
-    },
-  );
+  return handleStructuredAuthRequest(requestOrEndpoint, headersOrConfig as AuthConfig);
 }
 
 // レガシーシグネチャ（3引数形式）のリクエスト処理
@@ -281,12 +250,9 @@ async function handleLegacyAuthRequest(
 
 // 構造化リクエスト形式（AuthRequest）のリクエスト処理
 // REQ-AUTH-002 の完全なフローを実装する
-async function handleStructuredAuthRequest(
-  request: AuthRequest,
-  config: { frontendBaseUrl: string; discordClientId: string; discordClientSecret: string; discordRedirectUri: string },
-): Promise<AuthResponse> {
+async function handleStructuredAuthRequest(request: AuthRequest, config: AuthConfig): Promise<AuthResponse> {
   const { endpoint, query = {}, cookies = {}, headers = {} } = request;
-  const { frontendBaseUrl, discordClientId, discordClientSecret, discordRedirectUri } = config;
+  const { frontendBaseUrl, discordClientId, discordClientSecret, discordRedirectUri, db } = config;
   const secHeaders = getSecurityHeaders();
 
   // /v1/auth/discord/callback
@@ -302,7 +268,7 @@ async function handleStructuredAuthRequest(
     const stateHashVal = createHash('sha256').update(stateToken).digest('hex');
     const sessionHashVal = createHash('sha256').update(oauthSessionToken).digest('hex');
 
-    const consumed = await consumeOAuthState(null, stateHashVal, sessionHashVal);
+    const consumed = await consumeOAuthState(db, stateHashVal, sessionHashVal);
     if (!consumed) {
       return { statusCode: 401, headers: secHeaders };
     }
@@ -341,8 +307,7 @@ async function handleStructuredAuthRequest(
     // link session を発行
     const linkToken = await generateSecureRandomToken();
     const linkTokenHash = createHash('sha256').update(linkToken).digest('hex');
-    await saveDiscordLinkSession(null, {
-      id: randomBytes(16).toString('hex'),
+    await saveDiscordLinkSession(db, {
       linkSessionTokenHash: linkTokenHash,
       discordUserId,
       expiresAt: new Date(Date.now() + 900_000),
@@ -377,8 +342,7 @@ async function handleStructuredAuthRequest(
     }
 
     const tokenHashVal = createHash('sha256').update(linkSessionToken).digest('hex');
-    const store = getLinkSessionStore();
-    const record = store.get(tokenHashVal);
+    const record = await db.findLinkSession(tokenHashVal);
     if (!record) {
       return { statusCode: 401, headers: combinedHeaders };
     }
@@ -403,8 +367,7 @@ async function handleStructuredAuthRequest(
     const stateHashVal = createHash('sha256').update(stateToken).digest('hex');
     const sessionHashVal = createHash('sha256').update(sessionToken).digest('hex');
 
-    await saveOAuthState(null, {
-      id: randomBytes(16).toString('hex'),
+    await saveOAuthState(db, {
       stateHash: stateHashVal,
       oauthSessionHash: sessionHashVal,
       expiresAt: new Date(Date.now() + 600_000),

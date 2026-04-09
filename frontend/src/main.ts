@@ -81,7 +81,7 @@ function createPayjpAdapter(): PayjpAdapter | null {
     const elements = payjp.elements({ locale: 'ja' });
 
     return {
-      createCardElement(mountTarget) {
+      createCardElement(selector) {
         const card = elements.create('card', {
           style: {
             base: {
@@ -93,7 +93,7 @@ function createPayjpAdapter(): PayjpAdapter | null {
             invalid: { color: '#ea2261' },
           },
         });
-        card.mount(mountTarget);
+        card.mount(selector);
         return card;
       },
       async createToken(cardElement, data) {

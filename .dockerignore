@@ -1,6 +1,6 @@
 node_modules
-frontend
-!frontend/package.json
+frontend/node_modules
+frontend/dist
 feature
 .vcsdd
 .git

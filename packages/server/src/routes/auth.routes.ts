@@ -1,7 +1,6 @@
-import type { AuthRequest } from '@hayane/auth-service';
+import type { AuthConfig, AuthRequest } from '@hayane/auth-service';
 import { handleAuthRequest } from '@hayane/auth-service';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { AppConfig } from '../app.js';
 
 const MANAGED_HEADERS = new Set([
   'cache-control',
@@ -10,7 +9,7 @@ const MANAGED_HEADERS = new Set([
   'access-control-allow-credentials',
 ]);
 
-export async function authRoutes(app: FastifyInstance, opts: { config: AppConfig }) {
+export async function authRoutes(app: FastifyInstance, opts: { config: AuthConfig }) {
   const { config } = opts;
 
   app.get(

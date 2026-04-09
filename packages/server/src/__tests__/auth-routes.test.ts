@@ -1,16 +1,15 @@
-import { clearStores } from '@hayane/auth-service/test-utils';
+import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
-const TEST_CONFIG = {
-  frontendBaseUrl: 'https://example.com',
-  discordClientId: 'test-client-id',
-  discordClientSecret: 'test-client-secret',
-  discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
-};
-
 function createApp() {
-  return buildApp(TEST_CONFIG);
+  return buildApp({
+    frontendBaseUrl: 'https://example.com',
+    discordClientId: 'test-client-id',
+    discordClientSecret: 'test-client-secret',
+    discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
+    db: createInMemoryAuthDb(),
+  });
 }
 
 describe('GET /health', () => {
@@ -30,9 +29,7 @@ describe('GET /health', () => {
 });
 
 describe('GET /v1/auth/discord/start', () => {
-  beforeEach(() => {
-    clearStores();
-  });
+  beforeEach(() => {});
 
   it('returns 302 with Location to Discord and Set-Cookie', async () => {
     const app = createApp();
@@ -71,9 +68,7 @@ describe('GET /v1/auth/discord/start', () => {
 });
 
 describe('GET /v1/auth/discord/callback', () => {
-  beforeEach(() => {
-    clearStores();
-  });
+  beforeEach(() => {});
 
   it('returns 401 without required params', async () => {
     const app = createApp();
@@ -173,9 +168,7 @@ describe('GET /v1/auth/discord/callback', () => {
 });
 
 describe('GET /v1/auth/discord/session', () => {
-  beforeEach(() => {
-    clearStores();
-  });
+  beforeEach(() => {});
 
   it('returns 401 without link session cookie', async () => {
     const app = createApp();

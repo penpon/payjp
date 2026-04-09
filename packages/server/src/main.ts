@@ -318,6 +318,7 @@ const app = buildApp(
     discordClientId: env.DISCORD_CLIENT_ID,
     discordClientSecret: env.DISCORD_CLIENT_SECRET,
     discordRedirectUri: env.DISCORD_REDIRECT_URI,
+    db: dbClient,
   },
   billingDeps,
   syncDeps,

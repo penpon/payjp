@@ -446,6 +446,22 @@ export class PgDbClient implements DbClient {
     return result.rows[0] ? toOAuthState(result.rows[0] as Record<string, unknown>) : null;
   }
 
+  // --- discord_link_sessions (insert) ---
+
+  async insertDiscordLinkSession(record: {
+    linkSessionTokenHash: string;
+    discordUserId: string;
+    expiresAt: Date;
+  }): Promise<LinkSessionRecord> {
+    const result = await this.pool.query(
+      `INSERT INTO discord_link_sessions (link_session_token_hash, discord_user_id, expires_at)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [record.linkSessionTokenHash, record.discordUserId, record.expiresAt],
+    );
+    return toLinkSession(result.rows[0] as Record<string, unknown>);
+  }
+
   // --- payjp_events ---
 
   async findPayjpEventById(eventId: string): Promise<{

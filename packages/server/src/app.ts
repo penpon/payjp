@@ -1,6 +1,7 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
+import type { AuthConfig } from '@hayane/auth-service';
 import type { BillingDeps } from '@hayane/billing-service';
 import Fastify, { type FastifyError } from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
@@ -8,12 +9,7 @@ import { billingRoutes } from './routes/billing.routes.js';
 import type { SyncDeps } from './routes/sync.routes.js';
 import { syncRoutes } from './routes/sync.routes.js';
 
-export interface AppConfig {
-  readonly frontendBaseUrl: string;
-  readonly discordClientId: string;
-  readonly discordClientSecret: string;
-  readonly discordRedirectUri: string;
-}
+export type AppConfig = AuthConfig;
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 

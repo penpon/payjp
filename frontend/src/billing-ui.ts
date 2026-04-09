@@ -306,14 +306,13 @@ function renderBillingForm(
   // Mount PAY.JP card element after DOM insertion
   if (payjpAdapter) {
     queueMicrotask(() => {
-      const target = container.querySelector('#payjp-card-element');
-      if (!target) {
+      if (!container.querySelector('#payjp-card-element')) {
         console.error('[billing] Card mount point #payjp-card-element not found in DOM');
         cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
         return;
       }
       try {
-        const cardElement = payjpAdapter.createCardElement(target as HTMLElement);
+        const cardElement = payjpAdapter.createCardElement('#payjp-card-element');
         callbacks.onCardElementReady?.(cardElement);
         cardElement.on('change', (e) => {
           cardComplete = e.complete;
