@@ -3,8 +3,8 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 
 const certsDir = path.resolve(__dirname, '../.certs');
-const certFile = path.join(certsDir, '116.80.50.44+3.pem');
-const keyFile = path.join(certsDir, '116.80.50.44+3-key.pem');
+const certFile = path.join(certsDir, 'www.and--line.com.pem');
+const keyFile = path.join(certsDir, 'www.and--line.com-key.pem');
 const hasLocalCerts = fs.existsSync(certFile) && fs.existsSync(keyFile);
 
 export default defineConfig({
@@ -14,6 +14,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
+    allowedHosts: ['www.and--line.com'],
     ...(hasLocalCerts && {
       https: {
         cert: fs.readFileSync(certFile),

@@ -15,12 +15,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - api
+      - frontend
+
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       DATABASE_URL: postgres://hayane:hayane@db:5432/hayane?sslmode=disable
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
@@ -42,8 +54,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    ports:
-      - "5173:5173"
+    expose:
+      - "5173"
     volumes:
       - ./frontend/src:/app/frontend/src
       - ./frontend/index.html:/app/frontend/index.html
