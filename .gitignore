@@ -3,6 +3,7 @@
 ._*
 Thumbs.db
 awesome-design-md/
+*.pdf
 
 # Editor
 .vscode/settings.json
