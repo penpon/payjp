@@ -16,31 +16,6 @@
 
 フロントエンド実装・修正時は `/ui-ux-pro-max` + `/frontend-design` を**併用必須**。
 
-## Issue 別推奨モデル
-
-| Issue | 推奨モデル | 理由 |
-|---|---|---|
-| #16 退会フロー | opus high effort | 多コンポーネントUI＋詳細デザイン仕様を同時参照 |
-| #17 共通エラーUI | sonnet high effort | 仕様確定済みリファクタ |
-| #18 Docker Compose | sonnet high effort | インフラ設定・構成確認 |
-| #19 Cloudflare Pages | sonnet high effort | デプロイ設定確認 |
-| #20 E2Eハーネス | opus medium effort | 複数サービス統合アーキテクチャ設計 |
-| #21 Webhook E2E | sonnet high effort | #20 パターンへの追加 |
-| #22 Cancel E2E | sonnet high effort | 同上 |
-| #37 OAuth E2E (T-P0-01) | sonnet high effort | #20 パターンへの追加 |
-| #38 Subscribe E2E (T-P0-02) | sonnet high effort | 同上 |
-| #39 並列ガード E2E (T-P0-03) | sonnet high effort | 同上 |
-| #40 503注入 E2E (T-P0-04) | sonnet high effort | 同上 |
-| #41 ロール剥奪 E2E (T-P0-06) | sonnet high effort | 同上 |
-| #42 防御検証 E2E | sonnet high effort | 全エンドポイント横断・セキュリティ確認 |
-| #43 ライフサイクル横断 E2E | sonnet high effort | 複数T-P0シナリオ連携 |
-| #44 T-P0 Go-Live検証 | opus medium effort | T-P0-01〜07 仕様横断検証（手動） |
-| #45 運用文書最終化 | sonnet high effort | 文書整理・ベンダー確認（手動） |
-| #46 Cancel詳細 E2E (T-P0-05) | sonnet high effort | #20 パターンへの追加 |
-| #47 Webhook詳細 E2E (T-P0-07) | sonnet high effort | 同上 |
-| #48 Webhookイベント E2E (T-P0-07補完) | sonnet high effort | 同上 |
-| #49 フロントエンド E2E (Playwright) | sonnet high effort | Playwright・フロント動作検証 |
-
 ## レビューフェーズ — 実装完了後に必ず順次実行
 
 1. `/code-review` — コード品質・バグ・ロジックエラーの検出
