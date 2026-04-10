@@ -3,6 +3,7 @@ export { handleCancel } from './cancel.js';
 export { isUncertainError } from './errors.js';
 export { handleSubscribe } from './subscribe.js';
 export type {
+  AddGuildMemberResult,
   BillingConfig,
   BillingDeps,
   CancelRequest,

@@ -174,7 +174,7 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
-    addMemberToGuild: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
     revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 

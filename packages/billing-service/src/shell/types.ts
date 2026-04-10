@@ -70,10 +70,20 @@ export interface DiscordCheckResult {
   canAssignRole: boolean;
 }
 
+/** Result of Add Guild Member (guilds.join). Discord returns 201 when the user is newly added (roles from body apply) and 204 when already in the guild (roles are not applied). */
+export interface AddGuildMemberResult {
+  joinedNew: boolean;
+}
+
 export interface DiscordClient {
   checkMembership(guildId: string, discordUserId: string): Promise<DiscordCheckResult>;
   assignRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
-  addMemberToGuild(guildId: string, discordUserId: string, accessToken: string, roleId?: string): Promise<void>;
+  addMemberToGuild(
+    guildId: string,
+    discordUserId: string,
+    accessToken: string,
+    roleId?: string,
+  ): Promise<AddGuildMemberResult>;
   revokeToken(accessToken: string): Promise<void>;
 }
 

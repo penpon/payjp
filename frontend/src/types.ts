@@ -7,9 +7,7 @@ export type AppState =
   | 'error'
   | 'billing'
   | 'register_complete'
-  | 'discord_link'
   | 'link_complete'
-  | 'subscribed'
   | 'cancel_complete'
   | 'cancel_error';
 

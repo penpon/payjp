@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { REST } from '@discordjs/rest';
-import type { BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
+import { REST, RequestMethod } from '@discordjs/rest';
+import type { AddGuildMemberResult, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
 import type { WebhookHandlerDeps } from '@hayane/sync-service';
 import Payjp from 'payjp';
@@ -259,10 +259,24 @@ const discordClient: DiscordClient = {
   async assignRole(guildId, discordUserId, roleId) {
     await discordRest.put(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
   },
-  async addMemberToGuild(guildId, discordUserId, accessToken, roleId) {
+  async addMemberToGuild(guildId, discordUserId, accessToken, roleId): Promise<AddGuildMemberResult> {
     const body: Record<string, unknown> = { access_token: accessToken };
     if (roleId) body.roles = [roleId];
-    await discordRest.put(`/guilds/${guildId}/members/${discordUserId}`, { body });
+    const res = await discordRest.queueRequest({
+      fullRoute: `/guilds/${guildId}/members/${discordUserId}`,
+      method: RequestMethod.Put,
+      body,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Discord addGuildMember failed: HTTP ${res.status}${detail ? ` ${detail}` : ''}`);
+    }
+    // Drain 201 JSON body so the connection can be reused; 204 has no body.
+    if (res.status === 201) {
+      await res.json().catch(() => undefined);
+    }
+    // 201 = newly added (roles from body applied); 204 = already in guild (roles not applied)
+    return { joinedNew: res.status === 201 };
   },
   async revokeToken(accessToken) {
     const params = new URLSearchParams({
@@ -271,11 +285,15 @@ const discordClient: DiscordClient = {
       client_id: env.DISCORD_CLIENT_ID,
       client_secret: env.DISCORD_CLIENT_SECRET,
     });
-    await fetch('https://discord.com/api/oauth2/token/revoke', {
+    const res = await fetch('https://discord.com/api/oauth2/token/revoke', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
     });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Discord token revoke failed: HTTP ${res.status}${detail ? ` ${detail}` : ''}`);
+    }
   },
 };
 

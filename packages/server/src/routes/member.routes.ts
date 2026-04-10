@@ -1,7 +1,46 @@
-import type { BillingDeps } from '@hayane/billing-service';
+import type { BillingDeps, DiscordCheckResult } from '@hayane/billing-service';
 import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '@hayane/billing-service';
 import { decryptToken } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
+
+async function tryAssignPaidRoleWithRetries(
+  billingDeps: BillingDeps,
+  discordUserId: string,
+  precheck?: DiscordCheckResult,
+): Promise<boolean> {
+  const discordCheck =
+    precheck ?? (await billingDeps.discord.checkMembership(billingDeps.config.discordGuildId, discordUserId));
+  if (!discordCheck.isMember || !discordCheck.canAssignRole) {
+    return false;
+  }
+  const delays = [0, 1000, 2000];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (delays[attempt] > 0) {
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+    try {
+      await billingDeps.discord.assignRole(
+        billingDeps.config.discordGuildId,
+        discordUserId,
+        billingDeps.config.discordPaidRoleId,
+      );
+      return true;
+    } catch (roleErr) {
+      if (attempt === 2) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'member-routes',
+            message: 'Discord role assignment failed after retries',
+            discordUserId,
+            error: roleErr instanceof Error ? roleErr.message : String(roleErr),
+          }),
+        );
+      }
+    }
+  }
+  return false;
+}
 
 export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
   const { billingDeps } = opts;
@@ -157,13 +196,18 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
             if (!discordCheck.isMember && plainAccessToken) {
               // Auto-join guild with role (guilds.join)
               try {
-                await billingDeps.discord.addMemberToGuild(
+                const joinResult = await billingDeps.discord.addMemberToGuild(
                   billingDeps.config.discordGuildId,
                   discordUserId,
                   plainAccessToken,
                   billingDeps.config.discordPaidRoleId,
                 );
-                roleGranted = true;
+                if (joinResult.joinedNew) {
+                  roleGranted = true;
+                } else {
+                  // 204: user already in guild — roles from body were not applied (race with membership check)
+                  roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId);
+                }
               } catch (joinErr) {
                 console.error(
                   JSON.stringify({
@@ -176,34 +220,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
                 );
               }
             } else if (discordCheck.isMember && discordCheck.canAssignRole) {
-              // Already a member — assign role with retry (3x: 0s/1s/2s)
-              const delays = [0, 1000, 2000];
-              for (let attempt = 0; attempt < 3; attempt++) {
-                if (delays[attempt] > 0) {
-                  await new Promise((r) => setTimeout(r, delays[attempt]));
-                }
-                try {
-                  await billingDeps.discord.assignRole(
-                    billingDeps.config.discordGuildId,
-                    discordUserId,
-                    billingDeps.config.discordPaidRoleId,
-                  );
-                  roleGranted = true;
-                  break;
-                } catch (roleErr) {
-                  if (attempt === 2) {
-                    console.error(
-                      JSON.stringify({
-                        level: 'error',
-                        service: 'member-routes',
-                        message: 'Discord role assignment failed after retries',
-                        discordUserId,
-                        error: roleErr instanceof Error ? roleErr.message : String(roleErr),
-                      }),
-                    );
-                  }
-                }
-              }
+              roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId, discordCheck);
             }
           } catch (discordErr) {
             console.error(
