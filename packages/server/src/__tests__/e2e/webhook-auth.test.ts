@@ -292,7 +292,6 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
         data: {
           id: 'sub_test_e2e',
           object: 'subscription',
-          status: undefined,
           metadata: { discord_user_id: discordUserId },
           status: undefined,
         },
