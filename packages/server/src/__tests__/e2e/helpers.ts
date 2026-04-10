@@ -219,12 +219,16 @@ export async function completeOAuthFlow(
   return { linkSessionToken: linkMatch[1], mockFetch };
 }
 
-/** 購読完了状態の member を作成して返す（OAuth → Subscribe のフルフロー） */
+/**
+ * 購読完了状態の member を作成して返す（link_session は `insertLinkedSession` で再現）。
+ * PAY.JP / Discord のモックを差し替える場合は、この関数に渡す前に
+ * `buildE2EApp(pgDb, { payjp, discord })` でアプリを組み立てること。
+ */
 export async function subscribeUser(
   app: ReturnType<typeof buildApp>,
   pgDb: PgDbClient,
   discordUserId: string,
-  overrides: { planId?: string; payjpMock?: PayjpClient; discordMock?: DiscordClient } = {},
+  overrides: { planId?: string } = {},
 ): Promise<{ memberId: string; linkSessionToken: string }> {
   const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
   const planId = overrides.planId ?? E2E_BILLING_CONFIG.allowedPlanIds[0];
