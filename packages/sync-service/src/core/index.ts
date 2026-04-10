@@ -6,6 +6,8 @@ import type { SubscriptionStatus } from '@hayane/shared';
 
 // --- Types ---
 
+export type PlanRoleMapping = Record<string, string>;
+
 export interface RequiredFieldsResult {
   ok: boolean;
   missingFields: string[];
@@ -106,7 +108,9 @@ const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
-  'DISCORD_PAID_ROLE_ID',
+  'DISCORD_ROLE_ID_STARTER',
+  'DISCORD_ROLE_ID_BUSINESS',
+  'DISCORD_ROLE_ID_ENTERPRISE',
   'DAILY_RESYNC_CRON',
   'PAYJP_LIVEMODE',
 ] as const;
@@ -200,6 +204,16 @@ export function shouldGrantRole(status: string | null): boolean {
 // REQ-SYNC-010: PROP-SYNC-017
 export function shouldSyncRole(oldStatus: string | null, newStatus: string | null): boolean {
   return oldStatus !== newStatus;
+}
+
+export function resolveRoleIdForPlan(planId: string | null, mapping: PlanRoleMapping): string | null {
+  if (planId === null) return null;
+  return mapping[planId] ?? null;
+}
+
+export function shouldSwapRole(oldPlanId: string | null, newPlanId: string | null): boolean {
+  if (oldPlanId === null || newPlanId === null) return false;
+  return oldPlanId !== newPlanId;
 }
 
 // REQ-SYNC-011: PROP-SYNC-018

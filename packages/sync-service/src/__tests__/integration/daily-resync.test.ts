@@ -24,6 +24,7 @@ function createMockCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     createPayjpSubscription: vi.fn(async () => ({ id: 'sub_new', status: 'active' })),
     cancelPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'canceled' })),
     syncRole: vi.fn(async () => {}),
+    planRoleMapping: { plan_1: 'role_1' },
     log: vi.fn(),
     now: () => new Date('2026-04-06T12:00:00Z'),
     ...overrides,

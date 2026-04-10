@@ -117,11 +117,17 @@ export function makeMockDiscordClient(): DiscordClient {
 // アプリビルダー
 // ---------------------------------------------------------------------------
 
+export const E2E_PLAN_ROLE_MAPPING: Record<string, string> = {
+  plan_e2e: 'role-e2e-test',
+  plan_e2e_standard: 'role-e2e-standard',
+  plan_e2e_premium: 'role-e2e-premium',
+};
+
 export const E2E_BILLING_CONFIG: BillingConfig = {
   frontendBaseUrl: 'https://example.com',
   allowedPlanIds: ['plan_e2e', 'plan_e2e_standard', 'plan_e2e_premium'],
   discordGuildId: 'guild-e2e-test',
-  discordPaidRoleId: 'role-e2e-test',
+  planRoleMapping: E2E_PLAN_ROLE_MAPPING,
   initialChargeAmount: 1000,
   initialChargeAmountCurrency: 'jpy',
 };
@@ -130,14 +136,16 @@ export const E2E_WEBHOOK_TOKEN = 'whsec_e2e_test_token';
 
 export function buildSyncDepsForE2E(
   pool: pg.Pool,
-  syncRole: (userId: string, action: 'grant' | 'revoke') => Promise<void> = vi.fn().mockResolvedValue(undefined),
+  syncRole: (userId: string, action: 'grant' | 'revoke', roleId: string) => Promise<void> = vi
+    .fn()
+    .mockResolvedValue(undefined),
 ): SyncDeps {
   const webhookDeps: WebhookHandlerDeps = {
     db: createPgPool(pool),
     payjpWebhookToken: E2E_WEBHOOK_TOKEN,
     expectedLivemode: false,
     discordGuildId: E2E_BILLING_CONFIG.discordGuildId,
-    discordRoleId: E2E_BILLING_CONFIG.discordPaidRoleId,
+    planRoleMapping: E2E_PLAN_ROLE_MAPPING,
     syncRole,
     log: vi.fn(),
   };
@@ -339,6 +347,7 @@ export function makeCliDeps(pool: pg.Pool, overrides: Partial<CliDeps> = {}): Cl
     createPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_e2e', status: 'active' }),
     cancelPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_e2e', status: 'canceled' }),
     syncRole: vi.fn().mockResolvedValue(undefined),
+    planRoleMapping: E2E_PLAN_ROLE_MAPPING,
     log: vi.fn(),
     now: () => new Date(),
     ...overrides,

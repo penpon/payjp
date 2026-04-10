@@ -61,7 +61,7 @@ function createDeps(db: DbPool, overrides: Partial<WebhookHandlerDeps> = {}): We
     payjpWebhookToken: 'valid-token',
     expectedLivemode: true,
     discordGuildId: 'guild_1',
-    discordRoleId: 'role_1',
+    planRoleMapping: { plan_1: 'role_1' },
     syncRole: vi.fn(async () => {}),
     log: vi.fn(),
     ...overrides,
@@ -90,6 +90,7 @@ const MEMBER = {
   id: 'mem_1',
   discord_user_id: 'user_1',
   subscription_status: 'trial',
+  payjp_plan_id: 'plan_1',
   payjp_subscription_id: 'sub_test_1',
   last_payjp_event_created_at: 500,
 };
@@ -108,7 +109,7 @@ describe('INT-SYNC-001: Webhook happy path', () => {
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
     expect((res.body as Record<string, unknown>).ok).toBe(true);
-    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant', 'role_1');
   });
 });
 
@@ -154,7 +155,7 @@ describe('Webhook subscription.deleted without data.status', () => {
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
     expect((res.body as Record<string, unknown>).ok).toBe(true);
-    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_1');
   });
 });
 
@@ -262,7 +263,7 @@ describe('INT-SYNC-006: Webhook unknown status', () => {
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
     expect((res.body as Record<string, unknown>).ok).toBe(true);
-    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_1');
   });
 });
 
@@ -344,6 +345,91 @@ describe('INT-SYNC-009: Webhook subscription.updated status-unchanged', () => {
       (c[0] as string).includes('UPDATE members SET'),
     );
     expect(updateCalls.length).toBeGreaterThan(0);
+  });
+});
+
+// Plan change without status change → role swap (revoke old + grant new)
+describe('Webhook plan change without status change', () => {
+  it('active → active with plan change → revoke old role + grant new role', async () => {
+    const memberWithActive = { ...MEMBER, subscription_status: 'active', payjp_plan_id: 'plan_1' };
+    const db = createMockDb({ member: memberWithActive });
+    const deps = createDeps(db, { planRoleMapping: { plan_1: 'role_old', plan_2: 'role_new' } });
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent({
+        data: {
+          id: 'sub_test_1',
+          object: 'subscription',
+          status: 'active',
+          metadata: { discord_user_id: 'user_1' },
+          plan: { id: 'plan_2' },
+          current_period_end: 2000,
+        },
+      }),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    // Revoke old plan role, then grant new plan role
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_old');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant', 'role_new');
+  });
+});
+
+// Status change + plan change simultaneously → revoke old + grant new
+describe('Webhook status change + plan change simultaneously', () => {
+  it('trial → active with plan change → revoke old plan role + grant new plan role', async () => {
+    const memberWithTrial = { ...MEMBER, subscription_status: 'trial', payjp_plan_id: 'plan_1' };
+    const db = createMockDb({ member: memberWithTrial });
+    const deps = createDeps(db, { planRoleMapping: { plan_1: 'role_old', plan_2: 'role_new' } });
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent({
+        data: {
+          id: 'sub_test_1',
+          object: 'subscription',
+          status: 'active',
+          metadata: { discord_user_id: 'user_1' },
+          plan: { id: 'plan_2' },
+          current_period_end: 2000,
+        },
+      }),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    // Status changed to grant-eligible + plan changed → revoke old, grant new
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_old');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant', 'role_new');
+  });
+});
+
+// Revoke with null planId → all-roles fallback
+describe('Webhook revoke with null planId', () => {
+  it('null payjp_plan_id on revoke → all roles revoked', async () => {
+    const memberNoPlan = { ...MEMBER, subscription_status: 'active', payjp_plan_id: null };
+    const db = createMockDb({ member: memberNoPlan });
+    const deps = createDeps(db, { planRoleMapping: { plan_a: 'role_a', plan_b: 'role_b' } });
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: createValidEvent({
+        data: {
+          id: 'sub_test_1',
+          object: 'subscription',
+          status: 'deleted',
+          metadata: { discord_user_id: 'user_1' },
+        },
+      }),
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    // null planId → all roles revoked as safety fallback
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_a');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_b');
   });
 });
 

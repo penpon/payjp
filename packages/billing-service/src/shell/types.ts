@@ -93,7 +93,7 @@ export interface BillingConfig {
   frontendBaseUrl: string;
   allowedPlanIds: string[];
   discordGuildId: string;
-  discordPaidRoleId: string;
+  planRoleMapping: Record<string, string>;
   initialChargeAmount: number;
   initialChargeAmountCurrency: string;
   discordTokenEncryptionKey?: string;

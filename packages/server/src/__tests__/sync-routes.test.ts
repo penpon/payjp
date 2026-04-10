@@ -55,6 +55,7 @@ function makeMember(overrides: Record<string, unknown> = {}) {
     id: MEMBER_ID,
     discord_user_id: DISCORD_USER_ID,
     subscription_status: 'active',
+    payjp_plan_id: 'plan_test',
     last_payjp_event_created_at: NOW_UNIX - 100,
     payjp_subscription_id: SUBSCRIPTION_ID,
     ...overrides,
@@ -120,7 +121,7 @@ function makeSyncDeps(dbOverrides: Parameters<typeof makeMockDb>[0] = {}): SyncD
     payjpWebhookToken: WEBHOOK_TOKEN,
     expectedLivemode: true,
     discordGuildId: 'guild-001',
-    discordRoleId: 'role-001',
+    planRoleMapping: { plan_test: 'role-001' },
     syncRole: vi.fn().mockResolvedValue(undefined),
     log: vi.fn(),
   };
@@ -265,7 +266,7 @@ describe('POST /v1/payjp/webhook', () => {
     });
     await app.inject(webhookInject(event, WEBHOOK_TOKEN));
 
-    expect(deps.webhookDeps.syncRole).toHaveBeenCalledWith(DISCORD_USER_ID, 'revoke');
+    expect(deps.webhookDeps.syncRole).toHaveBeenCalledWith(DISCORD_USER_ID, 'revoke', 'role-001');
   });
 
   it('returns 200 with ok:true when member not found', async () => {

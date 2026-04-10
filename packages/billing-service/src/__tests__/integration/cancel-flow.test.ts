@@ -81,7 +81,7 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: 'https://frontend.example.com',
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    discordPaidRoleId: 'role-001',
+    planRoleMapping: { plan_test: 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
   };

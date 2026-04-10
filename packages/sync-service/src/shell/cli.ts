@@ -15,6 +15,8 @@ import {
   formatRfc3339Utc,
   isAccessEndExpired,
   isInflightOperationStale,
+  type PlanRoleMapping,
+  resolveRoleIdForPlan,
   type SubscriptionCandidate,
   shouldGrantRole,
   validateCliArgs,
@@ -35,7 +37,8 @@ export interface CliDeps {
   createPayjpCharge: (params: Record<string, unknown>) => Promise<{ id: string }>;
   createPayjpSubscription: (params: Record<string, unknown>) => Promise<{ id: string; status: string }>;
   cancelPayjpSubscription: (subscriptionId: string) => Promise<Record<string, unknown>>;
-  syncRole: (userId: string, action: 'grant' | 'revoke') => Promise<void>;
+  syncRole: (userId: string, action: 'grant' | 'revoke', roleId: string) => Promise<void>;
+  planRoleMapping: PlanRoleMapping;
   log: (entry: LogEntry) => void;
   now: () => Date;
 }
@@ -286,12 +289,9 @@ async function handleSubscribeRecovery(
     ]);
 
     // Sync role
+    const planId = member.payjp_plan_id as string | null;
     const action = shouldGrantRole(status) ? 'grant' : 'revoke';
-    try {
-      await deps.syncRole(discordUserId, action);
-    } catch {
-      /* logged in syncRole */
-    }
+    await syncRoleIds(deps, discordUserId, action, resolveRoleIdsForSync(planId, action, deps.planRoleMapping));
 
     // Resolve impact logs
     await resolveImpactLog(deps.db, memberId, 'subscribe_recovery_no_customer');
@@ -442,6 +442,7 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
   const memberId = member.id as string;
   const discordUserId = member.discord_user_id as string;
   const subscriptionId = member.payjp_subscription_id as string | null;
+  const planId = member.payjp_plan_id as string | null;
 
   // Skip members with inflight operations — these must be resolved via --operation-id
   if (member.inflight_operation_id) {
@@ -451,12 +452,7 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
   // Check access_end_at expiration
   const accessEndAt = member.access_end_at as Date | null;
   if (isAccessEndExpired(accessEndAt, deps.now())) {
-    // Revoke role
-    try {
-      await deps.syncRole(discordUserId, 'revoke');
-    } catch {
-      /* logged */
-    }
+    await syncRoleIds(deps, discordUserId, 'revoke', resolveRoleIdsForSync(planId, 'revoke', deps.planRoleMapping));
   }
 
   // Check PAY.JP subscription state
@@ -467,11 +463,7 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
       await deps.db.query(`UPDATE members SET subscription_status = 'deleted', updated_at = now() WHERE id = $1`, [
         memberId,
       ]);
-      try {
-        await deps.syncRole(discordUserId, 'revoke');
-      } catch {
-        /* logged */
-      }
+      await syncRoleIds(deps, discordUserId, 'revoke', resolveRoleIdsForSync(planId, 'revoke', deps.planRoleMapping));
     } else {
       const newStatus = payjpSub.status as string;
       await deps.db.query('UPDATE members SET subscription_status = $1, updated_at = now() WHERE id = $2', [
@@ -479,10 +471,35 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
         memberId,
       ]);
       const action = shouldGrantRole(newStatus) ? 'grant' : 'revoke';
-      try {
-        await deps.syncRole(discordUserId, action);
-      } catch {
-        /* logged */
+      const roleIds = resolveRoleIdsForSync(planId, action, deps.planRoleMapping);
+      if (roleIds.length === 0 && action === 'grant') {
+        deps.log({
+          timestamp: formatRfc3339Utc(deps.now()),
+          service: 'sync-service',
+          endpoint: 'cli/resync',
+          result: 'failure',
+          error: 'unmapped_plan_grant_skipped',
+          member_id: memberId,
+          payjp_plan_id: planId ?? 'null',
+        });
+      }
+      for (const roleId of roleIds) {
+        try {
+          await deps.syncRole(discordUserId, action, roleId);
+        } catch (err) {
+          deps.log({
+            timestamp: formatRfc3339Utc(deps.now()),
+            service: 'sync-service',
+            endpoint: 'cli/resync',
+            result: 'failure',
+            error: 'role_sync_failed',
+            member_id: memberId,
+            discord_user_id: discordUserId,
+            action,
+            roleId,
+            syncError: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
   }
@@ -491,6 +508,33 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
   await resolveImpactLog(deps.db, memberId, 'resync_individual_error');
 
   return { success: true };
+}
+
+// --- Role helpers ---
+
+/** Best-effort sync for a list of roleIds. Errors are swallowed (callers that need per-error logging handle their own loop). */
+async function syncRoleIds(
+  deps: CliDeps,
+  discordUserId: string,
+  action: 'grant' | 'revoke',
+  roleIds: string[],
+): Promise<void> {
+  for (const roleId of roleIds) {
+    try {
+      await deps.syncRole(discordUserId, action, roleId);
+    } catch {
+      /* best-effort; logged in syncRole */
+    }
+  }
+}
+
+/** Resolve roleId(s) for sync. If planId maps to a role, return it. Otherwise fallback to all roles (safety). */
+function resolveRoleIdsForSync(planId: string | null, action: 'grant' | 'revoke', mapping: PlanRoleMapping): string[] {
+  const roleId = resolveRoleIdForPlan(planId, mapping);
+  if (roleId) return [roleId];
+  // Unknown plan → for revoke, try all roles; for grant, no-op (can't grant without known plan)
+  if (action === 'revoke') return Object.values(mapping);
+  return [];
 }
 
 // --- DB helpers ---
