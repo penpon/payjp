@@ -63,9 +63,8 @@ const REQUIRED_ENV = [
   'DISCORD_REDIRECT_URI',
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
-  'DISCORD_ROLE_ID_STARTER',
-  'DISCORD_ROLE_ID_BUSINESS',
-  'DISCORD_ROLE_ID_ENTERPRISE',
+  // DISCORD_PLAN_ROLE_IDS: comma-separated role IDs, same order as PAYJP_PLAN_IDS
+  'DISCORD_PLAN_ROLE_IDS',
   'PAYJP_SECRET_KEY',
   'PAYJP_LIVEMODE',
   'PAYJP_PLAN_IDS',
@@ -320,25 +319,19 @@ if (allowedPlanIds.length === 0) {
   process.exit(1);
 }
 
-const planRoleMapping: Record<string, string> = {
-  plan_starter: env.DISCORD_ROLE_ID_STARTER,
-  plan_business: env.DISCORD_ROLE_ID_BUSINESS,
-  plan_enterprise: env.DISCORD_ROLE_ID_ENTERPRISE,
-};
-
-// Validate every allowed plan has a corresponding role mapping (and vice versa)
-const unmappedPlans = allowedPlanIds.filter((pid) => !planRoleMapping[pid]);
-if (unmappedPlans.length > 0) {
-  process.stderr.write(`[startup] No role mapping for plan IDs: ${unmappedPlans.join(', ')}\n`);
+const discordPlanRoleIds = env.DISCORD_PLAN_ROLE_IDS.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (discordPlanRoleIds.length !== allowedPlanIds.length) {
+  process.stderr.write(
+    `[startup] DISCORD_PLAN_ROLE_IDS must have the same number of comma-separated entries as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${discordPlanRoleIds.length})\n`,
+  );
   await closePoolIgnoringStartupErrors();
   process.exit(1);
 }
-const unusedMappings = Object.keys(planRoleMapping).filter((pid) => !allowedPlanIds.includes(pid));
-if (unusedMappings.length > 0) {
-  process.stderr.write(
-    `[startup] WARNING: Role mapping exists for plans not in PAYJP_PLAN_IDS: ${unusedMappings.join(', ')}\n`,
-  );
-}
+const planRoleMapping: Record<string, string> = Object.fromEntries(
+  allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
+);
 
 const billingDeps: BillingDeps = {
   db: dbClient,

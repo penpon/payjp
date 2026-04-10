@@ -612,9 +612,8 @@ describe('INT-SYNC-035: Env var validation', () => {
       DATABASE_URL: 'postgres://...',
       DISCORD_BOT_TOKEN: 'bot_xxx',
       DISCORD_GUILD_ID: 'guild_1',
-      DISCORD_ROLE_ID_STARTER: 'role_starter',
-      DISCORD_ROLE_ID_BUSINESS: 'role_business',
-      DISCORD_ROLE_ID_ENTERPRISE: 'role_enterprise',
+      PAYJP_PLAN_IDS: 'plan_starter,plan_business,plan_enterprise',
+      DISCORD_PLAN_ROLE_IDS: 'role_starter,role_business,role_enterprise',
       DAILY_RESYNC_CRON: '0 3 * * *',
       PAYJP_LIVEMODE: 'true',
     });

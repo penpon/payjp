@@ -23,6 +23,19 @@ import {
 } from '../core/index.js';
 import type { DbPool } from './types.js';
 
+/** Plan id from PAY.JP subscription object (`plan.id` or legacy `plan_id`). */
+function payjpSubscriptionPlanId(sub: Record<string, unknown> | null | undefined): string | null {
+  if (!sub) return null;
+  const plan = sub.plan;
+  if (plan && typeof plan === 'object' && plan !== null) {
+    const id = (plan as Record<string, unknown>).id;
+    if (typeof id === 'string' && id.length > 0) return id;
+  }
+  const top = sub.plan_id;
+  if (typeof top === 'string' && top.length > 0) return top;
+  return null;
+}
+
 export interface CliDeps {
   db: DbPool;
   getPayjpSubscription: (subscriptionId: string) => Promise<Record<string, unknown> | null>;
@@ -268,15 +281,17 @@ async function handleSubscribeRecovery(
     canResolveInflightOperation(payjpSub.status as string, payjpSub.id as string, subscriptionId, customerId)
   ) {
     const status = payjpSub.status as string;
+    const planIdFromPayjp = payjpSubscriptionPlanId(payjpSub as Record<string, unknown>);
     await deps.db.query(
       `UPDATE members SET
         subscription_status = $1,
+        payjp_plan_id = COALESCE(payjp_plan_id, $3),
         inflight_operation_id = NULL,
         inflight_operation_type = NULL,
         inflight_operation_started_at = NULL,
         updated_at = now()
        WHERE id = $2`,
-      [status, memberId],
+      [status, memberId, planIdFromPayjp],
     );
 
     // Step 6: Update last_payjp_event_created_at
@@ -288,10 +303,10 @@ async function handleSubscribeRecovery(
       memberId,
     ]);
 
-    // Sync role
-    const planId = member.payjp_plan_id as string | null;
+    // Sync role — use PAY.JP subscription plan when member row has not persisted payjp_plan_id yet
+    const planIdForSync = (member.payjp_plan_id as string | null) ?? planIdFromPayjp;
     const action = shouldGrantRole(status) ? 'grant' : 'revoke';
-    await syncRoleIds(deps, discordUserId, action, resolveRoleIdsForSync(planId, action, deps.planRoleMapping));
+    await syncRoleIds(deps, discordUserId, action, resolveRoleIdsForSync(planIdForSync, action, deps.planRoleMapping));
 
     // Resolve impact logs
     await resolveImpactLog(deps.db, memberId, 'subscribe_recovery_no_customer');
