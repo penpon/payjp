@@ -578,6 +578,8 @@ describe.skipIf(!hasTestDb)('E2E Security — 悪意ある入力防御', () => {
           origin: 'null',
         },
         cookies: { '__Host-link_session': rawToken },
+        // application/json かつボディ欠落は Fastify が 400 になり、Origin 検証まで届かない
+        payload: {},
       });
 
       expect(res.statusCode).toBe(403);
