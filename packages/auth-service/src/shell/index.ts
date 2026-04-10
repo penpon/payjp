@@ -281,12 +281,15 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
     // Discord code → access_token → discord_user_id
     let discordUserId: string;
     let encryptedAccessToken: string | undefined;
+    /** Plaintext token kept only until link_session row is persisted (or revoked on failure). */
+    let discordAccessTokenPlain: string | undefined;
     try {
       const accessToken = await exchangeDiscordCode(code, {
         clientId: discordClientId,
         clientSecret: discordClientSecret,
         redirectUri: discordRedirectUri,
       });
+      discordAccessTokenPlain = accessToken;
       discordUserId = await fetchDiscordUserId(accessToken);
       // Encrypt access_token for later use in guilds.join (link-discord endpoint will revoke after use)
       if (discordTokenEncryptionKey) {
@@ -302,10 +305,12 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
           });
           // Fallback: revoke immediately if encryption fails
           void revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch(() => {});
+          discordAccessTokenPlain = undefined;
         }
       } else {
         // No encryption key configured — revoke immediately (guilds.join unavailable)
         void revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch(() => {});
+        discordAccessTokenPlain = undefined;
       }
     } catch (err) {
       structuredLog({
@@ -321,12 +326,28 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
     // link session を発行
     const linkToken = await generateSecureRandomToken();
     const linkTokenHash = createHash('sha256').update(linkToken).digest('hex');
-    await saveDiscordLinkSession(db, {
-      linkSessionTokenHash: linkTokenHash,
-      discordUserId,
-      discordAccessTokenEncrypted: encryptedAccessToken,
-      expiresAt: new Date(Date.now() + 900_000),
-    });
+    try {
+      await saveDiscordLinkSession(db, {
+        linkSessionTokenHash: linkTokenHash,
+        discordUserId,
+        discordAccessTokenEncrypted: encryptedAccessToken,
+        expiresAt: new Date(Date.now() + 900_000),
+      });
+    } catch (saveErr) {
+      structuredLog({
+        service: 'auth-service',
+        endpoint: '/v1/auth/discord/callback',
+        result: 'failure',
+        error: 'link_session_save_failed',
+        message: saveErr instanceof Error ? saveErr.message : String(saveErr),
+      });
+      if (discordAccessTokenPlain) {
+        void revokeDiscordToken(discordAccessTokenPlain, discordClientId, discordClientSecret).catch(() => {});
+      }
+      const locationUrl = buildCallbackRedirectUrl(frontendBaseUrl);
+      return { statusCode: 302, headers: { ...secHeaders, Location: locationUrl } };
+    }
+    discordAccessTokenPlain = undefined;
 
     const attrs = buildCookieAttributes('__Host-link_session', 900);
     const locationUrl = buildCallbackRedirectUrl(frontendBaseUrl);

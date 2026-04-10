@@ -36,6 +36,14 @@ vi.mock('../api.js', () => ({
       this.status = status;
     }
   },
+  MemberFetchError: class MemberFetchError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.name = 'MemberFetchError';
+      this.status = status;
+    }
+  },
 }));
 
 import {
@@ -44,6 +52,7 @@ import {
   fetchSubscriptionStatus,
   getMember,
   linkDiscord,
+  MemberFetchError,
   SubscriptionStatusError,
 } from '../api.js';
 
@@ -168,6 +177,15 @@ describe('main init()', () => {
   });
 
   // --- Error handling ---
+
+  it('should show member-unavailable message when getMember throws MemberFetchError', async () => {
+    vi.mocked(getMember).mockRejectedValue(new MemberFetchError(503, 'Member fetch failed: 503'));
+
+    await runInit();
+
+    expect(getMember).toHaveBeenCalled();
+    expect(appDiv.textContent).toContain('会員情報を確認できませんでした');
+  });
 
   it('should show error state when getMember throws unexpected error', async () => {
     const error = new Error('Network error');

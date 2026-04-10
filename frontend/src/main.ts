@@ -5,6 +5,7 @@ import {
   fetchSubscriptionStatus,
   getMember,
   linkDiscord,
+  MemberFetchError,
   SubscriptionStatusError,
   startOAuth,
 } from './api.js';
@@ -411,7 +412,13 @@ async function init(): Promise<void> {
     startBillingFlow(app);
   } catch (err) {
     console.error('[init] failed:', err);
-    renderState(app, 'error', startOAuth);
+    if (err instanceof MemberFetchError) {
+      renderState(app, 'error', startOAuth, {
+        errorMessage: '会員情報を確認できませんでした。しばらく経ってから再度お試しください。',
+      });
+    } else {
+      renderState(app, 'error', startOAuth);
+    }
   }
 }
 

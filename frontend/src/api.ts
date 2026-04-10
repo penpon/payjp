@@ -231,12 +231,23 @@ export async function cancelSubscription(): Promise<CancelResponse> {
 
 // --- Member (billing-first flow) ---
 
+/** Thrown when GET /v1/members/me fails (non-2xx). Distinct from `null` which means 200 with no member session. */
+export class MemberFetchError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MemberFetchError';
+  }
+}
+
 export async function getMember(): Promise<MemberInfo | null> {
   const res = await fetch('/v1/members/me', {
     credentials: 'include',
   });
   if (!res.ok) {
-    return null;
+    throw new MemberFetchError(res.status, `Member fetch failed: ${res.status}`);
   }
   const data: unknown = await res.json();
   if (typeof data !== 'object' || data === null) return null;
