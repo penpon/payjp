@@ -96,14 +96,14 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           return reply.status(404).send({ ok: false, errorCode: 'MEMBER_NOT_FOUND' });
         }
 
-        // Idempotency: already linked to same discord user
-        if (member.discord_user_id === discordUserId) {
+        // Idempotency: already linked and role already granted
+        if (member.discord_user_id === discordUserId && member.role_state === 'granted') {
           await billingDeps.db.consumeLinkSession(lsHash, now);
-          return reply.status(200).send({ ok: true, discordUserId, roleGranted: member.role_state === 'granted' });
+          return reply.status(200).send({ ok: true, discordUserId, roleGranted: true });
         }
 
         // Conflict: already linked to different discord user
-        if (member.discord_user_id !== null) {
+        if (member.discord_user_id !== null && member.discord_user_id !== discordUserId) {
           return reply.status(409).send({ ok: false, errorCode: 'ALREADY_LINKED' });
         }
 
