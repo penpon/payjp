@@ -43,14 +43,22 @@ export async function truncateAll(pool: pg.Pool): Promise<void> {
 // Mock ファクトリ
 // ---------------------------------------------------------------------------
 
+/** PAY.JP のトークンIDは `tok_` で始まる。不正な文字列は拒否し、本番に近い経路（422）を E2E で再現する。 */
+const PAYJP_TOKEN_ID_PATTERN = /^tok_[0-9a-zA-Z_]+$/;
+
 export function makeMockPayjpClient(): PayjpClient {
   const trialEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
   return {
-    fetchToken: vi.fn().mockResolvedValue({
-      id: 'tok_test_e2e',
-      used: false,
-      three_d_secure_status: 'verified',
-      card: { id: 'car_test_e2e' },
+    fetchToken: vi.fn().mockImplementation(async (tokenId: string) => {
+      if (!PAYJP_TOKEN_ID_PATTERN.test(tokenId)) {
+        throw new Error('No such token');
+      }
+      return {
+        id: 'tok_test_e2e',
+        used: false,
+        three_d_secure_status: 'verified',
+        card: { id: 'car_test_e2e' },
+      };
     }),
     createCustomer: vi.fn().mockResolvedValue({
       id: 'cus_test_e2e',
@@ -260,6 +268,25 @@ export async function subscribeUser(
 
 const DEFAULT_EVENT_CREATED = Math.floor(new Date('2025-04-01T10:00:00Z').getTime() / 1000);
 
+/**
+ * テンプレートの `data` と上書きをマージする。
+ * `overrides` でキーを明示的に `undefined` にした場合は結果から除外する（`inject` の JSON からも欠落する）。
+ * 省略したキーはテンプレート値のまま残る。
+ */
+function mergeWebhookEventData(
+  base: Record<string, unknown>,
+  overrides: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base, ...overrides };
+  for (const key of Object.keys(overrides)) {
+    if (overrides[key] === undefined) {
+      delete merged[key];
+    }
+  }
+  return merged;
+}
+
+/** `data` のキーをテンプレから外したいときは `undefined` を渡す（欠損ペイロードの再現用）。 */
 export function makeWebhookEvent(
   overrides: { id?: string; type?: string; livemode?: boolean; created?: number; data?: Record<string, unknown> } = {},
 ): Record<string, unknown> {
@@ -276,15 +303,17 @@ export function makeWebhookEvent(
     type,
     livemode,
     created,
-    data: {
-      id: 'sub_test_e2e',
-      object: 'subscription',
-      status: 'active',
-      metadata: { discord_user_id: 'discord-e2e-user' },
-      plan: { id: 'plan_e2e' },
-      current_period_end: created + 30 * 86400,
-      ...dataOverrides,
-    },
+    data: mergeWebhookEventData(
+      {
+        id: 'sub_test_e2e',
+        object: 'subscription',
+        status: 'active',
+        metadata: { discord_user_id: 'discord-e2e-user' },
+        plan: { id: 'plan_e2e' },
+        current_period_end: created + 30 * 86400,
+      },
+      dataOverrides,
+    ),
   };
 }
 
