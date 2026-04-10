@@ -136,7 +136,7 @@ function makeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
 
 describe('POST /v1/members/link-discord', () => {
   it('keeps idempotent short-circuit when already granted', async () => {
-    const deps = makeDeps({ role_state: 'granted' });
+    const deps = makeDeps({ role_state: 'granted', subscription_status: 'active' });
     const app = buildApp(APP_CONFIG, deps);
 
     const res = await app.inject({
@@ -181,8 +181,8 @@ describe('POST /v1/members/link-discord', () => {
     expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
   });
 
-  it('returns 403 when subscription is not active or trial', async () => {
-    const deps = makeDeps({ role_state: 'unknown', subscription_status: 'canceled' });
+  it('rejects linking when subscription is not active', async () => {
+    const deps = makeDeps({ subscription_status: 'deleted' });
     const app = buildApp(APP_CONFIG, deps);
 
     const res = await app.inject({
@@ -195,8 +195,8 @@ describe('POST /v1/members/link-discord', () => {
       },
     });
 
-    expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual({ ok: false, errorCode: 'SUBSCRIPTION_INACTIVE' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'NO_SUBSCRIPTION' });
     expect(deps.db.updateMemberDiscordUserId).not.toHaveBeenCalled();
     expect(deps.discord.checkMembership).not.toHaveBeenCalled();
   });

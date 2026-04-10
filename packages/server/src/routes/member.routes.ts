@@ -1,12 +1,12 @@
 import type { BillingDeps, DiscordCheckResult } from '@hayane/billing-service';
 import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '@hayane/billing-service';
-import type { Member } from '@hayane/shared';
 import { decryptToken } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
 
-/** Paid entitlement required to link Discord and grant the paid role (PAY.JP sync). */
-function hasActiveSubscriptionForDiscordLink(member: Member): boolean {
-  return member.subscription_status === 'active' || member.subscription_status === 'trial';
+function hasLinkableSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
+  if (status === 'active' || status === 'trial') return true;
+  if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
+  return false;
 }
 
 async function tryAssignPaidRoleWithRetries(
@@ -152,6 +152,10 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
             return reply.status(404).send({ ok: false, errorCode: 'MEMBER_NOT_FOUND' });
           }
 
+          if (!hasLinkableSubscription(member.subscription_status, member.access_end_at, now)) {
+            return reply.status(409).send({ ok: false, errorCode: 'NO_SUBSCRIPTION' });
+          }
+
           // Idempotency: already linked and role already granted
           if (member.discord_user_id === discordUserId && member.role_state === 'granted') {
             await billingDeps.db.consumeLinkSession(lsHash, now);
@@ -167,10 +171,6 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           const existingMember = await billingDeps.db.findMemberByDiscordUserId(discordUserId);
           if (existingMember && existingMember.id !== memberId) {
             return reply.status(409).send({ ok: false, errorCode: 'DISCORD_ALREADY_USED' });
-          }
-
-          if (!hasActiveSubscriptionForDiscordLink(member)) {
-            return reply.status(403).send({ ok: false, errorCode: 'SUBSCRIPTION_INACTIVE' });
           }
 
           // Cross-member serialization for the same Discord account (subscribe/cancel use same key)
