@@ -107,6 +107,8 @@ export function renderSubscribed(
       : []),
   ];
 
+  cardChildren.push(el('p', { class: 'subscribed-detail discord-linked-badge' }, ['Discord: 連携済み ✓']));
+
   if (onStartCancel && subscription.status !== 'canceled') {
     const cancelBtn = el('button', { type: 'button', class: 'cancel-button' }, ['退会する']);
     cancelBtn.addEventListener('click', onStartCancel);

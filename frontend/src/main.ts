@@ -327,6 +327,8 @@ async function init(): Promise<void> {
           }
         }
 
+        let linkErrorMessage: string | undefined;
+
         if (session?.linked) {
           // OAuth callback 帰還 → Discord連携実行
           renderState(app, 'loading', startOAuth);
@@ -347,7 +349,19 @@ async function init(): Promise<void> {
             });
             return;
           }
-          // link失敗 or 例外 → サンクスページに戻す（再試行可能）
+          // link失敗 → エラーコード別に処理
+          if (linkResult?.errorCode === 'NO_SUBSCRIPTION') {
+            renderState(app, 'error', startOAuth, {
+              errorMessage: '有効な購読がないためDiscord連携できません。',
+            });
+            return;
+          }
+          linkErrorMessage =
+            linkResult?.errorCode === 'DISCORD_ALREADY_USED'
+              ? 'このDiscordアカウントは既に別のアカウントで使用されています。別のDiscordアカウントでお試しください。'
+              : linkResult && !linkResult.ok
+                ? 'Discord連携に失敗しました。再度お試しください。'
+                : undefined;
         }
 
         // Discord未連携 → サンクスページ
@@ -368,6 +382,7 @@ async function init(): Promise<void> {
             onBackToTop: () => {
               void init();
             },
+            linkError: linkErrorMessage,
           },
         });
         return;

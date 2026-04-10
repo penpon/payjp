@@ -78,6 +78,7 @@ export function renderState(
       plans: PlanDef[];
       onLinkDiscord?: () => void;
       onBackToTop: () => void;
+      linkError?: string;
     };
     linkComplete?: { roleGranted: boolean; onBackToTop: () => void };
     cancelComplete?: { result: CancelResponse };
@@ -120,14 +121,22 @@ export function renderState(
       break;
     case 'register_complete':
       if (extra?.registerComplete) {
-        const successEl = renderSuccess(extra.registerComplete.result, extra.registerComplete.plans);
-        if (extra.registerComplete.onLinkDiscord) {
-          const linkBtn = createDiscordButton(extra.registerComplete.onLinkDiscord);
-          const linkSection = el('div', { class: 'discord-link-section' }, [
-            linkBtn,
+        const { result, plans, onLinkDiscord, linkError } = extra.registerComplete;
+        const successEl = renderSuccess(result, plans);
+        if (onLinkDiscord) {
+          const plan = plans.find((p) => p.id === result.planId);
+          const planName = plan?.name ?? 'ご契約中のプラン';
+          const linkChildren: (Node | string)[] = [];
+          if (linkError) {
+            linkChildren.push(el('div', { class: 'error-banner', role: 'alert' }, [linkError]));
+          }
+          linkChildren.push(
+            el('span', { class: 'discord-status-badge--unlinked' }, ['Discord: 未連携']),
+            createDiscordButton(onLinkDiscord),
             el('p', { class: 'body-text' }, ['Discordと連携してサーバに参加してください！']),
-          ]);
-          successEl.appendChild(linkSection);
+            el('p', { class: 'body-text-sub' }, [`${planName} に対応したDiscordロールが付与されます。`]),
+          );
+          successEl.appendChild(el('div', { class: 'discord-link-section' }, linkChildren));
         }
         container.appendChild(successEl);
       } else {
