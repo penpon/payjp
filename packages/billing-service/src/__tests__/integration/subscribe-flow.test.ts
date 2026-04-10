@@ -648,6 +648,16 @@ describe('POST /v1/subscriptions — Integration', () => {
       }
     });
 
+    it('omits memberSessionToken when insertMemberSession fails (no cookie without DB row)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.insertMemberSession as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB insert failed'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.memberSessionToken).toBeUndefined();
+      }
+    });
+
     it('returns 503 + operationId when clearInflightOperation fails after subscribe', async () => {
       const deps = makeSuccessfulDeps();
       (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));

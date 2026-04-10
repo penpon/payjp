@@ -5,7 +5,6 @@ import {
   fetchSubscriptionStatus,
   getMember,
   linkDiscord,
-  SessionCheckError,
   SubscriptionStatusError,
   startOAuth,
 } from './api.js';
@@ -408,6 +407,7 @@ async function init(): Promise<void> {
     }
 
     // member_session なし → 課金フォーム表示（初回 or Cookie期限切れ）
+    clearStaleCancelPending();
     startBillingFlow(app);
   } catch (err) {
     console.error('[init] failed:', err);
