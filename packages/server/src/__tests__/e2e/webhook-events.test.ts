@@ -161,7 +161,8 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
 
     it('2. 重複冪等: 同一 event.id を 2 回送信 → 2 件目も 200, payjp_events は 1 件のみ', async () => {
       const discordUserId = `discord-dup-${randomUUID().slice(0, 8)}`;
-      await insertMember(pool, { discordUserId });
+      // active→active ではロール同期が走らない。1 回目で syncRole を検証するため trial→active にする
+      await insertMember(pool, { discordUserId, subscriptionStatus: 'trial', roleState: 'unknown' });
 
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_e2e_${randomUUID().slice(0, 8)}`;
