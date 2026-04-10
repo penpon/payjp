@@ -17,7 +17,7 @@ import { createDiscordLogoSvg } from './widgets.js';
 function createDiscordButton(onConnect: () => void): HTMLButtonElement {
   const button = el('button', { type: 'button', class: 'discord-button' }, [
     createDiscordLogoSvg(24),
-    el('span', {}, ['Discordで連携する']),
+    el('span', {}, ['Discordと連携する']),
   ]);
   button.addEventListener('click', onConnect);
   return button;
@@ -120,16 +120,12 @@ export function renderState(
       break;
     case 'register_complete':
       if (extra?.registerComplete) {
-        const successEl = renderSuccess(
-          extra.registerComplete.result,
-          extra.registerComplete.plans,
-          extra.registerComplete.onBackToTop,
-        );
+        const successEl = renderSuccess(extra.registerComplete.result, extra.registerComplete.plans);
         if (extra.registerComplete.onLinkDiscord) {
           const linkBtn = createDiscordButton(extra.registerComplete.onLinkDiscord);
           const linkSection = el('div', { class: 'discord-link-section' }, [
-            el('p', { class: 'body-text' }, ['Discordと連携して特典を受け取ってください。']),
             linkBtn,
+            el('p', { class: 'body-text' }, ['Discordと連携してサーバに参加してください！']),
           ]);
           successEl.appendChild(linkSection);
         }

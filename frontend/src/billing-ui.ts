@@ -413,7 +413,7 @@ function safeTrim(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBackToTop: () => void): HTMLDivElement {
+export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBackToTop?: () => void): HTMLDivElement {
   const planIdNorm = safeTrim(result.planId);
   const plan = planIdNorm ? plans.find((p) => p.id === planIdNorm) : undefined;
   const planName = plan?.name ?? (planIdNorm ? planIdNorm : 'プラン（参照できません）');
@@ -421,10 +421,7 @@ export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBac
 
   const statusLabel = result.trialApplied ? 'トライアル' : '有効';
 
-  const backBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
-  backBtn.addEventListener('click', onBackToTop);
-
-  return el('div', { class: 'card' }, [
+  const children: (Node | string)[] = [
     el('div', { class: 'success-container' }, [
       el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
       el('h1', { class: 'success-heading' }, ['登録が完了しました']),
@@ -452,8 +449,15 @@ export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBac
             ]),
           ]),
     ]),
-    backBtn,
-  ]);
+  ];
+
+  if (onBackToTop) {
+    const backBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
+    backBtn.addEventListener('click', onBackToTop);
+    children.push(backBtn);
+  }
+
+  return el('div', { class: 'card' }, children);
 }
 
 // --- Error step ---

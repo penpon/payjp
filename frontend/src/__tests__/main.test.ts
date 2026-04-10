@@ -117,7 +117,7 @@ describe('main init()', () => {
     expect(getMember).toHaveBeenCalled();
     // register_complete page shows Discord link button
     expect(appDiv.querySelector('.discord-button')).not.toBeNull();
-    expect(appDiv.textContent).toContain('Discordと連携して特典を受け取ってください');
+    expect(appDiv.textContent).toContain('Discordと連携してサーバに参加してください！');
   });
 
   // --- Member exists, discord linked → subscribed status ---
@@ -300,7 +300,7 @@ describe('main init()', () => {
     expect(linkDiscord).toHaveBeenCalled();
     // Falls through to register_complete (thanks page with Discord link button)
     expect(appDiv.querySelector('.discord-button')).not.toBeNull();
-    expect(appDiv.textContent).toContain('Discordと連携して特典を受け取ってください');
+    expect(appDiv.textContent).toContain('Discordと連携してサーバに参加してください！');
   });
 
   it('should show register_complete when linkDiscord throws (network/timeout)', async () => {
@@ -320,6 +320,6 @@ describe('main init()', () => {
     expect(consoleSpy).toHaveBeenCalledWith('[init] linkDiscord threw:', expect.any(TypeError));
     // Falls through to register_complete (thanks page with Discord link button)
     expect(appDiv.querySelector('.discord-button')).not.toBeNull();
-    expect(appDiv.textContent).toContain('Discordと連携して特典を受け取ってください');
+    expect(appDiv.textContent).toContain('Discordと連携してサーバに参加してください！');
   });
 });
