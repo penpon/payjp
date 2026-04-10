@@ -152,7 +152,8 @@ describe('POST /v1/members/link-discord', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, discordUserId: DISCORD_USER_ID, roleGranted: true });
     expect(deps.db.consumeLinkSession).toHaveBeenCalledTimes(1);
-    expect(deps.db.acquireAdvisoryLock).not.toHaveBeenCalled();
+    expect(deps.db.acquireAdvisoryLock).toHaveBeenCalledTimes(1);
+    expect(deps.db.acquireAdvisoryLock).toHaveBeenCalledWith(`member-link:${MEMBER_ID}`);
     expect(deps.discord.checkMembership).not.toHaveBeenCalled();
     expect(deps.discord.assignRole).not.toHaveBeenCalled();
   });
@@ -173,7 +174,8 @@ describe('POST /v1/members/link-discord', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, discordUserId: DISCORD_USER_ID, roleGranted: true });
-    expect(deps.db.acquireAdvisoryLock).toHaveBeenCalledWith(DISCORD_USER_ID);
+    expect(deps.db.acquireAdvisoryLock).toHaveBeenNthCalledWith(1, `member-link:${MEMBER_ID}`);
+    expect(deps.db.acquireAdvisoryLock).toHaveBeenNthCalledWith(2, DISCORD_USER_ID);
     expect(deps.discord.checkMembership).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID);
     expect(deps.discord.assignRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
     expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');

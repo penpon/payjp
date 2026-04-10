@@ -129,136 +129,161 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
         const memberId = memberSession.member_id;
         const discordUserId = linkSession.discord_user_id;
 
-        // Check member exists
-        const member = await billingDeps.db.findMemberById(memberId);
-        if (!member) {
-          return reply.status(404).send({ ok: false, errorCode: 'MEMBER_NOT_FOUND' });
-        }
-
-        // Idempotency: already linked and role already granted
-        if (member.discord_user_id === discordUserId && member.role_state === 'granted') {
-          await billingDeps.db.consumeLinkSession(lsHash, now);
-          return reply.status(200).send({ ok: true, discordUserId, roleGranted: true });
-        }
-
-        // Conflict: already linked to different discord user
-        if (member.discord_user_id !== null && member.discord_user_id !== discordUserId) {
-          return reply.status(409).send({ ok: false, errorCode: 'ALREADY_LINKED' });
-        }
-
-        // Check discord_user_id not used by another member
-        const existingMember = await billingDeps.db.findMemberByDiscordUserId(discordUserId);
-        if (existingMember && existingMember.id !== memberId) {
-          return reply.status(409).send({ ok: false, errorCode: 'DISCORD_ALREADY_USED' });
-        }
-
-        // Advisory lock on discord_user_id
-        const lockAcquired = await billingDeps.db.acquireAdvisoryLock(discordUserId);
-        if (!lockAcquired) {
+        // Serialize all link-discord work for this member first. A discord_user_id-only lock
+        // lets two concurrent requests (same member, different Discord accounts) take different
+        // locks and overwrite each other after passing pre-lock checks.
+        const memberLockKey = `member-link:${memberId}`;
+        const memberLockAcquired = await billingDeps.db.acquireAdvisoryLock(memberLockKey);
+        if (!memberLockAcquired) {
           return reply.status(503).send({ ok: false, errorCode: 'LOCK_UNAVAILABLE' });
         }
 
         try {
-          // Update discord_user_id
-          await billingDeps.db.updateMemberDiscordUserId(memberId, discordUserId);
-
-          // Consume link_session
-          await billingDeps.db.consumeLinkSession(lsHash, now);
-
-          // Decrypt access_token for guild join (if available)
-          let plainAccessToken: string | undefined;
-          if (linkSession.discord_access_token_encrypted && billingDeps.config.discordTokenEncryptionKey) {
-            try {
-              plainAccessToken = decryptToken(
-                linkSession.discord_access_token_encrypted,
-                billingDeps.config.discordTokenEncryptionKey,
-              );
-            } catch (decErr) {
-              console.error(
-                JSON.stringify({
-                  level: 'error',
-                  service: 'member-routes',
-                  message: 'Failed to decrypt Discord access token',
-                  discordUserId,
-                  error: decErr instanceof Error ? decErr.message : String(decErr),
-                }),
-              );
-            }
+          // Fresh read under member lock
+          const member = await billingDeps.db.findMemberById(memberId);
+          if (!member) {
+            return reply.status(404).send({ ok: false, errorCode: 'MEMBER_NOT_FOUND' });
           }
 
-          // Guild membership check + auto-join + role assignment
-          let roleGranted = false;
+          // Idempotency: already linked and role already granted
+          if (member.discord_user_id === discordUserId && member.role_state === 'granted') {
+            await billingDeps.db.consumeLinkSession(lsHash, now);
+            return reply.status(200).send({ ok: true, discordUserId, roleGranted: true });
+          }
+
+          // Conflict: already linked to different discord user
+          if (member.discord_user_id !== null && member.discord_user_id !== discordUserId) {
+            return reply.status(409).send({ ok: false, errorCode: 'ALREADY_LINKED' });
+          }
+
+          // Check discord_user_id not used by another member
+          const existingMember = await billingDeps.db.findMemberByDiscordUserId(discordUserId);
+          if (existingMember && existingMember.id !== memberId) {
+            return reply.status(409).send({ ok: false, errorCode: 'DISCORD_ALREADY_USED' });
+          }
+
+          // Cross-member serialization for the same Discord account (subscribe/cancel use same key)
+          const discordLockAcquired = await billingDeps.db.acquireAdvisoryLock(discordUserId);
+          if (!discordLockAcquired) {
+            return reply.status(503).send({ ok: false, errorCode: 'LOCK_UNAVAILABLE' });
+          }
+
           try {
-            const discordCheck = await billingDeps.discord.checkMembership(
-              billingDeps.config.discordGuildId,
-              discordUserId,
-            );
-            if (!discordCheck.isMember && plainAccessToken) {
-              // Auto-join guild with role (guilds.join)
+            // Update discord_user_id
+            await billingDeps.db.updateMemberDiscordUserId(memberId, discordUserId);
+
+            // Consume link_session
+            await billingDeps.db.consumeLinkSession(lsHash, now);
+
+            // Decrypt access_token for guild join (if available)
+            let plainAccessToken: string | undefined;
+            if (linkSession.discord_access_token_encrypted && billingDeps.config.discordTokenEncryptionKey) {
               try {
-                const joinResult = await billingDeps.discord.addMemberToGuild(
-                  billingDeps.config.discordGuildId,
-                  discordUserId,
-                  plainAccessToken,
-                  billingDeps.config.discordPaidRoleId,
+                plainAccessToken = decryptToken(
+                  linkSession.discord_access_token_encrypted,
+                  billingDeps.config.discordTokenEncryptionKey,
                 );
-                if (joinResult.joinedNew) {
-                  roleGranted = true;
-                } else {
-                  // 204: user already in guild — roles from body were not applied (race with membership check)
-                  roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId);
-                }
-              } catch (joinErr) {
+              } catch (decErr) {
                 console.error(
                   JSON.stringify({
                     level: 'error',
                     service: 'member-routes',
-                    message: 'Discord guild join failed',
+                    message: 'Failed to decrypt Discord access token',
                     discordUserId,
-                    error: joinErr instanceof Error ? joinErr.message : String(joinErr),
+                    error: decErr instanceof Error ? decErr.message : String(decErr),
                   }),
                 );
               }
-            } else if (discordCheck.isMember && discordCheck.canAssignRole) {
-              roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId, discordCheck);
             }
-          } catch (discordErr) {
-            console.error(
-              JSON.stringify({
-                level: 'error',
-                service: 'member-routes',
-                message: 'Discord membership check failed',
-                discordUserId,
-                error: discordErr instanceof Error ? discordErr.message : String(discordErr),
-              }),
-            );
-          }
 
-          // Revoke access_token after use (best-effort)
-          if (plainAccessToken) {
-            void billingDeps.discord.revokeToken(plainAccessToken).catch(() => {});
-          }
-
-          // Update role_state
-          if (roleGranted) {
+            // Guild membership check + auto-join + role assignment
+            let roleGranted = false;
             try {
-              await billingDeps.db.updateMemberRoleState(memberId, 'granted');
-            } catch {
-              // Best-effort
+              const discordCheck = await billingDeps.discord.checkMembership(
+                billingDeps.config.discordGuildId,
+                discordUserId,
+              );
+              if (!discordCheck.isMember && plainAccessToken) {
+                // Auto-join guild with role (guilds.join)
+                try {
+                  const joinResult = await billingDeps.discord.addMemberToGuild(
+                    billingDeps.config.discordGuildId,
+                    discordUserId,
+                    plainAccessToken,
+                    billingDeps.config.discordPaidRoleId,
+                  );
+                  if (joinResult.joinedNew) {
+                    roleGranted = true;
+                  } else {
+                    // 204: user already in guild — roles from body were not applied (race with membership check)
+                    roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId);
+                  }
+                } catch (joinErr) {
+                  console.error(
+                    JSON.stringify({
+                      level: 'error',
+                      service: 'member-routes',
+                      message: 'Discord guild join failed',
+                      discordUserId,
+                      error: joinErr instanceof Error ? joinErr.message : String(joinErr),
+                    }),
+                  );
+                }
+              } else if (discordCheck.isMember && discordCheck.canAssignRole) {
+                roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId, discordCheck);
+              }
+            } catch (discordErr) {
+              console.error(
+                JSON.stringify({
+                  level: 'error',
+                  service: 'member-routes',
+                  message: 'Discord membership check failed',
+                  discordUserId,
+                  error: discordErr instanceof Error ? discordErr.message : String(discordErr),
+                }),
+              );
+            }
+
+            // Revoke access_token after use (best-effort)
+            if (plainAccessToken) {
+              void billingDeps.discord.revokeToken(plainAccessToken).catch(() => {});
+            }
+
+            // Update role_state
+            if (roleGranted) {
+              try {
+                await billingDeps.db.updateMemberRoleState(memberId, 'granted');
+              } catch {
+                // Best-effort
+              }
+            }
+
+            return reply.status(200).send({ ok: true, discordUserId, roleGranted });
+          } finally {
+            try {
+              await billingDeps.db.releaseAdvisoryLock(discordUserId);
+            } catch (err) {
+              console.error(
+                JSON.stringify({
+                  level: 'error',
+                  service: 'member-routes',
+                  message: 'Advisory lock release failed',
+                  discordUserId,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              );
             }
           }
-
-          return reply.status(200).send({ ok: true, discordUserId, roleGranted });
         } finally {
           try {
-            await billingDeps.db.releaseAdvisoryLock(discordUserId);
+            await billingDeps.db.releaseAdvisoryLock(memberLockKey);
           } catch (err) {
             console.error(
               JSON.stringify({
                 level: 'error',
                 service: 'member-routes',
                 message: 'Advisory lock release failed',
-                discordUserId,
+                memberLockKey,
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
