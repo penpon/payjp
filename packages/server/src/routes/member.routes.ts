@@ -1,6 +1,6 @@
 import type { BillingDeps, DiscordCheckResult } from '@hayane/billing-service';
 import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '@hayane/billing-service';
-import { decryptToken } from '@hayane/shared';
+import { buildCookieAttributes, decryptToken, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
 
 function hasLinkableSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
@@ -68,11 +68,16 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
       const tokenHash = memberSessionTokenHash(memberSessionToken);
       const session = await billingDeps.db.findMemberSession(tokenHash);
       if (!session || session.expires_at < now) {
+        // Clear stale cookie to avoid repeated DB lookups
+        const clearAttrs = buildCookieAttributes('__Host-member_session', 0);
+        reply.header('Set-Cookie', serializeCookieAttributes(clearAttrs, ''));
         return reply.status(200).send({ member: null });
       }
 
       const member = await billingDeps.db.findMemberById(session.member_id);
       if (!member) {
+        const clearAttrs = buildCookieAttributes('__Host-member_session', 0);
+        reply.header('Set-Cookie', serializeCookieAttributes(clearAttrs, ''));
         return reply.status(200).send({ member: null });
       }
 
@@ -126,17 +131,14 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           return reply.status(401).send({ ok: false, errorCode: 'INVALID_MEMBER_SESSION' });
         }
 
-        // Validate link_session
-        // used_at !== null → 既に消費済み。フロントエンドはリトライ時に getMember() を先に呼び、
-        // discordLinked=true なら購読画面に遷移するため、ここに到達するのは不正リクエストのみ。
+        // Early validation of link_session (before lock). Full re-validation under lock below.
         const lsHash = linkSessionTokenHash(linkSessionToken);
-        const linkSession = await billingDeps.db.findLinkSession(lsHash);
-        if (!linkSession || linkSession.expires_at < now || linkSession.used_at !== null) {
+        const linkSessionPreCheck = await billingDeps.db.findLinkSession(lsHash);
+        if (!linkSessionPreCheck || linkSessionPreCheck.expires_at < now) {
           return reply.status(401).send({ ok: false, errorCode: 'INVALID_LINK_SESSION' });
         }
 
         const memberId = memberSession.member_id;
-        const discordUserId = linkSession.discord_user_id;
 
         // Serialize all link-discord work for this member first. A discord_user_id-only lock
         // lets two concurrent requests (same member, different Discord accounts) take different
@@ -148,6 +150,13 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
         }
 
         try {
+          // Re-validate link_session under lock to prevent TOCTOU race
+          const linkSession = await billingDeps.db.findLinkSession(lsHash);
+          if (!linkSession || linkSession.expires_at < now || linkSession.used_at !== null) {
+            return reply.status(401).send({ ok: false, errorCode: 'INVALID_LINK_SESSION' });
+          }
+          const discordUserId = linkSession.discord_user_id;
+
           // Fresh read under member lock
           const member = await billingDeps.db.findMemberById(memberId);
           if (!member) {
@@ -179,7 +188,11 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
                 );
               }
             }
-            await billingDeps.db.consumeLinkSession(lsHash, now);
+            try {
+              await billingDeps.db.consumeLinkSession(lsHash, now);
+            } catch {
+              // Already consumed by a concurrent request — idempotent success
+            }
             if (plainAccessTokenIdempotent) {
               void billingDeps.discord.revokeToken(plainAccessTokenIdempotent).catch(() => {});
             }
@@ -207,8 +220,12 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
             // Update discord_user_id
             await billingDeps.db.updateMemberDiscordUserId(memberId, discordUserId);
 
-            // Consume link_session
-            await billingDeps.db.consumeLinkSession(lsHash, now);
+            // Consume link_session (safe: already validated under lock, but guard against concurrent consume)
+            try {
+              await billingDeps.db.consumeLinkSession(lsHash, now);
+            } catch {
+              // Already consumed by a concurrent request — proceed (discord_user_id update already committed)
+            }
 
             // Decrypt access_token for guild join (if available)
             let plainAccessToken: string | undefined;

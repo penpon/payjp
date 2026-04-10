@@ -350,7 +350,7 @@ async function init(): Promise<void> {
             result: {
               ok: true as const,
               memberId: member.memberId,
-              subscriptionStatus: member.subscriptionStatus ?? 'active',
+              subscriptionStatus: member.subscriptionStatus ?? '',
               planId: member.planId ?? '',
               trialApplied: member.subscriptionStatus === 'trial',
               accessEndAt: member.accessEndAt ?? '',

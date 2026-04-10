@@ -264,7 +264,7 @@ const discordClient: DiscordClient = {
     const body: Record<string, unknown> = { access_token: accessToken };
     if (roleId) body.roles = [roleId];
     const res = await discordRest.queueRequest({
-      fullRoute: `/guilds/${guildId}/members/${discordUserId}`,
+      fullRoute: `/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(discordUserId)}`,
       method: RequestMethod.Put,
       body,
     });

@@ -92,7 +92,10 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     return { ok: false, statusCode: 422, errorCode: 'INVALID_PLAN_ID', message: 'planId not in allowlist' };
   }
 
-  if (!req.email || !EMAIL_RE.test(req.email)) {
+  // Normalize email to lowercase to prevent case-sensitive duplicates
+  const normalizedEmail = req.email.toLowerCase().trim();
+
+  if (!normalizedEmail || !EMAIL_RE.test(normalizedEmail)) {
     return { ok: false, statusCode: 422, errorCode: 'INVALID_EMAIL', message: 'Invalid email format' };
   }
 
@@ -100,15 +103,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     return { ok: false, statusCode: 422, errorCode: 'CONSENT_REQUIRED', message: 'Privacy consent is required' };
   }
 
-  // Step 2: Advisory lock on email (prevents duplicate subscriptions)
-  const lockAcquired = await db.acquireAdvisoryLock(req.email);
+  // Step 2: Advisory lock on normalized email (prevents duplicate subscriptions)
+  const lockAcquired = await db.acquireAdvisoryLock(normalizedEmail);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
 
   try {
     // Step 3: Upsert provisional member by email (discord_user_id=NULL)
-    const member = await db.upsertProvisionalMemberByEmail(req.email);
+    const member = await db.upsertProvisionalMemberByEmail(normalizedEmail);
 
     // Step 4: Inflight operation check
     if (hasInflightOperation(member.inflight_operation_id)) {
@@ -124,7 +127,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     // Step 5: Existing subscription check
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
-      const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: req.email });
+      const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
       return {
         ok: true,
         data: response,
@@ -141,12 +144,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     try {
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
     } catch (err) {
-      slog('error', 'PAY.JP token fetch failed', { email: req.email, operationId, error: String(err) });
+      slog('error', 'PAY.JP token fetch failed', { email: normalizedEmail, operationId, error: String(err) });
       try {
         await db.clearInflightOperation(member.id);
       } catch (clearErr) {
         slog('error', 'clearInflightOperation failed after fetchToken error', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           error: String(clearErr),
         });
@@ -165,7 +168,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         await db.clearInflightOperation(member.id);
       } catch (clearErr) {
         slog('error', 'clearInflightOperation failed after TOKEN_ALREADY_USED', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           error: String(clearErr),
         });
@@ -184,7 +187,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         await db.clearInflightOperation(member.id);
       } catch (clearErr) {
         slog('error', 'clearInflightOperation failed after THREE_D_SECURE_REQUIRED', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           error: String(clearErr),
         });
@@ -205,14 +208,14 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       let customer: Awaited<ReturnType<typeof payjp.createCustomer>>;
       try {
         customer = await payjp.createCustomer({
-          email: req.email,
+          email: normalizedEmail,
           card: req.payjpToken,
           metadata,
         });
       } catch (err) {
         if (isUncertainError(err)) {
           slog('error', 'PAY.JP createCustomer uncertain failure', {
-            email: req.email,
+            email: normalizedEmail,
             operationId,
             error: String(err),
           });
@@ -224,8 +227,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             operationId,
           };
         }
-        slog('error', 'PAY.JP createCustomer definite failure', { email: req.email, operationId, error: String(err) });
-        await clearInflightOnDefinitePayjpFailure(db, member.id, req.email, operationId, 'createCustomer');
+        slog('error', 'PAY.JP createCustomer definite failure', {
+          email: normalizedEmail,
+          operationId,
+          error: String(err),
+        });
+        await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createCustomer');
         return {
           ok: false,
           statusCode: 422,
@@ -239,7 +246,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         await db.updateMemberCustomerId(member.id, customerId);
       } catch (err) {
         slog('error', 'Failed to persist customer id after PAY.JP customer creation', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           customerId,
           error: String(err),
@@ -268,7 +275,11 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         });
       } catch (err) {
         if (isUncertainError(err)) {
-          slog('error', 'PAY.JP createCharge uncertain failure', { email: req.email, operationId, error: String(err) });
+          slog('error', 'PAY.JP createCharge uncertain failure', {
+            email: normalizedEmail,
+            operationId,
+            error: String(err),
+          });
           return {
             ok: false,
             statusCode: 503,
@@ -283,7 +294,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             initialChargeId = existingCharge.id;
           } catch (reconcileErr) {
             slog('error', 'Charge reconciliation failed', {
-              email: req.email,
+              email: normalizedEmail,
               operationId,
               reconcileErr: String(reconcileErr),
               originalErr: String(err),
@@ -297,14 +308,18 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             };
           }
         } else {
-          slog('error', 'PAY.JP createCharge definite failure', { email: req.email, operationId, error: String(err) });
-          await clearInflightOnDefinitePayjpFailure(db, member.id, req.email, operationId, 'createCharge');
+          slog('error', 'PAY.JP createCharge definite failure', {
+            email: normalizedEmail,
+            operationId,
+            error: String(err),
+          });
+          await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createCharge');
           return { ok: false, statusCode: 422, errorCode: 'PAYJP_ERROR', message: 'Charge failed', operationId };
         }
       }
       if (!initialChargeId) {
         if (!charge) {
-          slog('error', 'No charge object available after createCharge flow', { email: req.email, operationId });
+          slog('error', 'No charge object available after createCharge flow', { email: normalizedEmail, operationId });
           return {
             ok: false,
             statusCode: 503,
@@ -319,7 +334,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         await db.updateMemberChargeId(member.id, initialChargeId, now);
       } catch (err) {
         slog('error', 'Failed to persist initial charge id after PAY.JP charge creation', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           chargeId: initialChargeId,
           error: String(err),
@@ -349,7 +364,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     } catch (err) {
       if (isUncertainError(err)) {
         slog('error', 'PAY.JP createSubscription uncertain failure', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           error: String(err),
         });
@@ -367,7 +382,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
           subscription = existingSub;
         } catch (reconcileErr) {
           slog('error', 'Subscription reconciliation failed', {
-            email: req.email,
+            email: normalizedEmail,
             operationId,
             reconcileErr: String(reconcileErr),
             originalErr: String(err),
@@ -382,11 +397,11 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         }
       } else {
         slog('error', 'PAY.JP createSubscription definite failure', {
-          email: req.email,
+          email: normalizedEmail,
           operationId,
           error: String(err),
         });
-        await clearInflightOnDefinitePayjpFailure(db, member.id, req.email, operationId, 'createSubscription');
+        await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createSubscription');
         return {
           ok: false,
           statusCode: 422,
@@ -418,7 +433,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       });
     } catch (err) {
       slog('error', 'DB update failed after PAY.JP subscription creation', {
-        email: req.email,
+        email: normalizedEmail,
         operationId,
         error: String(err),
       });
@@ -436,7 +451,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       await db.clearInflightOperation(updatedMember.id);
     } catch (err) {
       slog('error', 'clearInflightOperation failed after successful subscribe', {
-        email: req.email,
+        email: normalizedEmail,
         operationId,
         memberId: updatedMember.id,
         error: String(err),
@@ -458,12 +473,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
     // Step 13: Issue member session token for post-subscribe flows (only if DB row is persisted)
     const memberSessionToken = await issueMemberSessionToken(db, updatedMember.id, now, {
-      email: req.email,
+      email: normalizedEmail,
       operationId,
     });
 
     slog('info', 'subscribe completed', {
-      email: req.email,
+      email: normalizedEmail,
       operationId,
       planId: req.planId,
       subscriptionId: subscription.id,
@@ -475,9 +490,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     };
   } finally {
     try {
-      await db.releaseAdvisoryLock(req.email);
+      await db.releaseAdvisoryLock(normalizedEmail);
     } catch (err) {
-      slog('error', 'Advisory lock release failed', { email: req.email, error: String(err) });
+      slog('error', 'Advisory lock release failed', { email: normalizedEmail, error: String(err) });
     }
   }
 }
