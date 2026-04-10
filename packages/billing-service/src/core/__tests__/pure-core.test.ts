@@ -183,9 +183,9 @@ describe('PROP-BILL-008: calculateTrialEnd', () => {
 describe('PROP-BILL-009: buildSubscriptionMetadata', () => {
   it('(property) always includes both keys with exact values', () => {
     fc.assert(
-      fc.property(fc.string(), fc.uuid(), (discordUserId, operationId) => {
-        const meta = buildSubscriptionMetadata(discordUserId, operationId);
-        expect(meta).toHaveProperty('discord_user_id', discordUserId);
+      fc.property(fc.uuid(), fc.uuid(), (memberId, operationId) => {
+        const meta = buildSubscriptionMetadata(memberId, operationId);
+        expect(meta).toHaveProperty('member_id', memberId);
         expect(meta).toHaveProperty('operation_id', operationId);
       }),
     );

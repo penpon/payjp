@@ -121,11 +121,12 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
   // REQ-SYNC-029: Acquire per-member advisory lock before member resolution/update
   // Use hashtext for consistency with billing-service's lock strategy
   const discordUserIdFromMetadata = event.data?.metadata?.discord_user_id;
+  const memberIdFromMetadata = event.data?.metadata?.member_id;
 
   // REQ-SYNC-009: Member resolution
   let member: Record<string, unknown> | null = null;
   try {
-    member = await resolveMember(deps.db, discordUserIdFromMetadata, event.data!.id!);
+    member = await resolveMember(deps.db, discordUserIdFromMetadata, event.data!.id!, memberIdFromMetadata);
   } catch (err) {
     if (err instanceof MemberResolutionConflictError) {
       try {
@@ -163,7 +164,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
   // --- Transactional section: lock + stale check + status update + event insert ---
   // Uses withTransaction to guarantee all queries run on the same connection (BEGIN/COMMIT/ROLLBACK)
-  const lockKey = member.discord_user_id as string;
+  const lockKey = (member.discord_user_id as string | null) ?? (member.id as string);
 
   type TxResult =
     | { type: 'member_not_found' }
@@ -329,9 +330,11 @@ async function resolveMember(
   db: DbPool,
   discordUserId: string | undefined,
   subscriptionId: string,
+  memberId?: string,
 ): Promise<Record<string, unknown> | null> {
   let memberByDiscord: Record<string, unknown> | null = null;
   let memberBySub: Record<string, unknown> | null = null;
+  let memberById: Record<string, unknown> | null = null;
 
   if (discordUserId) {
     const res = await db.query('SELECT * FROM members WHERE discord_user_id = $1', [discordUserId]);
@@ -341,14 +344,21 @@ async function resolveMember(
   const res2 = await db.query('SELECT * FROM members WHERE payjp_subscription_id = $1', [subscriptionId]);
   memberBySub = (res2.rows[0] as Record<string, unknown>) ?? null;
 
-  if (memberByDiscord && memberBySub) {
-    if (memberByDiscord.id !== memberBySub.id) {
-      throw new MemberResolutionConflictError();
-    }
-    return memberByDiscord;
+  if (memberId) {
+    const res3 = await db.query('SELECT * FROM members WHERE id = $1', [memberId]);
+    memberById = (res3.rows[0] as Record<string, unknown>) ?? null;
   }
 
-  return memberByDiscord ?? memberBySub;
+  const candidates = [memberByDiscord, memberBySub, memberById].filter(Boolean) as Array<Record<string, unknown>>;
+  if (candidates.length === 0) return null;
+
+  // Conflict check: all resolved members must be the same
+  const firstId = candidates[0].id;
+  for (const c of candidates) {
+    if (c.id !== firstId) throw new MemberResolutionConflictError();
+  }
+
+  return candidates[0];
 }
 
 // Whitelist of allowed column names for member updates from webhook
@@ -398,8 +408,21 @@ async function attemptRoleSync(
   action: 'grant' | 'revoke',
   errorLabel: string,
 ): Promise<void> {
+  const discordUserId = lockedMember.discord_user_id as string | null;
+  if (!discordUserId) {
+    deps.log({
+      timestamp: formatRfc3339Utc(new Date()),
+      service: 'sync-service',
+      endpoint: '/v1/payjp/webhook',
+      result: 'success',
+      message: 'role_sync_skipped_no_discord',
+      member_id: lockedMember.id as string,
+      action,
+    } as unknown as LogEntry);
+    return;
+  }
   try {
-    await deps.syncRole(lockedMember.discord_user_id as string, action);
+    await deps.syncRole(discordUserId, action);
   } catch (roleSyncErr) {
     deps.log({
       timestamp: formatRfc3339Utc(new Date()),
@@ -408,7 +431,7 @@ async function attemptRoleSync(
       result: 'failure',
       error: errorLabel,
       member_id: lockedMember.id as string,
-      discord_user_id: lockedMember.discord_user_id as string,
+      discord_user_id: discordUserId,
       action,
       roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
     } as unknown as LogEntry);
@@ -427,7 +450,7 @@ async function attemptRoleSync(
         result: 'critical_failure',
         error: 'role_sync_and_role_state_update_both_failed',
         member_id: lockedMember.id as string,
-        discord_user_id: lockedMember.discord_user_id as string,
+        discord_user_id: discordUserId,
         action,
         roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
         dbError: dbErr instanceof Error ? dbErr.message : String(dbErr),

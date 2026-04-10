@@ -1,4 +1,11 @@
-import type { CancelResponse, SessionResponse, SubscribeResponse, SubscriptionInfo } from './types.js';
+import type {
+  CancelResponse,
+  LinkDiscordResponse,
+  MemberInfo,
+  SessionResponse,
+  SubscribeResponse,
+  SubscriptionInfo,
+} from './types.js';
 
 // --- Session ---
 
@@ -220,4 +227,49 @@ export async function cancelSubscription(): Promise<CancelResponse> {
     throw new Error('Invalid cancel response');
   }
   return data;
+}
+
+// --- Member (billing-first flow) ---
+
+export async function getMember(): Promise<MemberInfo | null> {
+  const res = await fetch('/v1/members/me', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    return null;
+  }
+  const data: unknown = await res.json();
+  if (typeof data !== 'object' || data === null) return null;
+  const obj = data as Record<string, unknown>;
+  if (obj.member === null || obj.member === undefined) return null;
+  const m = obj.member as Record<string, unknown>;
+  return {
+    subscriptionStatus: typeof m.subscriptionStatus === 'string' ? m.subscriptionStatus : null,
+    planId: typeof m.planId === 'string' ? m.planId : null,
+    accessEndAt: typeof m.accessEndAt === 'string' ? m.accessEndAt : null,
+    discordLinked: m.discordLinked === true,
+  };
+}
+
+export async function linkDiscord(): Promise<LinkDiscordResponse> {
+  const res = await fetch('/v1/members/link-discord', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data: unknown = await res.json().catch(() => ({}));
+  const obj = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+  if (!res.ok) {
+    return {
+      ok: false,
+      errorCode: typeof obj.errorCode === 'string' ? obj.errorCode : 'UNKNOWN',
+    };
+  }
+  return {
+    ok: true,
+    discordUserId: typeof obj.discordUserId === 'string' ? obj.discordUserId : undefined,
+    roleGranted: obj.roleGranted === true,
+  };
 }

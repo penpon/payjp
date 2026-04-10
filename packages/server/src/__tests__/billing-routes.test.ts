@@ -109,7 +109,7 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     first_trial_granted_at: NOW,
     access_end_at: new Date(periodEndMs),
     next_billing_at: new Date(periodEndMs),
-    role_state: 'granted',
+    role_state: 'unknown',
     // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、setInflightOperation の値がそのまま残る
     inflight_operation_id: OPERATION_ID,
     inflight_operation_type: 'subscribe',
@@ -128,9 +128,20 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
 
   const db: DbClient = {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
+    findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
+    upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
+    updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertMemberSession: vi.fn().mockResolvedValue({
+      id: 'ms-1',
+      member_session_token_hash: 'h',
+      member_id: member.id,
+      expires_at: new Date(),
+      created_at: new Date(),
+    }),
+    findMemberSession: vi.fn().mockResolvedValue(null),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -191,7 +202,18 @@ function cancelPayload() {
   return {};
 }
 
-/** Common inject options for billing endpoints */
+/** Common inject options for subscribe endpoint (no link_session needed) */
+function subscribeInjectOpts(url: string, payload: Record<string, unknown>, overrides: { origin?: string } = {}) {
+  const { origin = FRONTEND_BASE_URL } = overrides;
+  return {
+    method: 'POST' as const,
+    url,
+    headers: { origin, 'content-type': 'application/json' },
+    payload,
+  };
+}
+
+/** Common inject options for cancel / other billing endpoints that need link_session */
 function injectOpts(
   url: string,
   payload: Record<string, unknown>,
@@ -216,7 +238,7 @@ describe('POST /v1/subscriptions', () => {
 
   it('returns 200 with SubscriptionResponse on success', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -226,28 +248,29 @@ describe('POST /v1/subscriptions', () => {
     expect(body.planId).toBe(PLAN_ID);
   });
 
+  it('sets __Host-member_session cookie on success', async () => {
+    const app = createApp();
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
+
+    expect(res.statusCode).toBe(200);
+    const setCookie = res.headers['set-cookie'];
+    expect(setCookie).toBeDefined();
+    expect(String(setCookie)).toContain('__Host-member_session=');
+  });
+
   it('returns 403 for invalid origin', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }));
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }),
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
   });
 
-  it('returns 401 without link_session cookie', async () => {
-    const deps = makeMockDeps();
-    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    const app = createApp(deps);
-
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { withCookie: false }));
-
-    expect(res.statusCode).toBe(401);
-    expect(res.json().errorCode).toBe('INVALID_LINK_SESSION');
-  });
-
   it('returns 422 for invalid planId', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), planId: 'invalid-plan' }));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, { ...subscribePayload(), planId: 'invalid-plan' }));
 
     expect(res.statusCode).toBe(422);
     expect(res.json().errorCode).toBe('INVALID_PLAN_ID');
@@ -255,7 +278,9 @@ describe('POST /v1/subscriptions', () => {
 
   it('returns 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), privacyConsented: false }));
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, { ...subscribePayload(), privacyConsented: false }),
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().errorCode).toBe('CONSENT_REQUIRED');
@@ -271,7 +296,7 @@ describe('POST /v1/subscriptions', () => {
     });
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(422);
     expect(res.json().errorCode).toBe('THREE_D_SECURE_REQUIRED');
@@ -281,7 +306,7 @@ describe('POST /v1/subscriptions', () => {
     const deps = makeMockDeps({ inflight_operation_id: 'existing-op-id' });
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
@@ -289,17 +314,11 @@ describe('POST /v1/subscriptions', () => {
     expect(body.operationId).toBe('existing-op-id');
   });
 
-  it('does not clear __Host-link_session cookie on success (cookie expires naturally)', async () => {
+  it('does not set cookie on subscribe error', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
-
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['set-cookie']).toBeUndefined();
-  });
-
-  it('does not clear __Host-link_session cookie on subscribe error', async () => {
-    const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }));
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }),
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.headers['set-cookie']).toBeUndefined();
@@ -307,7 +326,7 @@ describe('POST /v1/subscriptions', () => {
 
   it('includes security headers', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers['referrer-policy']).toBe('no-referrer');
@@ -320,26 +339,12 @@ describe('POST /v1/subscriptions', () => {
     (deps.payjp.createCustomer as ReturnType<typeof vi.fn>).mockRejectedValue(err);
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
     expect(body.errorCode).toBe('PAYJP_UNCERTAIN');
     expect(body.operationId).toBe(OPERATION_ID);
-  });
-
-  it('returns 409 when Discord membership check fails', async () => {
-    const deps = makeMockDeps();
-    (deps.discord.checkMembership as ReturnType<typeof vi.fn>).mockResolvedValue({
-      isMember: false,
-      canAssignRole: true,
-    });
-    const app = createApp(deps);
-
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
-
-    expect(res.statusCode).toBe(409);
-    expect(res.json().errorCode).toBe('DISCORD_NOT_MEMBER');
   });
 
   it('returns 200 with existing subscription when already active', async () => {
@@ -351,7 +356,7 @@ describe('POST /v1/subscriptions', () => {
     });
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);

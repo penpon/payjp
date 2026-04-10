@@ -103,7 +103,13 @@ export function renderState(
     billing?: BillingContext;
     subscribed?: SubscribedContext;
     errorMessage?: string;
-    registerComplete?: { result: SubscribeResponse; plans: PlanDef[]; onBackToTop: () => void };
+    registerComplete?: {
+      result: SubscribeResponse;
+      plans: PlanDef[];
+      onLinkDiscord?: () => void;
+      onBackToTop: () => void;
+    };
+    linkComplete?: { roleGranted: boolean; onBackToTop: () => void };
     cancelComplete?: { result: CancelResponse };
     cancelError?: CancelUIError;
   },
@@ -147,15 +153,43 @@ export function renderState(
       break;
     case 'register_complete':
       if (extra?.registerComplete) {
-        container.appendChild(
-          renderSuccess(
-            extra.registerComplete.result,
-            extra.registerComplete.plans,
-            extra.registerComplete.onBackToTop,
-          ),
+        const successEl = renderSuccess(
+          extra.registerComplete.result,
+          extra.registerComplete.plans,
+          extra.registerComplete.onBackToTop,
         );
+        if (extra.registerComplete.onLinkDiscord) {
+          const linkBtn = createDiscordButton(extra.registerComplete.onLinkDiscord);
+          const linkSection = el('div', { class: 'discord-link-section' }, [
+            el('p', { class: 'body-text' }, ['Discordと連携して特典を受け取ってください。']),
+            linkBtn,
+          ]);
+          successEl.appendChild(linkSection);
+        }
+        container.appendChild(successEl);
       } else {
         console.error('[ui] renderState("register_complete") called without registerComplete context');
+        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+      }
+      break;
+    case 'link_complete':
+      if (extra?.linkComplete) {
+        const msg = extra.linkComplete.roleGranted
+          ? 'Discord連携が完了し、ロールが付与されました。'
+          : 'Discord連携が完了しました。';
+        const backBtn = el('button', { type: 'button', class: 'submit-button' }, ['トップに戻る']);
+        backBtn.addEventListener('click', extra.linkComplete.onBackToTop);
+        container.appendChild(
+          createCard([
+            el('h1', { class: 'heading' }, ['連携完了']),
+            el('div', { class: 'badge success-badge', role: 'status' }, [
+              el('span', { class: 'success-icon', 'aria-hidden': 'true' }, ['\u2713']),
+              el('span', {}, [msg]),
+            ]),
+            backBtn,
+          ]),
+        );
+      } else {
         container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;

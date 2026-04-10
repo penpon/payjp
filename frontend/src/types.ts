@@ -7,6 +7,9 @@ export type AppState =
   | 'error'
   | 'billing'
   | 'register_complete'
+  | 'discord_link'
+  | 'link_complete'
+  | 'subscribed'
   | 'cancel_complete'
   | 'cancel_error';
 
@@ -60,6 +63,20 @@ export interface SubscribeResponse {
   planId: string;
   trialApplied: boolean;
   accessEndAt: string;
+}
+
+export interface MemberInfo {
+  subscriptionStatus: string | null;
+  planId: string | null;
+  accessEndAt: string | null;
+  discordLinked: boolean;
+}
+
+export interface LinkDiscordResponse {
+  ok: boolean;
+  discordUserId?: string;
+  roleGranted?: boolean;
+  errorCode?: string;
 }
 
 export interface SubscriptionInfo {

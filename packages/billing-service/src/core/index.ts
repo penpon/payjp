@@ -58,10 +58,15 @@ export function calculateTrialEnd(now: Date): Date {
 
 // PROP-BILL-009: REQ-BILL-013, REQ-BILL-014
 export function buildSubscriptionMetadata(
-  discordUserId: string,
+  memberId: string,
   operationId: string,
-): { discord_user_id: string; operation_id: string } {
-  return { discord_user_id: discordUserId, operation_id: operationId };
+): { member_id: string; operation_id: string } {
+  return { member_id: memberId, operation_id: operationId };
+}
+
+// member session token hash (SHA-256, deterministic)
+export function memberSessionTokenHash(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 // PROP-BILL-010: REQ-BILL-016

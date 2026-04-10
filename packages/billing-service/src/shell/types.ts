@@ -99,7 +99,6 @@ export interface BillingDeps {
 
 export interface SubscribeRequest {
   origin: string;
-  linkSessionToken: string;
   email: string;
   payjpToken: string;
   planId: string;
@@ -121,6 +120,8 @@ export interface OperationError {
   operationId?: string;
 }
 
-export type SubscribeResult = { ok: true; data: import('@hayane/shared').SubscriptionResponse } | OperationError;
+export type SubscribeResult =
+  | { ok: true; data: import('@hayane/shared').SubscriptionResponse; memberSessionToken?: string }
+  | OperationError;
 
 export type CancelResult = { ok: true; data: import('@hayane/shared').CancelResponse } | OperationError;

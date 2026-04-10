@@ -6,6 +6,7 @@ import type { BillingDeps } from '@hayane/billing-service';
 import Fastify, { type FastifyError } from 'fastify';
 import { authRoutes } from './routes/auth.routes.js';
 import { billingRoutes } from './routes/billing.routes.js';
+import { memberRoutes } from './routes/member.routes.js';
 import type { SyncDeps } from './routes/sync.routes.js';
 import { syncRoutes } from './routes/sync.routes.js';
 
@@ -96,6 +97,7 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
 
   if (billingDeps) {
     app.register(billingRoutes, { billingDeps });
+    app.register(memberRoutes, { billingDeps });
   }
 
   if (syncDeps) {
