@@ -73,6 +73,8 @@ export interface DiscordCheckResult {
 export interface DiscordClient {
   checkMembership(guildId: string, discordUserId: string): Promise<DiscordCheckResult>;
   assignRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
+  addMemberToGuild(guildId: string, discordUserId: string, accessToken: string, roleId?: string): Promise<void>;
+  revokeToken(accessToken: string): Promise<void>;
 }
 
 export type { DbClient };
@@ -84,6 +86,7 @@ export interface BillingConfig {
   discordPaidRoleId: string;
   initialChargeAmount: number;
   initialChargeAmountCurrency: string;
+  discordTokenEncryptionKey?: string;
 }
 
 export interface BillingDeps {

@@ -259,6 +259,24 @@ const discordClient: DiscordClient = {
   async assignRole(guildId, discordUserId, roleId) {
     await discordRest.put(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
   },
+  async addMemberToGuild(guildId, discordUserId, accessToken, roleId) {
+    const body: Record<string, unknown> = { access_token: accessToken };
+    if (roleId) body.roles = [roleId];
+    await discordRest.put(`/guilds/${guildId}/members/${discordUserId}`, { body });
+  },
+  async revokeToken(accessToken) {
+    const params = new URLSearchParams({
+      token: accessToken,
+      token_type_hint: 'access_token',
+      client_id: env.DISCORD_CLIENT_ID,
+      client_secret: env.DISCORD_CLIENT_SECRET,
+    });
+    await fetch('https://discord.com/api/oauth2/token/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+  },
 };
 
 const syncRole = async (userId: string, action: 'grant' | 'revoke'): Promise<void> => {

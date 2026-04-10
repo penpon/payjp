@@ -108,6 +108,8 @@ export function makeMockDiscordClient(): DiscordClient {
   return {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue(undefined),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 }
 

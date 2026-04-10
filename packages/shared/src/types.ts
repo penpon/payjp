@@ -15,6 +15,7 @@ export interface LinkSessionRecord {
   id: string;
   link_session_token_hash: string;
   discord_user_id: string;
+  discord_access_token_encrypted: string | null;
   expires_at: Date;
   used_at: Date | null;
   created_at: Date;

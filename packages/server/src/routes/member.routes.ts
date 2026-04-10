@@ -1,5 +1,6 @@
 import type { BillingDeps } from '@hayane/billing-service';
 import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '@hayane/billing-service';
+import { decryptToken } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
 
 export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
@@ -125,15 +126,57 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           // Consume link_session
           await billingDeps.db.consumeLinkSession(lsHash, now);
 
-          // Guild membership check + role assignment
+          // Decrypt access_token for guild join (if available)
+          let plainAccessToken: string | undefined;
+          if (linkSession.discord_access_token_encrypted && billingDeps.config.discordTokenEncryptionKey) {
+            try {
+              plainAccessToken = decryptToken(
+                linkSession.discord_access_token_encrypted,
+                billingDeps.config.discordTokenEncryptionKey,
+              );
+            } catch (decErr) {
+              console.error(
+                JSON.stringify({
+                  level: 'error',
+                  service: 'member-routes',
+                  message: 'Failed to decrypt Discord access token',
+                  discordUserId,
+                  error: decErr instanceof Error ? decErr.message : String(decErr),
+                }),
+              );
+            }
+          }
+
+          // Guild membership check + auto-join + role assignment
           let roleGranted = false;
           try {
             const discordCheck = await billingDeps.discord.checkMembership(
               billingDeps.config.discordGuildId,
               discordUserId,
             );
-            if (discordCheck.isMember && discordCheck.canAssignRole) {
-              // Role assignment with retry (3x: 0s/1s/2s)
+            if (!discordCheck.isMember && plainAccessToken) {
+              // Auto-join guild with role (guilds.join)
+              try {
+                await billingDeps.discord.addMemberToGuild(
+                  billingDeps.config.discordGuildId,
+                  discordUserId,
+                  plainAccessToken,
+                  billingDeps.config.discordPaidRoleId,
+                );
+                roleGranted = true;
+              } catch (joinErr) {
+                console.error(
+                  JSON.stringify({
+                    level: 'error',
+                    service: 'member-routes',
+                    message: 'Discord guild join failed',
+                    discordUserId,
+                    error: joinErr instanceof Error ? joinErr.message : String(joinErr),
+                  }),
+                );
+              }
+            } else if (discordCheck.isMember && discordCheck.canAssignRole) {
+              // Already a member — assign role with retry (3x: 0s/1s/2s)
               const delays = [0, 1000, 2000];
               for (let attempt = 0; attempt < 3; attempt++) {
                 if (delays[attempt] > 0) {
@@ -172,6 +215,11 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
                 error: discordErr instanceof Error ? discordErr.message : String(discordErr),
               }),
             );
+          }
+
+          // Revoke access_token after use (best-effort)
+          if (plainAccessToken) {
+            void billingDeps.discord.revokeToken(plainAccessToken).catch(() => {});
           }
 
           // Update role_state

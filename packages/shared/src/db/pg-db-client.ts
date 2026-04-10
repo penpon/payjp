@@ -134,6 +134,7 @@ function toLinkSession(row: Record<string, unknown>): LinkSessionRecord {
     id: row.id as string,
     link_session_token_hash: row.link_session_token_hash as string,
     discord_user_id: row.discord_user_id as string,
+    discord_access_token_encrypted: (row.discord_access_token_encrypted as string) ?? null,
     expires_at: row.expires_at as Date,
     used_at: (row.used_at as Date) ?? null,
     created_at: row.created_at as Date,
@@ -508,12 +509,13 @@ export class PgDbClient implements DbClient {
     linkSessionTokenHash: string;
     discordUserId: string;
     expiresAt: Date;
+    discordAccessTokenEncrypted?: string;
   }): Promise<LinkSessionRecord> {
     const result = await this.pool.query(
-      `INSERT INTO discord_link_sessions (link_session_token_hash, discord_user_id, expires_at)
-       VALUES ($1, $2, $3)
+      `INSERT INTO discord_link_sessions (link_session_token_hash, discord_user_id, discord_access_token_encrypted, expires_at)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [record.linkSessionTokenHash, record.discordUserId, record.expiresAt],
+      [record.linkSessionTokenHash, record.discordUserId, record.discordAccessTokenEncrypted ?? null, record.expiresAt],
     );
     return toLinkSession(result.rows[0] as Record<string, unknown>);
   }

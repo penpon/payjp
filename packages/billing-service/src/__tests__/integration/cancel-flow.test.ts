@@ -57,6 +57,7 @@ function makeLinkSession(overrides: Partial<LinkSessionRecord> = {}): LinkSessio
     id: 'link-session-cancel-id-001',
     link_session_token_hash: 'dummy-hash',
     discord_user_id: DISCORD_USER_ID,
+    discord_access_token_encrypted: null,
     expires_at: new Date(NOW.getTime() + 3600 * 1000),
     used_at: null,
     created_at: NOW,
@@ -144,6 +145,8 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue(undefined),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 
   return {

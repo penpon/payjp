@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { LinkSessionRecord, OAuthStateRecord } from '@hayane/shared';
+import { encryptToken } from '@hayane/shared';
 import {
   buildCallbackRedirectUrl,
   buildCookieAttributes,
@@ -20,6 +21,7 @@ export interface AuthDb {
     linkSessionTokenHash: string;
     discordUserId: string;
     expiresAt: Date;
+    discordAccessTokenEncrypted?: string;
   }): Promise<LinkSessionRecord>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
 }
@@ -74,6 +76,7 @@ export async function saveDiscordLinkSession(
     linkSessionTokenHash: string;
     discordUserId: string;
     expiresAt: Date;
+    discordAccessTokenEncrypted?: string;
   },
 ): Promise<void> {
   await db.insertDiscordLinkSession(record);
@@ -183,6 +186,7 @@ export interface AuthConfig {
   discordClientId: string;
   discordClientSecret: string;
   discordRedirectUri: string;
+  discordTokenEncryptionKey?: string;
   db: AuthDb;
 }
 
@@ -252,7 +256,8 @@ async function handleLegacyAuthRequest(
 // REQ-AUTH-002 の完全なフローを実装する
 async function handleStructuredAuthRequest(request: AuthRequest, config: AuthConfig): Promise<AuthResponse> {
   const { endpoint, query = {}, cookies = {}, headers = {} } = request;
-  const { frontendBaseUrl, discordClientId, discordClientSecret, discordRedirectUri, db } = config;
+  const { frontendBaseUrl, discordClientId, discordClientSecret, discordRedirectUri, discordTokenEncryptionKey, db } =
+    config;
   const secHeaders = getSecurityHeaders();
 
   // /v1/auth/discord/callback
@@ -275,6 +280,7 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
 
     // Discord code → access_token → discord_user_id
     let discordUserId: string;
+    let encryptedAccessToken: string | undefined;
     try {
       const accessToken = await exchangeDiscordCode(code, {
         clientId: discordClientId,
@@ -282,17 +288,25 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
         redirectUri: discordRedirectUri,
       });
       discordUserId = await fetchDiscordUserId(accessToken);
-      // Revoke Discord access_token immediately (best-effort, REQ-AUTH-016)
-      void revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch((revokeErr) => {
-        structuredLog({
-          service: 'auth-service',
-          endpoint: '/v1/auth/discord/callback',
-          result: 'failure',
-          error: 'discord_token_revoke_failed',
-          discordUserId,
-          message: revokeErr instanceof Error ? revokeErr.message : String(revokeErr),
-        });
-      });
+      // Encrypt access_token for later use in guilds.join (link-discord endpoint will revoke after use)
+      if (discordTokenEncryptionKey) {
+        try {
+          encryptedAccessToken = encryptToken(accessToken, discordTokenEncryptionKey);
+        } catch (encErr) {
+          structuredLog({
+            service: 'auth-service',
+            endpoint: '/v1/auth/discord/callback',
+            result: 'failure',
+            error: 'access_token_encryption_failed',
+            message: encErr instanceof Error ? encErr.message : String(encErr),
+          });
+          // Fallback: revoke immediately if encryption fails
+          void revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch(() => {});
+        }
+      } else {
+        // No encryption key configured — revoke immediately (guilds.join unavailable)
+        void revokeDiscordToken(accessToken, discordClientId, discordClientSecret).catch(() => {});
+      }
     } catch (err) {
       structuredLog({
         service: 'auth-service',
@@ -310,6 +324,7 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
     await saveDiscordLinkSession(db, {
       linkSessionTokenHash: linkTokenHash,
       discordUserId,
+      discordAccessTokenEncrypted: encryptedAccessToken,
       expiresAt: new Date(Date.now() + 900_000),
     });
 

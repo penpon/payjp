@@ -7,7 +7,7 @@ export function buildDiscordAuthorizationUrl(clientId: string, redirectUri: stri
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', 'identify');
+  url.searchParams.set('scope', 'identify guilds.join');
   url.searchParams.set('state', state);
   return url.toString();
 }

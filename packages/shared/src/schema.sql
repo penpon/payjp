@@ -61,12 +61,13 @@ CREATE INDEX IF NOT EXISTS oauth_states_expires_at_idx ON oauth_states (expires_
 
 -- Table 4: discord_link_sessions — 課金前連携セッション (auth-service 発行 / billing-service 消費)
 CREATE TABLE IF NOT EXISTS discord_link_sessions (
-  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  link_session_token_hash   TEXT NOT NULL UNIQUE,
-  discord_user_id           TEXT NOT NULL,
-  expires_at                TIMESTAMPTZ NOT NULL,
-  used_at                   TIMESTAMPTZ,
-  created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  link_session_token_hash           TEXT NOT NULL UNIQUE,
+  discord_user_id                   TEXT NOT NULL,
+  discord_access_token_encrypted    TEXT,
+  expires_at                        TIMESTAMPTZ NOT NULL,
+  used_at                           TIMESTAMPTZ,
+  created_at                        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS discord_link_sessions_expires_at_idx ON discord_link_sessions (expires_at);
