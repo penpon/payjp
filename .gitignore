@@ -4,6 +4,7 @@
 Thumbs.db
 awesome-design-md/
 *.pdf
+.cursor/
 
 # Editor
 .vscode/settings.json
