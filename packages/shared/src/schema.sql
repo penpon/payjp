@@ -6,8 +6,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Table 1: members — 会員・購読状態の正 (billing-service / sync-service 管理)
 CREATE TABLE IF NOT EXISTS members (
   id                              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  discord_user_id                 TEXT NOT NULL UNIQUE,
-  email                           TEXT NOT NULL,
+  discord_user_id                 TEXT UNIQUE,
+  email                           TEXT NOT NULL UNIQUE,
   subscription_status             TEXT CHECK (subscription_status IN ('active', 'trial', 'canceled', 'paused', 'deleted')),
   payjp_plan_id                   TEXT,
   payjp_customer_id               TEXT UNIQUE,
@@ -61,17 +61,30 @@ CREATE INDEX IF NOT EXISTS oauth_states_expires_at_idx ON oauth_states (expires_
 
 -- Table 4: discord_link_sessions — 課金前連携セッション (auth-service 発行 / billing-service 消費)
 CREATE TABLE IF NOT EXISTS discord_link_sessions (
-  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  link_session_token_hash   TEXT NOT NULL UNIQUE,
-  discord_user_id           TEXT NOT NULL,
-  expires_at                TIMESTAMPTZ NOT NULL,
-  used_at                   TIMESTAMPTZ,
-  created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  link_session_token_hash           TEXT NOT NULL UNIQUE,
+  discord_user_id                   TEXT NOT NULL,
+  discord_access_token_encrypted    TEXT,
+  expires_at                        TIMESTAMPTZ NOT NULL,
+  used_at                           TIMESTAMPTZ,
+  created_at                        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS discord_link_sessions_expires_at_idx ON discord_link_sessions (expires_at);
 
--- Table 5: member_impact_logs — 会員影響の未解決/解消追跡 (sync-service / resync CLI 管理)
+-- Table 5: member_sessions — 課金完了後のセッション管理 (billing-service 発行)
+CREATE TABLE IF NOT EXISTS member_sessions (
+  id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_session_token_hash   TEXT NOT NULL UNIQUE,
+  member_id                   UUID NOT NULL REFERENCES members(id),
+  expires_at                  TIMESTAMPTZ NOT NULL,
+  created_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS member_sessions_expires_at_idx ON member_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS member_sessions_member_id_idx ON member_sessions (member_id);
+
+-- Table 6: member_impact_logs — 会員影響の未解決/解消追跡 (sync-service / resync CLI 管理)
 CREATE TABLE IF NOT EXISTS member_impact_logs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id       UUID NOT NULL REFERENCES members(id),

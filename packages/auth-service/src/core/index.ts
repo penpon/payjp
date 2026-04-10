@@ -1,10 +1,4 @@
-import type {
-  CookieAttributes,
-  CookieName,
-  LinkSessionRecord,
-  OAuthStateRecord,
-  ValidationResult,
-} from '@hayane/shared';
+import type { LinkSessionRecord, OAuthStateRecord, ValidationResult } from '@hayane/shared';
 
 // PROP-AUTH-001 対象: buildDiscordAuthorizationUrl
 // REQ-AUTH-001, REQ-AUTH-007: scope=identify 固定
@@ -13,7 +7,7 @@ export function buildDiscordAuthorizationUrl(clientId: string, redirectUri: stri
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', 'identify');
+  url.searchParams.set('scope', 'identify guilds.join');
   url.searchParams.set('state', state);
   return url.toString();
 }
@@ -74,16 +68,8 @@ export function validateLinkSessionRecord(
 
 // PROP-AUTH-006, PROP-AUTH-007 対象: buildCookieAttributes
 // REQ-AUTH-005: __Host-Cookie の固定属性
-export function buildCookieAttributes(name: CookieName, maxAge: number): CookieAttributes {
-  return {
-    name,
-    secure: true,
-    httpOnly: true,
-    sameSite: 'Lax',
-    path: '/',
-    maxAge,
-  };
-}
+// 実装は @hayane/shared に移動済み。後方互換性のため re-export。
+export { buildCookieAttributes } from '@hayane/shared';
 
 // PROP-AUTH-005 対象: maskSensitiveLogFields
 // REQ-AUTH-010: 機密キーのマスキング
@@ -186,17 +172,8 @@ export function validateRequiredEnvVars(env: Record<string, string | undefined>)
 }
 
 // PROP-AUTH-006, PROP-AUTH-007 補完: serializeCookieAttributes
-// CookieAttributes を Set-Cookie ヘッダ文字列にシリアライズする
-export function serializeCookieAttributes(attrs: CookieAttributes, value: string): string {
-  const parts: string[] = [`${attrs.name}=${value}`];
-  if (attrs.maxAge !== undefined) parts.push(`Max-Age=${attrs.maxAge}`);
-  if (attrs.path) parts.push(`Path=${attrs.path}`);
-  if (attrs.secure) parts.push('Secure');
-  if (attrs.httpOnly) parts.push('HttpOnly');
-  if (attrs.sameSite) parts.push(`SameSite=${attrs.sameSite}`);
-  // Domain は意図的に追加しない（__Host- Cookie の要件）
-  return parts.join('; ');
-}
+// 実装は @hayane/shared に移動済み。後方互換性のため re-export。
+export { serializeCookieAttributes } from '@hayane/shared';
 
 // PROP-AUTH-009 対象: validateFrontendBaseUrl
 // REQ-AUTH-011: origin形式のみ許可（末尾スラッシュ・パス禁止）

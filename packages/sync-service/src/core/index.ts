@@ -358,6 +358,7 @@ export function evaluateSubscriptionSearchResult(
   candidates: SubscriptionCandidate[],
   discordUserId: string,
   accessEndAtUnix: number | null,
+  memberId?: string,
 ): 'single-match' | 'fail-close' {
   if (candidates.length === 0) return 'fail-close';
   if (candidates.length > 1) return 'fail-close';
@@ -365,7 +366,11 @@ export function evaluateSubscriptionSearchResult(
   const candidate = candidates[0];
 
   // Check metadata match
-  if (candidate.metadata?.discord_user_id === discordUserId) {
+  if (candidate.metadata?.discord_user_id === discordUserId && discordUserId !== '') {
+    return 'single-match';
+  }
+
+  if (memberId && candidate.metadata?.member_id === memberId) {
     return 'single-match';
   }
 

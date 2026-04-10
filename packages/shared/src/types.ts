@@ -1,4 +1,4 @@
-export type CookieName = '__Host-oauth_session' | '__Host-link_session';
+export type CookieName = '__Host-oauth_session' | '__Host-link_session' | '__Host-member_session';
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
 
@@ -15,6 +15,7 @@ export interface LinkSessionRecord {
   id: string;
   link_session_token_hash: string;
   discord_user_id: string;
+  discord_access_token_encrypted: string | null;
   expires_at: Date;
   used_at: Date | null;
   created_at: Date;
@@ -44,7 +45,7 @@ export type InflightOperationType = 'subscribe' | 'cancel';
 
 export interface Member {
   id: string;
-  discord_user_id: string;
+  discord_user_id: string | null;
   email: string;
   payjp_customer_id: string | null;
   payjp_subscription_id: string | null;
@@ -81,6 +82,14 @@ export interface CancelResponse {
   memberId: string;
   cancelEffectiveAt: string;
   roleRemovalAt: string;
+}
+
+export interface MemberSessionRecord {
+  id: string;
+  member_session_token_hash: string;
+  member_id: string;
+  expires_at: Date;
+  created_at: Date;
 }
 
 export type FixedEnvVarValidationResult =

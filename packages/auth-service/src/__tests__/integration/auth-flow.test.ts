@@ -353,11 +353,11 @@ describe('PROP-AUTH-018: callback Set-Cookie for __Host-link_session has exact a
 });
 
 // ---------------------------------------------------------------------------
-// PROP-AUTH-019: start — Discord URL scope=identify
+// PROP-AUTH-019: start — Discord URL scope=identify guilds.join
 // REQ-AUTH-007
 // ---------------------------------------------------------------------------
-describe('PROP-AUTH-019: start Discord authorization URL has scope=identify', () => {
-  it('handleAuthRequest for start returns 302 Location with scope=identify', async () => {
+describe('PROP-AUTH-019: start Discord authorization URL has scope=identify guilds.join', () => {
+  it('handleAuthRequest for start returns 302 Location with scope=identify guilds.join', async () => {
     const config = {
       frontendBaseUrl: 'https://frontend.example.com',
       discordClientId: 'test-client-id',
@@ -370,7 +370,7 @@ describe('PROP-AUTH-019: start Discord authorization URL has scope=identify', ()
     const locationUrl = response.headers.Location;
     expect(locationUrl).toBeDefined();
     const parsed = new URL(locationUrl);
-    expect(parsed.searchParams.get('scope')).toBe('identify');
+    expect(parsed.searchParams.get('scope')).toBe('identify guilds.join');
   });
 });
 
@@ -455,6 +455,7 @@ describe('PROP-AUTH-022: session 401 when link session TTL expired', () => {
       id: 'expired-022',
       link_session_token_hash: 'token-hash-022',
       discord_user_id: '123456789012345678',
+      discord_access_token_encrypted: null,
       expires_at: new Date('2000-01-01T00:00:00Z'), // 過去の日時 = 期限切れ
       used_at: null,
       created_at: new Date('2000-01-01T00:00:00Z'),
@@ -478,6 +479,7 @@ describe('PROP-AUTH-022: session 401 when link session TTL expired', () => {
       id: 'valid-022',
       link_session_token_hash: 'valid-token-hash-022',
       discord_user_id: '123456789012345678',
+      discord_access_token_encrypted: null,
       expires_at: new Date('2099-01-01T00:00:00Z'),
       used_at: null,
       created_at: new Date('2026-01-01T00:00:00Z'),

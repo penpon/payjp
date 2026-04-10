@@ -70,9 +70,21 @@ export interface DiscordCheckResult {
   canAssignRole: boolean;
 }
 
+/** Result of Add Guild Member (guilds.join). Discord returns 201 when the user is newly added (roles from body apply) and 204 when already in the guild (roles are not applied). */
+export interface AddGuildMemberResult {
+  joinedNew: boolean;
+}
+
 export interface DiscordClient {
   checkMembership(guildId: string, discordUserId: string): Promise<DiscordCheckResult>;
   assignRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
+  addMemberToGuild(
+    guildId: string,
+    discordUserId: string,
+    accessToken: string,
+    roleId?: string,
+  ): Promise<AddGuildMemberResult>;
+  revokeToken(accessToken: string): Promise<void>;
 }
 
 export type { DbClient };
@@ -84,6 +96,7 @@ export interface BillingConfig {
   discordPaidRoleId: string;
   initialChargeAmount: number;
   initialChargeAmountCurrency: string;
+  discordTokenEncryptionKey?: string;
 }
 
 export interface BillingDeps {
@@ -99,7 +112,6 @@ export interface BillingDeps {
 
 export interface SubscribeRequest {
   origin: string;
-  linkSessionToken: string;
   email: string;
   payjpToken: string;
   planId: string;
@@ -121,6 +133,8 @@ export interface OperationError {
   operationId?: string;
 }
 
-export type SubscribeResult = { ok: true; data: import('@hayane/shared').SubscriptionResponse } | OperationError;
+export type SubscribeResult =
+  | { ok: true; data: import('@hayane/shared').SubscriptionResponse; memberSessionToken?: string }
+  | OperationError;
 
 export type CancelResult = { ok: true; data: import('@hayane/shared').CancelResponse } | OperationError;

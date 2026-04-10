@@ -3,14 +3,13 @@
  *
  * ハーネスが正常動作することを確認する最小シナリオ。
  * - Smoke 1: OAuth start → callback → session(linked=true)
- * - Smoke 2: Subscribe 初回ユーザー → charge + trial subscription → ロール付与
+ * - Smoke 2: Subscribe 初回ユーザー → charge + trial subscription（Discord ロールは link-discord）
  *
  * 詳細 E2E シナリオは #37（OAuth/T-P0-01）・#38（Subscribe/T-P0-02）が担当。
  *
  * 前提: DATABASE_URL_TEST または DATABASE_URL が設定済みの PostgreSQL に接続可能であること。
  */
 
-import { createHash } from 'node:crypto';
 import type pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -116,22 +115,10 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Smoke 2: Subscribe フロー
-  // link_session を DB に直接挿入し、POST /v1/subscriptions を検証
+  // Smoke 2: Subscribe フロー（課金先行 — link_session 不要）
   // ---------------------------------------------------------------------------
   describe('Smoke 2: Subscribe flow', () => {
-    const DISCORD_USER_ID = '111222333444555002';
-    const RAW_LINK_TOKEN = 'e2e-smoke-raw-link-token-subscribe';
-
-    it('初回ユーザー → charge + trial subscription → ロール付与、DB に member が存在する', async () => {
-      // link_session を DB に直接挿入（OAuth 完了後の状態を再現）
-      const tokenHash = createHash('sha256').update(RAW_LINK_TOKEN).digest('hex');
-      await pgDb.insertDiscordLinkSession({
-        linkSessionTokenHash: tokenHash,
-        discordUserId: DISCORD_USER_ID,
-        expiresAt: new Date(Date.now() + 3600 * 1000),
-      });
-
+    it('初回ユーザー → charge + trial subscription、DB に member が存在する（subscribe では Discord 未使用）', async () => {
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
@@ -143,7 +130,6 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
           'content-type': 'application/json',
           origin: 'https://example.com',
         },
-        cookies: { '__Host-link_session': RAW_LINK_TOKEN },
         body: JSON.stringify({
           planId: E2E_BILLING_CONFIG.allowedPlanIds[0],
           email: 'smoke-test@example.com',
@@ -154,21 +140,19 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
 
       expect(res.statusCode).toBe(200);
 
-      // DB 確認: member が trial/active で作成されている
-      const member = await pgDb.findMemberByDiscordUserId(DISCORD_USER_ID);
+      const idRow = await pool.query<{ id: string }>('SELECT id FROM members WHERE email = $1', [
+        'smoke-test@example.com',
+      ]);
+      expect(idRow.rows.length).toBe(1);
+      const member = await pgDb.findMemberById(idRow.rows[0].id);
       expect(member).not.toBeNull();
       expect(['trial', 'active']).toContain(member!.subscription_status);
       expect(member!.payjp_subscription_id).toBe('sub_test_e2e');
       expect(member!.payjp_customer_id).toBe('cus_test_e2e');
 
-      // Mock 確認: Discord ロール付与が呼ばれた
-      expect(discordMock.assignRole).toHaveBeenCalledWith(
-        E2E_BILLING_CONFIG.discordGuildId,
-        DISCORD_USER_ID,
-        E2E_BILLING_CONFIG.discordPaidRoleId,
-      );
+      expect(discordMock.assignRole).not.toHaveBeenCalled();
+      expect(discordMock.checkMembership).not.toHaveBeenCalled();
 
-      // Mock 確認: PAY.JP 主要 API が呼ばれた
       expect(payjpMock.fetchToken).toHaveBeenCalledWith('tok_test_e2e');
       expect(payjpMock.createCustomer).toHaveBeenCalledOnce();
       expect(payjpMock.createSubscription).toHaveBeenCalledOnce();

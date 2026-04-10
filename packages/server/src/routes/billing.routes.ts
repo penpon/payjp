@@ -5,7 +5,9 @@ import {
   handleSubscribe,
   isSameOrigin,
   linkSessionTokenHash,
+  memberSessionTokenHash,
 } from '@hayane/billing-service';
+import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 function extractRequestContext(request: FastifyRequest): {
@@ -42,11 +44,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       },
     },
     async (request, reply) => {
-      const { body, origin, linkSessionToken } = extractRequestContext(request);
+      const { body, origin } = extractRequestContext(request);
 
       const req: SubscribeRequest = {
         origin,
-        linkSessionToken,
         email: typeof body?.email === 'string' ? body.email : '',
         payjpToken: typeof body?.payjpToken === 'string' ? body.payjpToken : '',
         planId: typeof body?.planId === 'string' ? body.planId : '',
@@ -55,6 +56,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
 
       try {
         const result = await handleSubscribe(req, billingDeps);
+        // Issue __Host-member_session cookie on successful subscribe
+        if (result.ok && result.memberSessionToken) {
+          const attrs = buildCookieAttributes('__Host-member_session', 86400);
+          reply.header('Set-Cookie', serializeCookieAttributes(attrs, result.memberSessionToken));
+        }
         return sendBillingResponse(reply, result);
       } catch (err) {
         console.error(
@@ -92,36 +98,48 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         });
       }
 
-      const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
-      if (!linkSessionToken) {
-        return reply.status(200).send({ subscription: null });
-      }
-
       try {
         const now = billingDeps.clock();
-        const tokenHash = linkSessionTokenHash(linkSessionToken);
-        const linkSession = await billingDeps.db.findLinkSession(tokenHash);
-        if (!linkSession) {
-          return reply.status(200).send({ subscription: null });
-        }
-        if (linkSession.expires_at < now) {
-          return reply.status(200).send({ subscription: null });
+
+        // Try member_session first (billing-first flow)
+        const memberSessionToken = request.cookies['__Host-member_session'] ?? '';
+        if (memberSessionToken) {
+          const msHash = memberSessionTokenHash(memberSessionToken);
+          const ms = await billingDeps.db.findMemberSession(msHash);
+          if (ms && ms.expires_at > now) {
+            const member = await billingDeps.db.findMemberById(ms.member_id);
+            if (member?.subscription_status && member.subscription_status !== 'deleted') {
+              return reply.status(200).send({
+                subscription: {
+                  status: member.subscription_status,
+                  planId: member.payjp_plan_id,
+                  accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
+                },
+              });
+            }
+          }
         }
 
-        // used_at が立っていても Discord ユーザーに紐づく購読は返す。subscribe 失敗後も Cookie が残るケースで
-        // 実際に作成済みのサブスクリプションをフロントが取得できるようにする（POST は consume で二重利用不可）。
-        const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
-        if (!member?.subscription_status || member.subscription_status === 'deleted') {
-          return reply.status(200).send({ subscription: null });
+        // Fallback: link_session (cancel flow / legacy)
+        const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
+        if (linkSessionToken) {
+          const tokenHash = linkSessionTokenHash(linkSessionToken);
+          const linkSession = await billingDeps.db.findLinkSession(tokenHash);
+          if (linkSession && linkSession.expires_at > now) {
+            const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
+            if (member?.subscription_status && member.subscription_status !== 'deleted') {
+              return reply.status(200).send({
+                subscription: {
+                  status: member.subscription_status,
+                  planId: member.payjp_plan_id,
+                  accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
+                },
+              });
+            }
+          }
         }
 
-        return reply.status(200).send({
-          subscription: {
-            status: member.subscription_status,
-            planId: member.payjp_plan_id,
-            accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
-          },
-        });
+        return reply.status(200).send({ subscription: null });
       } catch (err) {
         console.error(
           JSON.stringify({

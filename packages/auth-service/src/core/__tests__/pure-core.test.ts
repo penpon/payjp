@@ -42,6 +42,7 @@ const BASE_LINK_RECORD: LinkSessionRecord = {
   id: 'link-id',
   link_session_token_hash: 'correct-token-hash',
   discord_user_id: 'discord-123',
+  discord_access_token_encrypted: null,
   expires_at: new Date('2099-01-01T00:15:00Z'),
   used_at: null,
   created_at: new Date('2099-01-01T00:00:00Z'),
@@ -50,11 +51,11 @@ const BASE_LINK_RECORD: LinkSessionRecord = {
 const NOW_BEFORE_EXPIRY = new Date('2099-01-01T00:05:00Z');
 
 // ---------------------------------------------------------------------------
-// PROP-AUTH-001: buildDiscordAuthorizationUrl — scope=identify 固定
+// PROP-AUTH-001: buildDiscordAuthorizationUrl — scope=identify guilds.join 固定
 // REQ-AUTH-001, REQ-AUTH-007
 // ---------------------------------------------------------------------------
-describe('PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify', () => {
-  it('property: arbitrary clientId/redirectUri/state always yields URL with scope=identify and no extra scopes', () => {
+describe('PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify guilds.join', () => {
+  it('property: arbitrary clientId/redirectUri/state always yields URL with scope=identify guilds.join', () => {
     fc.assert(
       fc.property(
         fc.string({ minLength: 1 }),
@@ -64,9 +65,8 @@ describe('PROP-AUTH-001: buildDiscordAuthorizationUrl always has scope=identify'
           const url = buildDiscordAuthorizationUrl(clientId, redirectUri, state);
           const parsed = new URL(url);
           const scope = parsed.searchParams.get('scope');
-          expect(scope).toBe('identify');
-          // 余分なスコープが入っていないこと
-          expect(scope?.split(' ').length).toBe(1);
+          expect(scope).toBe('identify guilds.join');
+          expect(scope?.split(' ').length).toBe(2);
         },
       ),
       { numRuns: 100 },
@@ -459,6 +459,7 @@ describe('PROP-AUTH-028: validateLinkSessionRecord succeeds when all conditions 
             id,
             link_session_token_hash: tokenHashVal,
             discord_user_id: discordUserId,
+            discord_access_token_encrypted: null,
             expires_at: futureExpiry,
             used_at: null,
             created_at: now,

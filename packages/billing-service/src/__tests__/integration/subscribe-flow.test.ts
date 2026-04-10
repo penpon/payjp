@@ -7,7 +7,7 @@
  * オーケストレーションの振る舞いを検証する。
  */
 
-import type { LinkSessionRecord, Member } from '@hayane/shared';
+import type { Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { handleSubscribe } from '../../shell/subscribe.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
@@ -25,7 +25,6 @@ const PAYJP_CUSTOMER_ID = 'cus_test_001';
 const PAYJP_CHARGE_ID = 'ch_test_001';
 const PAYJP_SUBSCRIPTION_ID = 'sub_test_001';
 const OPERATION_ID = 'op-test-001';
-const LINK_SESSION_TOKEN = 'link-session-token-abc';
 const EMAIL = 'test@example.com';
 
 function makeMember(overrides: Partial<Member> = {}): Member {
@@ -52,18 +51,6 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     last_payjp_event_created_at: null,
     created_at: NOW,
     updated_at: NOW,
-    ...overrides,
-  };
-}
-
-function makeLinkSession(overrides: Partial<LinkSessionRecord> = {}): LinkSessionRecord {
-  return {
-    id: 'link-session-id-001',
-    link_session_token_hash: 'dummy-hash',
-    discord_user_id: DISCORD_USER_ID,
-    expires_at: new Date(NOW.getTime() + 3600 * 1000),
-    used_at: null,
-    created_at: NOW,
     ...overrides,
   };
 }
@@ -140,9 +127,20 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
 
   const db: DbClient = {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
+    findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
-    findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
+    upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
+    updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
+    findLinkSession: vi.fn().mockResolvedValue(null),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertMemberSession: vi.fn().mockResolvedValue({
+      id: 'ms-1',
+      member_session_token_hash: 'h',
+      member_id: member.id,
+      expires_at: new Date(),
+      created_at: new Date(),
+    }),
+    findMemberSession: vi.fn().mockResolvedValue(null),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -169,6 +167,8 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -184,7 +184,6 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
 function makeSubscribeRequest(overrides: Record<string, unknown> = {}) {
   return {
     origin: 'https://frontend.example.com',
-    linkSessionToken: LINK_SESSION_TOKEN,
     email: EMAIL,
     payjpToken: PAYJP_TOKEN_ID,
     planId: PLAN_ID,
@@ -232,44 +231,9 @@ describe('POST /v1/subscriptions — Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // PROP-BILL-021: Link session validation
+  // PROP-BILL-021: Consent validation (link session removed in billing-first flow)
   // -------------------------------------------------------------------------
-  describe('PROP-BILL-021: Link session validation', () => {
-    it('rejects with 401 for invalid link session', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(401);
-        expect(result.errorCode).toBe('INVALID_LINK_SESSION');
-      }
-    });
-
-    it('rejects with 401 for expired link session', async () => {
-      const deps = makeSuccessfulDeps();
-      const expiredSession = makeLinkSession({ expires_at: new Date(NOW.getTime() - 1000) });
-      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(expiredSession);
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(401);
-        expect(result.errorCode).toBe('EXPIRED_LINK_SESSION');
-      }
-    });
-
-    it('rejects with 401 for consumed link session', async () => {
-      const deps = makeSuccessfulDeps();
-      const consumedSession = makeLinkSession({ used_at: new Date(NOW.getTime() - 500) });
-      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(consumedSession);
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(401);
-        expect(result.errorCode).toBe('CONSUMED_LINK_SESSION');
-      }
-    });
-
+  describe('PROP-BILL-021: Consent validation', () => {
     it('rejects with 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
       const deps = makeSuccessfulDeps();
       const result = await handleSubscribe(makeSubscribeRequest({ privacyConsented: false }), deps);
@@ -329,10 +293,10 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-024: Provisional member row
   // -------------------------------------------------------------------------
   describe('PROP-BILL-024: Provisional member', () => {
-    it('creates provisional member row when none exists', async () => {
+    it('creates provisional member row by email when none exists', async () => {
       const deps = makeSuccessfulDeps();
       await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(deps.db.upsertProvisionalMember).toHaveBeenCalledWith(DISCORD_USER_ID, EMAIL);
+      expect(deps.db.upsertProvisionalMemberByEmail).toHaveBeenCalledWith(EMAIL);
     });
   });
 
@@ -340,7 +304,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-025: Inflight operation guard
   // -------------------------------------------------------------------------
   describe('PROP-BILL-025: Inflight operation guard', () => {
-    it('returns 503 + existing operationId; link session NOT consumed; PAY.JP calls = 0', async () => {
+    it('returns 503 + existing operationId; PAY.JP calls = 0', async () => {
       const existingOperationId = 'existing-op-123';
       const deps = makeSuccessfulDeps({
         inflight_operation_id: existingOperationId,
@@ -352,7 +316,6 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.statusCode).toBe(503);
         expect(result.operationId).toBe(existingOperationId);
       }
-      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
       expect(deps.payjp.fetchToken).not.toHaveBeenCalled();
     });
   });
@@ -371,12 +334,14 @@ describe('POST /v1/subscriptions — Integration', () => {
         first_trial_granted_at: new Date('2025-01-01T00:00:00Z'),
       });
       const deps = makeSuccessfulDeps();
-      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockResolvedValue(activeMember);
+      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(activeMember);
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.subscriptionStatus).toBe('active');
+        expect(result.memberSessionToken).toBeDefined();
       }
+      expect(deps.db.insertMemberSession).toHaveBeenCalledTimes(1);
       expect(deps.payjp.createCustomer).not.toHaveBeenCalled();
     });
 
@@ -389,7 +354,7 @@ describe('POST /v1/subscriptions — Integration', () => {
         first_trial_granted_at: NOW,
       });
       const deps = makeSuccessfulDeps();
-      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockResolvedValue(trialMember);
+      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(trialMember);
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
     });
@@ -404,50 +369,9 @@ describe('POST /v1/subscriptions — Integration', () => {
         cancel_requested_at: NOW,
       });
       const deps = makeSuccessfulDeps();
-      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockResolvedValue(canceledMember);
+      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(canceledMember);
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // PROP-BILL-027: Discord non-member
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-027: Discord non-member', () => {
-    it('rejects with 409; PAY.JP calls = 0', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.discord.checkMembership as ReturnType<typeof vi.fn>).mockResolvedValue({
-        isMember: false,
-        canAssignRole: false,
-      });
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(409);
-        expect(result.errorCode).toBe('DISCORD_NOT_MEMBER');
-      }
-      expect(deps.payjp.fetchToken).not.toHaveBeenCalled();
-      expect(deps.payjp.createCustomer).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // PROP-BILL-028: Discord role capability failure
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-028: Discord role capability failure', () => {
-    it('rejects with 503; PAY.JP calls = 0', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.discord.checkMembership as ReturnType<typeof vi.fn>).mockResolvedValue({
-        isMember: true,
-        canAssignRole: false,
-      });
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(503);
-        expect(result.errorCode).toBe('DISCORD_ROLE_CAPABILITY');
-      }
-      expect(deps.payjp.fetchToken).not.toHaveBeenCalled();
     });
   });
 
@@ -509,31 +433,6 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(inflightIdx).toBeGreaterThanOrEqual(0);
       expect(customerIdx).toBeGreaterThanOrEqual(0);
       expect(inflightIdx).toBeLessThan(customerIdx);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // PROP-BILL-031: Link session consumption timing
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-031: Link session consumption timing', () => {
-    it('consumed after pre-validations; re-send → 401', async () => {
-      const deps = makeSuccessfulDeps();
-      let consumed = false;
-      (deps.db.consumeLinkSession as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        consumed = true;
-        return Promise.resolve();
-      });
-      // 1回目は成功
-      await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(consumed).toBe(true);
-
-      // 2回目: consumed session を返す
-      (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(makeLinkSession({ used_at: NOW }));
-      const result2 = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result2.ok).toBe(false);
-      if (!result2.ok) {
-        expect(result2.statusCode).toBe(401);
-      }
     });
   });
 
@@ -652,23 +551,25 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-036: charge/subscription metadata
   // -------------------------------------------------------------------------
   describe('PROP-BILL-036: charge/subscription metadata', () => {
-    it('contains discord_user_id and operation_id', async () => {
+    it('contains member_id and operation_id', async () => {
       const deps = makeSuccessfulDeps();
       await handleSubscribe(makeSubscribeRequest(), deps);
 
       expect(deps.payjp.createCharge).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.objectContaining({
-            discord_user_id: DISCORD_USER_ID,
+            member_id: MEMBER_ID,
             operation_id: OPERATION_ID,
+            discord_user_id: DISCORD_USER_ID,
           }),
         }),
       );
       expect(deps.payjp.createSubscription).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.objectContaining({
-            discord_user_id: DISCORD_USER_ID,
+            member_id: MEMBER_ID,
             operation_id: OPERATION_ID,
+            discord_user_id: DISCORD_USER_ID,
           }),
         }),
       );
@@ -714,107 +615,6 @@ describe('POST /v1/subscriptions — Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // PROP-BILL-039: Role sync retry
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-039: Role sync retry', () => {
-    it('retries up to 3 times on Discord 429/5xx', async () => {
-      vi.useFakeTimers();
-      try {
-        const deps = makeSuccessfulDeps();
-        let attempts = 0;
-        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-          attempts++;
-          if (attempts < 3) throw new Error('Discord 429');
-          return Promise.resolve();
-        });
-        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
-        await vi.runAllTimersAsync();
-        const result = await resultPromise;
-        expect(attempts).toBe(3);
-        expect(result.ok).toBe(true);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('retries when assignRole rejects with HTTP 429 (rate limit) on the error object', async () => {
-      vi.useFakeTimers();
-      try {
-        const deps = makeSuccessfulDeps();
-        let attempts = 0;
-        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-          attempts++;
-          if (attempts < 2) {
-            throw Object.assign(new Error('Too Many Requests'), { status: 429 });
-          }
-          return Promise.resolve();
-        });
-        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
-        await vi.runAllTimersAsync();
-        const result = await resultPromise;
-        expect(attempts).toBe(2);
-        expect(result.ok).toBe(true);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('does not retry on non-429 4xx (e.g. 403) from assignRole', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        throw Object.assign(new Error('Missing Access'), { status: 403 });
-      });
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(deps.discord.assignRole).toHaveBeenCalledTimes(1);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.errorCode).toBe('DISCORD_ROLE_SYNC_FAILED');
-        expect(result.message).toBe('Discord role assignment failed with a non-retryable error');
-      }
-    });
-
-    it('does not retry when assignRole rejects with 4xx on statusCode (no top-level status)', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        throw Object.assign(new Error('Missing Access'), { statusCode: 403 });
-      });
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(deps.discord.assignRole).toHaveBeenCalledTimes(1);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.message).toBe('Discord role assignment failed with a non-retryable error');
-      }
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // PROP-BILL-040: Role sync final failure
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-040: Role sync final failure', () => {
-    it('503 + operationId, inflight retained from step 7 on role sync failure (P-09)', async () => {
-      vi.useFakeTimers();
-      try {
-        const deps = makeSuccessfulDeps();
-        (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Discord unavailable'));
-        const resultPromise = handleSubscribe(makeSubscribeRequest(), deps);
-        await vi.runAllTimersAsync();
-        const result = await resultPromise;
-        expect(result.ok).toBe(false);
-        if (!result.ok) {
-          expect(result.statusCode).toBe(503);
-          expect(result.operationId).toBe(OPERATION_ID);
-          expect(result.message).toBe('Failed to assign Discord role after 3 failed attempts');
-        }
-        // step 7 のみ（updateMemberAfterSubscribe は inflight をクリアしない）
-        expect(deps.db.setInflightOperation).toHaveBeenCalledTimes(1);
-        expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // PROP-BILL-041: Subscribe response schema
   // -------------------------------------------------------------------------
   describe('PROP-BILL-041: Subscribe response schema', () => {
@@ -835,14 +635,34 @@ describe('POST /v1/subscriptions — Integration', () => {
       }
     });
 
-    it('P-09: clearInflightOperation called after role sync success', async () => {
+    it('clearInflightOperation called after successful subscribe', async () => {
       const deps = makeSuccessfulDeps();
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
 
-    it('P-09: returns 503 + operationId when clearInflightOperation fails after subscribe and role sync', async () => {
+    it('returns memberSessionToken on success', async () => {
+      const deps = makeSuccessfulDeps();
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.memberSessionToken).toBeDefined();
+        expect(typeof result.memberSessionToken).toBe('string');
+      }
+    });
+
+    it('omits memberSessionToken when insertMemberSession fails (no cookie without DB row)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.insertMemberSession as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB insert failed'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.memberSessionToken).toBeUndefined();
+      }
+    });
+
+    it('returns 503 + operationId when clearInflightOperation fails after subscribe', async () => {
       const deps = makeSuccessfulDeps();
       (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
@@ -852,22 +672,7 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.errorCode).toBe('DB_UPDATE_FAILED');
         expect(result.operationId).toBe(OPERATION_ID);
       }
-      expect(deps.db.updateMemberRoleState).toHaveBeenCalledTimes(1);
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
-    });
-
-    it('P-09: returns 503 + operationId when updateMemberRoleState fails after subscribe and role sync (does not call clearInflightOperation)', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.db.updateMemberRoleState as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(503);
-        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
-        expect(result.operationId).toBe(OPERATION_ID);
-      }
-      expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
-      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
 
     it('F-10: privacy_consented_at passed to updateMemberAfterSubscribe', async () => {
@@ -884,7 +689,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-062: Subscribe orchestration ordering
   // -------------------------------------------------------------------------
   describe('PROP-BILL-062: Subscribe orchestration ordering', () => {
-    it('verifies complete 14-step sequence via mock call-order recording', async () => {
+    it('verifies complete step sequence via mock call-order recording', async () => {
       const callOrder: string[] = [];
       const deps = makeSuccessfulDeps();
 
@@ -892,16 +697,12 @@ describe('POST /v1/subscriptions — Integration', () => {
         callOrder.push('acquireAdvisoryLock');
         return Promise.resolve(true);
       });
-      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        callOrder.push('upsertProvisionalMember');
+      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callOrder.push('upsertProvisionalMemberByEmail');
         return Promise.resolve(makeMember());
       });
       (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockImplementation(() => {
         callOrder.push('setInflightOperation');
-        return Promise.resolve();
-      });
-      (deps.db.consumeLinkSession as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        callOrder.push('consumeLinkSession');
         return Promise.resolve();
       });
       (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -932,18 +733,13 @@ describe('POST /v1/subscriptions — Integration', () => {
         callOrder.push('updateMemberAfterSubscribe');
         return Promise.resolve(makeUpdatedMemberAfterSubscribe(makeMember()));
       });
-      (deps.discord.assignRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        callOrder.push('assignRole');
-        return Promise.resolve();
-      });
 
       await handleSubscribe(makeSubscribeRequest(), deps);
 
       // 重要なステップが正しい順序で呼ばれていること
       const idxLock = callOrder.indexOf('acquireAdvisoryLock');
-      const idxProvisional = callOrder.indexOf('upsertProvisionalMember');
+      const idxProvisional = callOrder.indexOf('upsertProvisionalMemberByEmail');
       const idxInflight = callOrder.indexOf('setInflightOperation');
-      const idxConsumeSession = callOrder.indexOf('consumeLinkSession');
       const idxFetchToken = callOrder.indexOf('fetchToken');
       const idxCreateCustomer = callOrder.indexOf('createCustomer');
       const idxPersistCustomerId = callOrder.indexOf('updateMemberCustomerId');
@@ -951,20 +747,17 @@ describe('POST /v1/subscriptions — Integration', () => {
       const idxPersistChargeId = callOrder.indexOf('updateMemberChargeId');
       const idxCreateSub = callOrder.indexOf('createSubscription');
       const idxUpdateMember = callOrder.indexOf('updateMemberAfterSubscribe');
-      const idxAssignRole = callOrder.indexOf('assignRole');
 
-      // Lock → provisional → inflight (before PAY.JP) → fetchToken (3DS validation) → consumeSession → createCustomer → charge → sub → updateMember → assignRole
+      // Lock → provisional → inflight (before PAY.JP) → fetchToken (3DS validation) → createCustomer → charge → sub → updateMember
       expect(idxLock).toBeLessThan(idxProvisional);
       expect(idxProvisional).toBeLessThan(idxInflight);
       expect(idxInflight).toBeLessThan(idxFetchToken);
-      expect(idxFetchToken).toBeLessThan(idxConsumeSession);
-      expect(idxConsumeSession).toBeLessThan(idxCreateCustomer);
+      expect(idxFetchToken).toBeLessThan(idxCreateCustomer);
       expect(idxCreateCustomer).toBeLessThan(idxPersistCustomerId);
       expect(idxPersistCustomerId).toBeLessThan(idxCreateCharge);
       expect(idxCreateCharge).toBeLessThan(idxPersistChargeId);
       expect(idxPersistChargeId).toBeLessThan(idxCreateSub);
       expect(idxCreateSub).toBeLessThan(idxUpdateMember);
-      expect(idxUpdateMember).toBeLessThan(idxAssignRole);
     });
   });
 
