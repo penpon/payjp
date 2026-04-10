@@ -290,13 +290,15 @@ describe.skipIf(!hasTestDb)('E2E Security — 悪意ある入力防御', () => {
     });
 
     it('additionalProperties に悪意ある追加フィールド → 400（スキーマ: additionalProperties: false）', async () => {
+      // `__proto__:` リテラルはプロトタイプを汚染するだけで own プロパティにならず JSON に載らない。
+      // 計算プロパティで own キーとして送り、プロトタイプ汚染ペイロードがサーバーに届くことを検証する。
       const res = await postSubscribe({
         planId: 'plan_e2e',
         email: 'test@example.com',
         payjpToken: 'tok',
         privacyConsented: true,
         evil: 'data',
-        __proto__: { isAdmin: true },
+        ['__proto__']: { isAdmin: true },
         constructor: 'override',
       });
 
