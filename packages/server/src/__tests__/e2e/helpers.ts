@@ -256,6 +256,25 @@ export async function subscribeUser(
 
 const DEFAULT_EVENT_CREATED = Math.floor(new Date('2025-04-01T10:00:00Z').getTime() / 1000);
 
+/**
+ * テンプレートの `data` と上書きをマージする。
+ * `overrides` でキーを明示的に `undefined` にした場合は結果から除外する（`inject` の JSON からも欠落する）。
+ * 省略したキーはテンプレート値のまま残る。
+ */
+function mergeWebhookEventData(
+  base: Record<string, unknown>,
+  overrides: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base, ...overrides };
+  for (const key of Object.keys(overrides)) {
+    if (overrides[key] === undefined) {
+      delete merged[key];
+    }
+  }
+  return merged;
+}
+
+/** `data` のキーをテンプレから外したいときは `undefined` を渡す（欠損ペイロードの再現用）。 */
 export function makeWebhookEvent(
   overrides: { id?: string; type?: string; livemode?: boolean; created?: number; data?: Record<string, unknown> } = {},
 ): Record<string, unknown> {
@@ -272,15 +291,17 @@ export function makeWebhookEvent(
     type,
     livemode,
     created,
-    data: {
-      id: 'sub_test_e2e',
-      object: 'subscription',
-      status: 'active',
-      metadata: { discord_user_id: 'discord-e2e-user' },
-      plan: { id: 'plan_e2e' },
-      current_period_end: created + 30 * 86400,
-      ...dataOverrides,
-    },
+    data: mergeWebhookEventData(
+      {
+        id: 'sub_test_e2e',
+        object: 'subscription',
+        status: 'active',
+        metadata: { discord_user_id: 'discord-e2e-user' },
+        plan: { id: 'plan_e2e' },
+        current_period_end: created + 30 * 86400,
+      },
+      dataOverrides,
+    ),
   };
 }
 

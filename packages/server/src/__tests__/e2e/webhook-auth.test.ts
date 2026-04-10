@@ -285,7 +285,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_${randomUUID().slice(0, 8)}`;
 
-      // status を含まない data
+      // status を含まない data（テンプレの status を undefined で明示除去）
       const event = makeWebhookEvent({
         id: eventId,
         type: 'subscription.updated',
@@ -294,7 +294,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           object: 'subscription',
           status: undefined,
           metadata: { discord_user_id: discordUserId },
-          // status intentionally omitted
+          status: undefined,
         },
       });
 
@@ -524,7 +524,6 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           object: 'subscription',
           status: 'active',
           metadata: undefined,
-          // metadata omitted intentionally
         },
       });
 
@@ -557,7 +556,6 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           object: 'subscription',
           status: 'active',
           metadata: undefined,
-          // metadata.discord_user_id も指定しない
         },
       });
 
@@ -729,7 +727,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_${randomUUID().slice(0, 8)}`;
-      // plan フィールドを含まない event
+      // plan フィールドを含まない event（テンプレの plan を undefined で明示除去）
       const event = makeWebhookEvent({
         id: eventId,
         data: {
@@ -738,7 +736,6 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
           status: 'active',
           metadata: { discord_user_id: discordUserId },
           plan: undefined,
-          // plan intentionally omitted
         },
       });
 
