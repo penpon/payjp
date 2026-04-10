@@ -230,27 +230,24 @@ export async function completeOAuthFlow(
 }
 
 /**
- * 購読完了状態の member を作成して返す（link_session は `insertLinkedSession` で再現）。
- * PAY.JP / Discord のモックを差し替える場合は、この関数に渡す前に
- * `buildE2EApp(pgDb, { payjp, discord })` でアプリを組み立てること。
+ * 購読完了状態の member を作成して返す（課金先行: link_session 不要）。
  */
 export async function subscribeUser(
   app: ReturnType<typeof buildApp>,
   pgDb: PgDbClient,
   discordUserId: string,
   overrides: { planId?: string } = {},
-): Promise<{ memberId: string; linkSessionToken: string }> {
-  const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+): Promise<{ memberId: string }> {
   const planId = overrides.planId ?? E2E_BILLING_CONFIG.allowedPlanIds[0];
+  const email = `${discordUserId}@e2e-test.example.com`;
 
   const res = await app.inject({
     method: 'POST',
     url: '/v1/subscriptions',
     headers: { 'content-type': 'application/json', origin: 'https://example.com' },
-    cookies: { '__Host-link_session': rawToken },
     body: JSON.stringify({
       planId,
-      email: `${discordUserId}@e2e-test.example.com`,
+      email,
       payjpToken: 'tok_test_e2e',
       privacyConsented: true,
     }),
@@ -260,8 +257,12 @@ export async function subscribeUser(
     throw new Error(`subscribeUser failed: ${res.statusCode} ${res.body}`);
   }
 
-  const member = await pgDb.findMemberByDiscordUserId(discordUserId);
-  return { memberId: member!.id, linkSessionToken: rawToken };
+  const body = res.json() as { memberId?: string };
+  if (!body.memberId) {
+    throw new Error('subscribeUser: response missing memberId');
+  }
+  const member = await pgDb.findMemberById(body.memberId);
+  return { memberId: member!.id };
 }
 
 // ---------------------------------------------------------------------------
