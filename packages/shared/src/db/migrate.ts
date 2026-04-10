@@ -12,8 +12,13 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
     const schemaPath = resolve(__dirname, '../schema.sql');
     const schemaSql = readFileSync(schemaPath, 'utf-8');
     await client.query('BEGIN');
-    await client.query(schemaSql);
-    await client.query('COMMIT');
+    try {
+      await client.query(schemaSql);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
 
     // Phase 2: Incremental migrations (ALTER, etc.)
     const migrationsDir = resolve(__dirname, 'migrations');
