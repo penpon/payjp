@@ -53,6 +53,7 @@ import {
   getMember,
   linkDiscord,
   MemberFetchError,
+  SessionCheckError,
   SubscriptionStatusError,
 } from '../api.js';
 
@@ -108,8 +109,8 @@ describe('main init()', () => {
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
     });
-    // No link_session → checkSession throws
-    vi.mocked(checkSession).mockRejectedValue(new Error('no session'));
+    // No link_session → checkSession returns 401
+    vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(401, 'Session check failed: 401'));
 
     await runInit();
 
@@ -202,6 +203,22 @@ describe('main init()', () => {
     expect(consoleSpy).toHaveBeenCalledWith('[init] failed:', error);
   });
 
+  it('should show error when checkSession fails with non-401 (e.g. 503)', async () => {
+    vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
+      subscriptionStatus: 'active',
+      planId: 'plan_business',
+      accessEndAt: '2026-05-07T00:00:00Z',
+      discordLinked: false,
+    });
+    vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(503, 'Session check failed: 503'));
+
+    await runInit();
+
+    expect(appDiv.textContent).toContain('連携状態の確認に失敗しました');
+    expect(consoleSpy).toHaveBeenCalled();
+  });
+
   // --- Cancel pending flow ---
 
   it('should clear cancelPending when member has no discord link', async () => {
@@ -213,7 +230,7 @@ describe('main init()', () => {
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
     });
-    vi.mocked(checkSession).mockRejectedValue(new Error('no session'));
+    vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(401, 'Session check failed: 401'));
 
     await runInit();
 

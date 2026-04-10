@@ -6,6 +6,7 @@ import {
   getMember,
   linkDiscord,
   MemberFetchError,
+  SessionCheckError,
   SubscriptionStatusError,
   startOAuth,
 } from './api.js';
@@ -306,27 +307,36 @@ async function init(): Promise<void> {
       if (!member.discordLinked) {
         // Discord未連携 → OAuthコールバック帰還かチェック
         // link_session Cookie があれば自動的にlink-discord APIを呼ぶ
+        let session: Awaited<ReturnType<typeof checkSession>> | null = null;
         try {
-          const session = await checkSession();
-          if (session.linked) {
-            // OAuth callback 帰還 → Discord連携実行
-            renderState(app, 'loading', startOAuth);
-            const linkResult = await linkDiscord();
-            if (linkResult.ok) {
-              renderState(app, 'link_complete', startOAuth, {
-                linkComplete: {
-                  roleGranted: linkResult.roleGranted ?? false,
-                  onBackToTop: () => {
-                    void init();
-                  },
-                },
-              });
-              return;
-            }
-            // link失敗 → サンクスページに戻す（再試行可能）
+          session = await checkSession();
+        } catch (err) {
+          // 401 のみ「link_session なし / 期限切れ / 無効」— サンクスページへ進む
+          if (!(err instanceof SessionCheckError && err.status === 401)) {
+            console.error('[init] Session check failed:', err);
+            renderState(app, 'error', startOAuth, {
+              errorMessage: '連携状態の確認に失敗しました。しばらく経ってから再度お試しください。',
+            });
+            return;
           }
-        } catch {
-          // link_session なし → サンクスページ表示
+        }
+
+        if (session?.linked) {
+          // OAuth callback 帰還 → Discord連携実行
+          renderState(app, 'loading', startOAuth);
+          const linkResult = await linkDiscord();
+          if (linkResult.ok) {
+            renderState(app, 'link_complete', startOAuth, {
+              linkComplete: {
+                roleGranted: linkResult.roleGranted ?? false,
+                onBackToTop: () => {
+                  void init();
+                },
+              },
+            });
+            return;
+          }
+          // link失敗 → サンクスページに戻す（再試行可能）
         }
 
         // Discord未連携 → サンクスページ
