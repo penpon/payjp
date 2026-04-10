@@ -301,4 +301,24 @@ describe('main init()', () => {
     expect(appDiv.querySelector('.discord-button')).not.toBeNull();
     expect(appDiv.textContent).toContain('Discordと連携して特典を受け取ってください');
   });
+
+  it('should show register_complete when linkDiscord throws (network/timeout)', async () => {
+    vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
+      subscriptionStatus: 'active',
+      planId: 'plan_business',
+      accessEndAt: '2026-05-07T00:00:00Z',
+      discordLinked: false,
+    });
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
+    vi.mocked(linkDiscord).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await runInit();
+
+    expect(linkDiscord).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith('[init] linkDiscord threw:', expect.any(TypeError));
+    // Falls through to register_complete (thanks page with Discord link button)
+    expect(appDiv.querySelector('.discord-button')).not.toBeNull();
+    expect(appDiv.textContent).toContain('Discordと連携して特典を受け取ってください');
+  });
 });

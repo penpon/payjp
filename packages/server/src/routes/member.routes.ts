@@ -127,6 +127,8 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
         }
 
         // Validate link_session
+        // used_at !== null → 既に消費済み。フロントエンドはリトライ時に getMember() を先に呼び、
+        // discordLinked=true なら購読画面に遷移するため、ここに到達するのは不正リクエストのみ。
         const lsHash = linkSessionTokenHash(linkSessionToken);
         const linkSession = await billingDeps.db.findLinkSession(lsHash);
         if (!linkSession || linkSession.expires_at < now || linkSession.used_at !== null) {

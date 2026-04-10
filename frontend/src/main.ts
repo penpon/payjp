@@ -324,8 +324,13 @@ async function init(): Promise<void> {
         if (session?.linked) {
           // OAuth callback 帰還 → Discord連携実行
           renderState(app, 'loading', startOAuth);
-          const linkResult = await linkDiscord();
-          if (linkResult.ok) {
+          let linkResult: Awaited<ReturnType<typeof linkDiscord>> | null = null;
+          try {
+            linkResult = await linkDiscord();
+          } catch (err) {
+            console.error('[init] linkDiscord threw:', err);
+          }
+          if (linkResult?.ok) {
             renderState(app, 'link_complete', startOAuth, {
               linkComplete: {
                 roleGranted: linkResult.roleGranted ?? false,
@@ -336,7 +341,7 @@ async function init(): Promise<void> {
             });
             return;
           }
-          // link失敗 → サンクスページに戻す（再試行可能）
+          // link失敗 or 例外 → サンクスページに戻す（再試行可能）
         }
 
         // Discord未連携 → サンクスページ
