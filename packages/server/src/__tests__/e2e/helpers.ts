@@ -43,14 +43,22 @@ export async function truncateAll(pool: pg.Pool): Promise<void> {
 // Mock ファクトリ
 // ---------------------------------------------------------------------------
 
+/** PAY.JP のトークンIDは `tok_` で始まる。不正な文字列は拒否し、本番に近い経路（422）を E2E で再現する。 */
+const PAYJP_TOKEN_ID_PATTERN = /^tok_[0-9a-zA-Z_]+$/;
+
 export function makeMockPayjpClient(): PayjpClient {
   const trialEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
   return {
-    fetchToken: vi.fn().mockResolvedValue({
-      id: 'tok_test_e2e',
-      used: false,
-      three_d_secure_status: 'verified',
-      card: { id: 'car_test_e2e' },
+    fetchToken: vi.fn().mockImplementation(async (tokenId: string) => {
+      if (!PAYJP_TOKEN_ID_PATTERN.test(tokenId)) {
+        throw new Error('No such token');
+      }
+      return {
+        id: 'tok_test_e2e',
+        used: false,
+        three_d_secure_status: 'verified',
+        card: { id: 'car_test_e2e' },
+      };
     }),
     createCustomer: vi.fn().mockResolvedValue({
       id: 'cus_test_e2e',
