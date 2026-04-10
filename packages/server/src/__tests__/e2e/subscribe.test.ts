@@ -132,9 +132,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
       // 既存メンバー: first_trial_granted_at 設定済み、subscription_status = deleted
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, subscription_status, first_trial_granted_at, payjp_customer_id)
-         VALUES ($1, $2, 'deleted', NOW(), 'cus_test_e2e')`,
-        [randomUUID(), discordUserId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, first_trial_granted_at, payjp_customer_id)
+         VALUES ($1, $2, $3, 'deleted', NOW(), 'cus_test_e2e')`,
+        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
@@ -165,9 +165,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, subscription_status, first_trial_granted_at, payjp_customer_id)
-         VALUES ($1, $2, 'deleted', NOW() - INTERVAL '60 days', 'cus_test_e2e')`,
-        [randomUUID(), discordUserId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, first_trial_granted_at, payjp_customer_id)
+         VALUES ($1, $2, $3, 'deleted', NOW() - INTERVAL '60 days', 'cus_test_e2e')`,
+        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
@@ -529,9 +529,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at)
-         VALUES ($1, $2, 'active', 'cus_test_e2e', 'sub_test_e2e', 'plan_e2e', NOW() + INTERVAL '30 days')`,
-        [randomUUID(), discordUserId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at)
+         VALUES ($1, $2, $3, 'active', 'cus_test_e2e', 'sub_test_e2e', 'plan_e2e', NOW() + INTERVAL '30 days')`,
+        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
@@ -553,9 +553,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at)
-         VALUES ($1, $2, 'trial', 'cus_test_e2e', 'sub_test_e2e', 'plan_e2e', NOW() + INTERVAL '30 days')`,
-        [randomUUID(), discordUserId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at)
+         VALUES ($1, $2, $3, 'trial', 'cus_test_e2e', 'sub_test_e2e', 'plan_e2e', NOW() + INTERVAL '30 days')`,
+        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
@@ -576,9 +576,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at)
-         VALUES ($1, $2, 'canceled', 'cus_test_e2e', 'sub_test_e2e', 'plan_e2e', NOW() + INTERVAL '15 days')`,
-        [randomUUID(), discordUserId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at)
+         VALUES ($1, $2, $3, 'canceled', 'cus_test_e2e', 'sub_test_e2e', 'plan_e2e', NOW() + INTERVAL '15 days')`,
+        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
