@@ -82,30 +82,36 @@ function createPayjpAdapter(): PayjpAdapter | null {
   try {
     const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'subwindow' });
     const elements = payjp.elements({ locale: 'ja' });
-    let cachedCard: ReturnType<typeof elements.create> | null = null;
+    let cachedElements: import('./types.js').PayjpCardElements | null = null;
+
+    const elementStyle = {
+      base: {
+        color: '#061b31',
+        fontSize: '16px',
+        fontFamily: 'Inter, "Noto Sans JP", sans-serif',
+        '::placeholder': { color: '#64748d' },
+      },
+      invalid: { color: '#ea2261' },
+    };
 
     return {
-      createCardElement(selector) {
-        if (!cachedCard) {
-          cachedCard = elements.create('card', {
-            style: {
-              base: {
-                color: '#061b31',
-                fontSize: '16px',
-                fontFamily: 'Inter, "Noto Sans JP", sans-serif',
-                '::placeholder': { color: '#64748d' },
-              },
-              invalid: { color: '#ea2261' },
-            },
-          });
+      createCardElements(selectors) {
+        if (!cachedElements) {
+          cachedElements = {
+            cardNumber: elements.create('cardNumber', { style: elementStyle }),
+            cardExpiry: elements.create('cardExpiry', { style: elementStyle }),
+            cardCvc: elements.create('cardCvc', { style: elementStyle }),
+          };
         }
-        cachedCard.mount(selector);
-        return cachedCard;
+        cachedElements.cardNumber.mount(selectors.cardNumber);
+        cachedElements.cardExpiry.mount(selectors.cardExpiry);
+        cachedElements.cardCvc.mount(selectors.cardCvc);
+        return cachedElements;
       },
-      async createToken(cardElement, data) {
+      async createToken(cardNumberElement, data) {
         try {
           const result = await payjp.createToken(
-            cardElement,
+            cardNumberElement,
             { three_d_secure: true, card: { name: data.name, email: data.email } },
             { threeDSecureDialogOptions: { timeout: 1800000 } },
           );

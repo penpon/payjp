@@ -139,7 +139,12 @@ function renderBillingForm(
   let email = state.email;
   let cardholderName = state.cardholderName;
   let consented = state.privacyConsented;
-  let cardComplete = false;
+  // biome-ignore lint/style/useConst: reassigned in PAY.JP change handlers
+  let cardNumberComplete = false;
+  // biome-ignore lint/style/useConst: reassigned in PAY.JP change handlers
+  let cardExpiryComplete = false;
+  // biome-ignore lint/style/useConst: reassigned in PAY.JP change handlers
+  let cardCvcComplete = false;
 
   // Plan selection
   const planContainer = el('div', { class: 'plan-grid', role: 'radiogroup', 'aria-label': 'プラン選択' });
@@ -218,8 +223,10 @@ function renderBillingForm(
     updateSubmitState();
   });
 
-  // PAY.JP card element mount point
-  const cardMountPoint = el('div', { id: 'payjp-card-element', class: 'payjp-mount' });
+  // PAY.JP card element mount points
+  const cardNumberMount = el('div', { id: 'payjp-card-number', class: 'payjp-mount' });
+  const cardExpiryMount = el('div', { id: 'payjp-card-expiry', class: 'payjp-mount' });
+  const cardCvcMount = el('div', { id: 'payjp-card-cvc', class: 'payjp-mount' });
 
   // Consent checkbox
   const checkbox = el('input', {
@@ -245,6 +252,7 @@ function renderBillingForm(
   );
 
   function updateSubmitState(): void {
+    const cardComplete = cardNumberComplete && cardExpiryComplete && cardCvcComplete;
     const valid =
       selectedPlanId !== '' && email.trim() !== '' && cardholderName.trim() !== '' && consented && cardComplete;
     if (valid) {
@@ -280,14 +288,36 @@ function renderBillingForm(
     el('div', { class: 'form-section' }, [
       el('h2', { class: 'form-section-title' }, ['お支払い情報']),
       el('div', { class: 'form-group' }, [
-        el('label', { class: 'form-label', for: 'billing-email' }, ['メールアドレス']),
+        el('label', { class: 'form-label', for: 'billing-email' }, [
+          'メールアドレス',
+          el('span', { class: 'required-badge' }, ['必須']),
+        ]),
         emailInput,
       ]),
       el('div', { class: 'form-group' }, [
-        el('label', { class: 'form-label', for: 'billing-name' }, ['カード名義（半角英字）']),
+        el('label', { class: 'form-label', for: 'billing-name' }, [
+          'カード名義（半角英字）',
+          el('span', { class: 'required-badge' }, ['必須']),
+        ]),
         nameInput,
       ]),
-      el('div', { class: 'form-group' }, [el('label', { class: 'form-label' }, ['カード情報']), cardMountPoint]),
+      el('div', { class: 'form-group' }, [
+        el('label', { class: 'form-label' }, ['カード番号', el('span', { class: 'required-badge' }, ['必須'])]),
+        cardNumberMount,
+      ]),
+      el('div', { class: 'card-row' }, [
+        el('div', { class: 'card-row-field' }, [
+          el('label', { class: 'form-label' }, ['有効期限', el('span', { class: 'required-badge' }, ['必須'])]),
+          cardExpiryMount,
+        ]),
+        el('div', { class: 'card-row-field' }, [
+          el('label', { class: 'form-label' }, [
+            'セキュリティコード',
+            el('span', { class: 'required-badge' }, ['必須']),
+          ]),
+          cardCvcMount,
+        ]),
+      ]),
     ]),
     el('div', { class: 'consent-row' }, [
       checkbox,
@@ -303,41 +333,65 @@ function renderBillingForm(
 
   container.appendChild(form);
 
-  // Mount PAY.JP card element after DOM insertion
+  // Mount PAY.JP card elements after DOM insertion
   if (payjpAdapter) {
     queueMicrotask(() => {
-      if (!container.querySelector('#payjp-card-element')) {
-        console.error('[billing] Card mount point #payjp-card-element not found in DOM');
-        cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
+      if (
+        !container.querySelector('#payjp-card-number') ||
+        !container.querySelector('#payjp-card-expiry') ||
+        !container.querySelector('#payjp-card-cvc')
+      ) {
+        console.error('[billing] Card mount points not found in DOM');
+        cardNumberMount.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
         return;
       }
       try {
-        const cardElement = payjpAdapter.createCardElement('#payjp-card-element');
-        callbacks.onCardElementReady?.(cardElement);
-        cardElement.on('change', (e) => {
-          cardComplete = e.complete;
-          updateSubmitState();
+        const cardElements = payjpAdapter.createCardElements({
+          cardNumber: '#payjp-card-number',
+          cardExpiry: '#payjp-card-expiry',
+          cardCvc: '#payjp-card-cvc',
+        });
+        callbacks.onCardElementReady?.(cardElements.cardNumber);
 
-          // Show/clear inline error
-          const existing = container.querySelector('.card-error');
-          if (e.error) {
-            if (existing) {
-              existing.textContent = e.error.message;
-            } else {
-              const errEl = el('div', { class: 'card-error', role: 'alert' }, [e.error.message]);
-              cardMountPoint.after(errEl);
+        const wireChange = (
+          element: import('./types.js').PayjpCardElement,
+          mountPoint: HTMLElement,
+          setComplete: (v: boolean) => void,
+        ): void => {
+          element.on('change', (e) => {
+            setComplete(e.complete);
+            updateSubmitState();
+
+            const existing = mountPoint.nextElementSibling;
+            if (e.error) {
+              if (existing?.classList.contains('card-error')) {
+                existing.textContent = e.error.message;
+              } else {
+                const errEl = el('div', { class: 'card-error', role: 'alert' }, [e.error.message]);
+                mountPoint.after(errEl);
+              }
+            } else if (existing?.classList.contains('card-error')) {
+              existing.remove();
             }
-          } else if (existing) {
-            existing.remove();
-          }
+          });
+        };
+
+        wireChange(cardElements.cardNumber, cardNumberMount, (v) => {
+          cardNumberComplete = v;
+        });
+        wireChange(cardElements.cardExpiry, cardExpiryMount, (v) => {
+          cardExpiryComplete = v;
+        });
+        wireChange(cardElements.cardCvc, cardCvcMount, (v) => {
+          cardCvcComplete = v;
         });
       } catch (err) {
         console.error('[billing] PAY.JP card element creation failed:', err);
-        cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
+        cardNumberMount.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
       }
     });
   } else {
-    cardMountPoint.textContent = 'カード入力欄を読み込めませんでした。ページを再読み込みしてください。';
+    cardNumberMount.textContent = 'カード入力欄を読み込めませんでした。ページを再読み込みしてください。';
   }
 }
 

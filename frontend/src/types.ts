@@ -118,7 +118,13 @@ export interface PayjpChangeEvent {
 }
 
 export interface PayjpElements {
-  create(type: 'card', options?: Record<string, unknown>): PayjpCardElement;
+  create(type: 'card' | 'cardNumber' | 'cardExpiry' | 'cardCvc', options?: Record<string, unknown>): PayjpCardElement;
+}
+
+export interface PayjpCardElements {
+  cardNumber: PayjpCardElement;
+  cardExpiry: PayjpCardElement;
+  cardCvc: PayjpCardElement;
 }
 
 /** PAY.JP.js `createToken` の解決値 */
@@ -146,9 +152,9 @@ declare global {
 // --- PAY.JP adapter (for testability) ---
 
 export interface PayjpAdapter {
-  createCardElement(selector: string): PayjpCardElement;
+  createCardElements(selectors: { cardNumber: string; cardExpiry: string; cardCvc: string }): PayjpCardElements;
   createToken(
-    cardElement: PayjpCardElement,
+    cardNumberElement: PayjpCardElement,
     data: { name: string; email: string },
   ): Promise<{ tokenId?: string; error?: string }>;
 }

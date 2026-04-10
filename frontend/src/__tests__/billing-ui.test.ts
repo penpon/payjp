@@ -18,15 +18,17 @@ function createMockCallbacks(): BillingCallbacks {
   };
 }
 
+function createMockElement() {
+  return { mount: vi.fn(), unmount: vi.fn(), clear: vi.fn(), on: vi.fn() };
+}
+
 function createMockPayjpAdapter(): PayjpAdapter {
-  const mockElement = {
-    mount: vi.fn(),
-    unmount: vi.fn(),
-    clear: vi.fn(),
-    on: vi.fn(),
-  };
   return {
-    createCardElement: vi.fn().mockReturnValue(mockElement),
+    createCardElements: vi.fn().mockReturnValue({
+      cardNumber: createMockElement(),
+      cardExpiry: createMockElement(),
+      cardCvc: createMockElement(),
+    }),
     createToken: vi.fn().mockResolvedValue({ tokenId: 'tok_test' }),
   };
 }
@@ -74,10 +76,19 @@ describe('billing-ui', () => {
       expect(container.querySelector('#billing-name')).not.toBeNull();
     });
 
-    it('should render PAY.JP card mount point', () => {
+    it('should render PAY.JP card mount points', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 
-      expect(container.querySelector('#payjp-card-element')).not.toBeNull();
+      expect(container.querySelector('#payjp-card-number')).not.toBeNull();
+      expect(container.querySelector('#payjp-card-expiry')).not.toBeNull();
+      expect(container.querySelector('#payjp-card-cvc')).not.toBeNull();
+    });
+
+    it('should render required badges on all form labels', () => {
+      renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
+
+      const badges = container.querySelectorAll('.required-badge');
+      expect(badges.length).toBe(5);
     });
 
     it('should render consent checkbox and privacy link', () => {
@@ -165,14 +176,23 @@ describe('billing-ui', () => {
 
       await Promise.resolve();
 
-      const mockElement = vi.mocked(payjp.createCardElement).mock.results[0]?.value as {
-        on: (ev: string, cb: (e: { complete: boolean }) => void) => void;
-      };
-      const changeCb = vi.mocked(mockElement.on).mock.calls.find((c) => c[0] === 'change')?.[1] as (e: {
-        complete: boolean;
-      }) => void;
-      expect(changeCb).toBeDefined();
-      changeCb({ complete: true });
+      type MockEl = ReturnType<typeof createMockElement>;
+      type MockCardElements = { cardNumber: MockEl; cardExpiry: MockEl; cardCvc: MockEl };
+      const cardElements = vi.mocked(payjp.createCardElements).mock.results[0]?.value as MockCardElements;
+      const getChangeCb = (mockEl: MockEl) =>
+        vi.mocked(mockEl.on).mock.calls.find((c) => c[0] === 'change')?.[1] as
+          | ((e: { complete: boolean }) => void)
+          | undefined;
+
+      const numberCb = getChangeCb(cardElements.cardNumber);
+      const expiryCb = getChangeCb(cardElements.cardExpiry);
+      const cvcCb = getChangeCb(cardElements.cardCvc);
+      expect(numberCb).toBeDefined();
+      expect(expiryCb).toBeDefined();
+      expect(cvcCb).toBeDefined();
+      numberCb?.({ complete: true });
+      expiryCb?.({ complete: true });
+      cvcCb?.({ complete: true });
 
       const btn = container.querySelector('.submit-button') as HTMLButtonElement;
       expect(btn.hasAttribute('disabled')).toBe(true);
