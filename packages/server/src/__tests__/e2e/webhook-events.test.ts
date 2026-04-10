@@ -294,7 +294,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
       expect(member.rows[0].subscription_status).toBe('canceled');
       expect(member.rows[0].access_end_at).not.toBeNull();
 
-      // canceled は GRANT_STATUSES に含まれるため syncRole は grant で呼ばれる (active→canceled でステータス変化あり)
+      // canceled は GRANT_STATUSES に含まれるため active→canceled のステータス変化で syncRole は grant（revoke ではない）
+      expect(syncRole).toHaveBeenCalledOnce();
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant');
       expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'revoke');
     });
 
