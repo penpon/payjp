@@ -57,6 +57,7 @@ import {
 } from '../api.js';
 
 describe('main init()', () => {
+  const TEST_MEMBER_ID = 'member-test-001';
   let appDiv: HTMLDivElement;
   const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -101,6 +102,7 @@ describe('main init()', () => {
 
   it('should show register_complete page when member exists but discord not linked', async () => {
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
@@ -121,6 +123,7 @@ describe('main init()', () => {
 
   it('should show subscribed state when member has discord linked and active subscription', async () => {
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
@@ -144,6 +147,7 @@ describe('main init()', () => {
 
   it('should show billing form when member has discord linked but no subscription', async () => {
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: null,
       planId: null,
       accessEndAt: null,
@@ -163,6 +167,7 @@ describe('main init()', () => {
 
   it('should show error when subscription status endpoint is unavailable', async () => {
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
@@ -202,6 +207,7 @@ describe('main init()', () => {
   it('should clear cancelPending when member has no discord link', async () => {
     sessionStorage.setItem('cancelPending', String(Date.now()));
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
@@ -244,6 +250,7 @@ describe('main init()', () => {
 
   it('should call linkDiscord and show link_complete when member has no discord but checkSession returns linked', async () => {
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
@@ -261,6 +268,7 @@ describe('main init()', () => {
 
   it('should show register_complete when linkDiscord fails', async () => {
     vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',

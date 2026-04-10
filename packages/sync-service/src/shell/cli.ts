@@ -312,7 +312,7 @@ async function handleCancelRecovery(
 ): Promise<RecoveryResult> {
   const customerId = member.payjp_customer_id as string | null;
   const memberId = member.id as string;
-  const discordUserId = member.discord_user_id as string;
+  const discordUserId = (member.discord_user_id as string | null) ?? '';
 
   // REQ-SYNC-020 step 1
   if (!customerId) {
@@ -345,7 +345,7 @@ async function handleCancelRecovery(
 
     const accessEndAt = member.access_end_at as Date | null;
     const accessEndAtUnix = accessEndAt ? Math.floor(accessEndAt.getTime() / 1000) : null;
-    const evaluation = evaluateSubscriptionSearchResult(candidates, discordUserId, accessEndAtUnix);
+    const evaluation = evaluateSubscriptionSearchResult(candidates, discordUserId ?? '', accessEndAtUnix, memberId);
 
     if (evaluation === 'fail-close') {
       await insertImpactLog(deps.db, memberId, 'cancel_recovery_subscription_ambiguous', operationId);

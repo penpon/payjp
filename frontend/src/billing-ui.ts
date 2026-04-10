@@ -356,8 +356,8 @@ function renderSubmitting(): HTMLDivElement {
 // --- Success step ---
 
 export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBackToTop: () => void): HTMLDivElement {
-  const plan = plans.find((p) => p.id === result.planId);
-  const planName = plan?.name ?? result.planId;
+  const plan = result.planId ? plans.find((p) => p.id === result.planId) : undefined;
+  const planName = plan?.name ?? (result.planId.trim() ? result.planId : 'プラン（参照できません）');
 
   const statusLabel = result.trialApplied ? 'トライアル' : '有効';
 
@@ -382,13 +382,15 @@ export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBac
         ? [
             el('div', { class: 'result-row' }, [
               el('span', { class: 'result-label' }, ['トライアル期間']),
-              el('span', { class: 'result-value' }, [`${formatDate(result.accessEndAt)} まで`]),
+              el('span', { class: 'result-value' }, [
+                result.accessEndAt.trim() ? `${formatDate(result.accessEndAt)} まで` : '—',
+              ]),
             ]),
           ]
         : [
             el('div', { class: 'result-row' }, [
               el('span', { class: 'result-label' }, ['次回更新日']),
-              el('span', { class: 'result-value' }, [formatDate(result.accessEndAt)]),
+              el('span', { class: 'result-value' }, [result.accessEndAt.trim() ? formatDate(result.accessEndAt) : '—']),
             ]),
           ]),
     ]),

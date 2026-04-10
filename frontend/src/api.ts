@@ -254,7 +254,10 @@ export async function getMember(): Promise<MemberInfo | null> {
   const obj = data as Record<string, unknown>;
   if (obj.member === null || obj.member === undefined) return null;
   const m = obj.member as Record<string, unknown>;
+  const memberId = typeof m.memberId === 'string' ? m.memberId : null;
+  if (!memberId) return null;
   return {
+    memberId,
     subscriptionStatus: typeof m.subscriptionStatus === 'string' ? m.subscriptionStatus : null,
     planId: typeof m.planId === 'string' ? m.planId : null,
     accessEndAt: typeof m.accessEndAt === 'string' ? m.accessEndAt : null,

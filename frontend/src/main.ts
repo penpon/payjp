@@ -334,8 +334,8 @@ async function init(): Promise<void> {
           registerComplete: {
             result: {
               ok: true as const,
-              memberId: '',
-              subscriptionStatus: member.subscriptionStatus ?? '',
+              memberId: member.memberId,
+              subscriptionStatus: member.subscriptionStatus ?? 'active',
               planId: member.planId ?? '',
               trialApplied: false,
               accessEndAt: member.accessEndAt ?? '',

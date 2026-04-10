@@ -57,11 +57,20 @@ export function calculateTrialEnd(now: Date): Date {
 }
 
 // PROP-BILL-009: REQ-BILL-013, REQ-BILL-014
+// Includes member_id + operation_id for billing-first; discord_user_id when already linked (sync/CLI compatibility).
 export function buildSubscriptionMetadata(
   memberId: string,
   operationId: string,
-): { member_id: string; operation_id: string } {
-  return { member_id: memberId, operation_id: operationId };
+  discordUserId?: string | null,
+): Record<string, string> {
+  const meta: Record<string, string> = {
+    member_id: memberId,
+    operation_id: operationId,
+  };
+  if (discordUserId) {
+    meta.discord_user_id = discordUserId;
+  }
+  return meta;
 }
 
 // member session token hash (SHA-256, deterministic)

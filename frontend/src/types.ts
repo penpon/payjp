@@ -64,6 +64,7 @@ export interface SubscribeResponse {
 }
 
 export interface MemberInfo {
+  memberId: string;
   subscriptionStatus: string | null;
   planId: string | null;
   accessEndAt: string | null;

@@ -556,6 +556,11 @@ describe('PROP-SYNC-019: evaluateSubscriptionSearchResult', () => {
     const candidates = [{ id: 'sub_1', status: 'active' }];
     expect(evaluateSubscriptionSearchResult(candidates, 'user_1', null)).toBe('fail-close');
   });
+
+  it('1 candidate with member_id metadata match (no discord) → single-match', () => {
+    const candidates = [{ id: 'sub_1', status: 'active', metadata: { member_id: 'mem-a', operation_id: 'op1' } }];
+    expect(evaluateSubscriptionSearchResult(candidates, '', null, 'mem-a')).toBe('single-match');
+  });
 });
 
 // PROP-SYNC-020: isInflightOperationStale

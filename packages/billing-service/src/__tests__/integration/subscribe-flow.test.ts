@@ -558,6 +558,7 @@ describe('POST /v1/subscriptions — Integration', () => {
           metadata: expect.objectContaining({
             member_id: MEMBER_ID,
             operation_id: OPERATION_ID,
+            discord_user_id: DISCORD_USER_ID,
           }),
         }),
       );
@@ -566,6 +567,7 @@ describe('POST /v1/subscriptions — Integration', () => {
           metadata: expect.objectContaining({
             member_id: MEMBER_ID,
             operation_id: OPERATION_ID,
+            discord_user_id: DISCORD_USER_ID,
           }),
         }),
       );

@@ -167,7 +167,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     }
 
     // Step 8: Customer creation or reuse
-    const metadata = buildSubscriptionMetadata(member.id, operationId);
+    const metadata = buildSubscriptionMetadata(member.id, operationId, member.discord_user_id);
     let customerId = member.payjp_customer_id;
     if (!customerId) {
       let customer: Awaited<ReturnType<typeof payjp.createCustomer>>;

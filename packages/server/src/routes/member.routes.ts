@@ -72,6 +72,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
 
       return reply.status(200).send({
         member: {
+          memberId: member.id,
           subscriptionStatus: member.subscription_status,
           planId: member.payjp_plan_id,
           accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,

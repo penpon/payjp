@@ -181,14 +181,22 @@ describe('PROP-BILL-008: calculateTrialEnd', () => {
 // PROP-BILL-009: buildSubscriptionMetadata (property test)
 // ---------------------------------------------------------------------------
 describe('PROP-BILL-009: buildSubscriptionMetadata', () => {
-  it('(property) always includes both keys with exact values', () => {
+  it('(property) always includes member_id and operation_id', () => {
     fc.assert(
       fc.property(fc.uuid(), fc.uuid(), (memberId, operationId) => {
         const meta = buildSubscriptionMetadata(memberId, operationId);
         expect(meta).toHaveProperty('member_id', memberId);
         expect(meta).toHaveProperty('operation_id', operationId);
+        expect(meta.discord_user_id).toBeUndefined();
       }),
     );
+  });
+
+  it('includes discord_user_id when provided', () => {
+    const meta = buildSubscriptionMetadata('m1', 'op1', '123456789012345678');
+    expect(meta.member_id).toBe('m1');
+    expect(meta.operation_id).toBe('op1');
+    expect(meta.discord_user_id).toBe('123456789012345678');
   });
 });
 
