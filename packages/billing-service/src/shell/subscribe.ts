@@ -28,6 +28,33 @@ function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<str
   console[level](JSON.stringify({ level, service: 'billing-subscribe', message, ...ctx }));
 }
 
+async function issueMemberSessionToken(
+  db: BillingDeps['db'],
+  memberId: string,
+  now: Date,
+  ctx: { email: string; operationId?: string },
+): Promise<string | undefined> {
+  const rawToken = randomBytes(32).toString('hex');
+  const tokenHash = memberSessionTokenHash(rawToken);
+  try {
+    await db.insertMemberSession({
+      memberSessionTokenHash: tokenHash,
+      memberId,
+      expiresAt: new Date(now.getTime() + MEMBER_SESSION_TTL_MS),
+    });
+    return rawToken;
+  } catch (err) {
+    slog('error', 'insertMemberSession failed', {
+      email: ctx.email,
+      memberId,
+      ...(ctx.operationId !== undefined ? { operationId: ctx.operationId } : {}),
+      error: String(err),
+    });
+    // Non-fatal: subscription succeeded, but session cookie must not be set without a DB row
+    return undefined;
+  }
+}
+
 /** F-02 確定失敗パス: inflight 解除はベストエフォート */
 async function clearInflightOnDefinitePayjpFailure(
   db: BillingDeps['db'],
@@ -97,7 +124,12 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     // Step 5: Existing subscription check
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
-      return { ok: true, data: response };
+      const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: req.email });
+      return {
+        ok: true,
+        data: response,
+        ...(memberSessionToken !== undefined ? { memberSessionToken } : {}),
+      };
     }
 
     // Step 6: Persist operationId BEFORE any PAY.JP write
@@ -425,25 +457,10 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     };
 
     // Step 13: Issue member session token for post-subscribe flows (only if DB row is persisted)
-    let memberSessionToken: string | undefined;
-    const rawToken = randomBytes(32).toString('hex');
-    const tokenHash = memberSessionTokenHash(rawToken);
-    try {
-      await db.insertMemberSession({
-        memberSessionTokenHash: tokenHash,
-        memberId: updatedMember.id,
-        expiresAt: new Date(now.getTime() + MEMBER_SESSION_TTL_MS),
-      });
-      memberSessionToken = rawToken;
-    } catch (err) {
-      slog('error', 'insertMemberSession failed after successful subscribe', {
-        email: req.email,
-        operationId,
-        memberId: updatedMember.id,
-        error: String(err),
-      });
-      // Non-fatal: subscription succeeded, but session cookie must not be set without a DB row
-    }
+    const memberSessionToken = await issueMemberSessionToken(db, updatedMember.id, now, {
+      email: req.email,
+      operationId,
+    });
 
     slog('info', 'subscribe completed', {
       email: req.email,

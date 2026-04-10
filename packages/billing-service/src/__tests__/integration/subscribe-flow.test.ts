@@ -339,7 +339,9 @@ describe('POST /v1/subscriptions — Integration', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.subscriptionStatus).toBe('active');
+        expect(result.memberSessionToken).toBeDefined();
       }
+      expect(deps.db.insertMemberSession).toHaveBeenCalledTimes(1);
       expect(deps.payjp.createCustomer).not.toHaveBeenCalled();
     });
 
