@@ -28,7 +28,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     payjp_customer_id: null,
     payjp_subscription_id: null,
     payjp_initial_charge_id: null,
-    payjp_plan_id: null,
+    payjp_plan_id: 'plan-001',
     subscription_status: null,
     first_trial_granted_at: null,
     initial_charge_paid_at: null,
@@ -77,7 +77,7 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: FRONTEND_BASE_URL,
     allowedPlanIds: ['plan-001'],
     discordGuildId: 'guild-001',
-    discordPaidRoleId: 'role-001',
+    planRoleMapping: { 'plan-001': 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
   };
@@ -210,7 +210,7 @@ describe('POST /v1/members/link-discord', () => {
     expect(res.json()).toEqual({ ok: true, discordUserId: DISCORD_USER_ID, roleGranted: true });
     expect(deps.db.acquireAdvisoryLock).toHaveBeenNthCalledWith(1, `member-link:${MEMBER_ID}`);
     expect(deps.db.acquireAdvisoryLock).toHaveBeenNthCalledWith(2, DISCORD_USER_ID);
-    expect(deps.discord.checkMembership).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID);
+    expect(deps.discord.checkMembership).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
     expect(deps.discord.assignRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
     expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
   });

@@ -40,18 +40,18 @@ function canBotAssignRole(params: {
   allRoles: DiscordApiRole[];
   botMember: DiscordApiMember;
   guildId: string;
-  paidRoleId: string;
+  roleId: string;
 }): boolean {
-  const { allRoles, botMember, guildId, paidRoleId } = params;
-  const paidRole = allRoles.find((r) => r.id === paidRoleId);
-  if (!paidRole) return false;
+  const { allRoles, botMember, guildId, roleId } = params;
+  const targetRole = allRoles.find((r) => r.id === roleId);
+  if (!targetRole) return false;
 
   const perms = mergeGuildPermissions(botMember.roles, allRoles, guildId);
   if ((perms & PERM_ADMINISTRATOR) === PERM_ADMINISTRATOR) return true;
   if ((perms & PERM_MANAGE_ROLES) !== PERM_MANAGE_ROLES) return false;
 
   const botTop = highestRolePosition(botMember.roles, allRoles);
-  return botTop > paidRole.position;
+  return botTop > targetRole.position;
 }
 
 // ---- 1. Env validation ----
@@ -63,7 +63,8 @@ const REQUIRED_ENV = [
   'DISCORD_REDIRECT_URI',
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
-  'DISCORD_PAID_ROLE_ID',
+  // DISCORD_PLAN_ROLE_IDS: comma-separated role IDs, same order as PAYJP_PLAN_IDS
+  'DISCORD_PLAN_ROLE_IDS',
   'PAYJP_SECRET_KEY',
   'PAYJP_LIVEMODE',
   'PAYJP_PLAN_IDS',
@@ -222,7 +223,7 @@ try {
 }
 
 const discordClient: DiscordClient = {
-  async checkMembership(guildId, discordUserId) {
+  async checkMembership(guildId, discordUserId, roleId?: string) {
     try {
       await discordRest.get(`/guilds/${guildId}/members/${discordUserId}`);
     } catch (err: unknown) {
@@ -233,7 +234,6 @@ const discordClient: DiscordClient = {
       throw err;
     }
 
-    const paidRoleId = env.DISCORD_PAID_ROLE_ID;
     let rolesRaw: DiscordApiRole[];
     let botMemberRaw: DiscordApiMember;
     try {
@@ -249,13 +249,12 @@ const discordClient: DiscordClient = {
       throw err;
     }
 
-    const canAssignRole = canBotAssignRole({
-      allRoles: rolesRaw,
-      botMember: botMemberRaw,
-      guildId,
-      paidRoleId,
-    });
-    return { isMember: true, canAssignRole };
+    const canAssign = roleId
+      ? canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId })
+      : Object.values(planRoleMapping).some((rid) =>
+          canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId: rid }),
+        );
+    return { isMember: true, canAssignRole: canAssign };
   },
   async assignRole(guildId, discordUserId, roleId) {
     await discordRest.put(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
@@ -298,13 +297,14 @@ const discordClient: DiscordClient = {
   },
 };
 
-const syncRole = async (userId: string, action: 'grant' | 'revoke'): Promise<void> => {
+async function syncRole(userId: string, action: 'grant' | 'revoke', roleId: string): Promise<void> {
+  const endpoint = `/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${roleId}` as const;
   if (action === 'grant') {
-    await discordRest.put(`/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${env.DISCORD_PAID_ROLE_ID}`);
+    await discordRest.put(endpoint);
   } else {
-    await discordRest.delete(`/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${env.DISCORD_PAID_ROLE_ID}`);
+    await discordRest.delete(endpoint);
   }
-};
+}
 
 // ---- 4. Wire dependencies ----
 
@@ -319,6 +319,20 @@ if (allowedPlanIds.length === 0) {
   process.exit(1);
 }
 
+const discordPlanRoleIds = env.DISCORD_PLAN_ROLE_IDS.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (discordPlanRoleIds.length !== allowedPlanIds.length) {
+  process.stderr.write(
+    `[startup] DISCORD_PLAN_ROLE_IDS must have the same number of comma-separated entries as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${discordPlanRoleIds.length})\n`,
+  );
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+const planRoleMapping: Record<string, string> = Object.fromEntries(
+  allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
+);
+
 const billingDeps: BillingDeps = {
   db: dbClient,
   payjp: payjpClient,
@@ -327,7 +341,7 @@ const billingDeps: BillingDeps = {
     frontendBaseUrl: env.FRONTEND_BASE_URL,
     allowedPlanIds,
     discordGuildId: env.DISCORD_GUILD_ID,
-    discordPaidRoleId: env.DISCORD_PAID_ROLE_ID,
+    planRoleMapping,
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     discordTokenEncryptionKey,
@@ -341,7 +355,7 @@ const webhookDeps: WebhookHandlerDeps = {
   payjpWebhookToken: process.env.PAYJP_WEBHOOK_TOKEN ?? '',
   expectedLivemode: env.PAYJP_LIVEMODE === 'true',
   discordGuildId: env.DISCORD_GUILD_ID,
-  discordRoleId: env.DISCORD_PAID_ROLE_ID,
+  planRoleMapping,
   syncRole,
   log: (entry) => console.log(JSON.stringify(entry)),
 };

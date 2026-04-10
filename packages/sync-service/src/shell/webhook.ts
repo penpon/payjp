@@ -13,7 +13,9 @@ import {
   mapSubscriptionStatus,
   maskSensitiveLogFields,
   resolveEffectiveSubscriptionStatus,
+  resolveRoleIdForPlan,
   shouldGrantRole,
+  shouldSwapRole,
   shouldSyncRole,
   validateRequiredFields,
   validateWebhookToken,
@@ -175,6 +177,9 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         lockedMember: Record<string, unknown>;
         statusChanged: boolean;
         action?: 'grant' | 'revoke';
+        planChanged: boolean;
+        oldPlanId: string | null;
+        newPlanId: string | null;
       };
 
   let txResult: TxResult;
@@ -242,6 +247,10 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
       const oldStatus = lockedMember.subscription_status as string | null;
       const statusChanged = shouldSyncRole(oldStatus, newStatus);
 
+      const oldPlanId = lockedMember.payjp_plan_id as string | null;
+      const newPlanId = event.data?.plan?.id ?? oldPlanId;
+      const planChanged = shouldSwapRole(oldPlanId, newPlanId);
+
       const updates: Record<string, unknown> = {
         last_payjp_event_created_at: event.created!,
         subscription_status: newStatus,
@@ -269,6 +278,9 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         lockedMember,
         statusChanged,
         action: statusChanged ? (shouldGrantRole(newStatus) ? ('grant' as const) : ('revoke' as const)) : undefined,
+        planChanged,
+        oldPlanId,
+        newPlanId,
       };
     });
   } catch (err) {
@@ -278,11 +290,53 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
   // --- Post-transaction: role sync (best-effort, outside transaction) ---
   if (txResult.type === 'unknown_status') {
-    await attemptRoleSync(deps, txResult.lockedMember, 'revoke', 'role_sync_failed_unknown_status');
+    await attemptRoleSyncAllRoles(deps, txResult.lockedMember, 'revoke', 'role_sync_failed_unknown_status');
   }
 
-  if (txResult.type === 'processed' && txResult.statusChanged && txResult.action) {
-    await attemptRoleSync(deps, txResult.lockedMember, txResult.action, 'role_sync_failed');
+  if (txResult.type === 'processed') {
+    const { statusChanged, action, planChanged, oldPlanId, newPlanId } = txResult;
+
+    if (statusChanged && action) {
+      if (action === 'revoke') {
+        // Revoke: use oldPlanId (the role that was granted)
+        const roleId = resolveRoleIdForPlan(oldPlanId, deps.planRoleMapping);
+        if (roleId) {
+          await attemptRoleSync(deps, txResult.lockedMember, 'revoke', 'role_sync_failed', roleId);
+        } else {
+          await attemptRoleSyncAllRoles(deps, txResult.lockedMember, 'revoke', 'role_sync_failed');
+        }
+      } else {
+        // Grant: if plan also changed, revoke old first
+        if (planChanged && oldPlanId) {
+          const oldRoleId = resolveRoleIdForPlan(oldPlanId, deps.planRoleMapping);
+          if (oldRoleId) {
+            await attemptRoleSync(deps, txResult.lockedMember, 'revoke', 'role_swap_revoke_failed', oldRoleId);
+          }
+        }
+        const roleId = resolveRoleIdForPlan(newPlanId, deps.planRoleMapping);
+        if (roleId) {
+          await attemptRoleSync(deps, txResult.lockedMember, 'grant', 'role_sync_failed', roleId);
+        } else {
+          await logUnmappedPlanWarning(deps, txResult.lockedMember, 'grant', newPlanId);
+        }
+      }
+    } else if (
+      !statusChanged &&
+      planChanged &&
+      shouldGrantRole(txResult.lockedMember.subscription_status as string | null)
+    ) {
+      // Status unchanged but plan changed while still grant-eligible → swap roles
+      const oldRoleId = resolveRoleIdForPlan(oldPlanId, deps.planRoleMapping);
+      const newRoleId = resolveRoleIdForPlan(newPlanId, deps.planRoleMapping);
+      if (oldRoleId) {
+        await attemptRoleSync(deps, txResult.lockedMember, 'revoke', 'role_swap_revoke_failed', oldRoleId);
+      }
+      if (newRoleId) {
+        await attemptRoleSync(deps, txResult.lockedMember, 'grant', 'role_swap_grant_failed', newRoleId);
+      } else {
+        await logUnmappedPlanWarning(deps, txResult.lockedMember, 'grant', newPlanId);
+      }
+    }
   }
 
   return { status: 200, body: { ok: true } };
@@ -407,6 +461,7 @@ async function attemptRoleSync(
   lockedMember: Record<string, unknown>,
   action: 'grant' | 'revoke',
   errorLabel: string,
+  roleId: string,
 ): Promise<void> {
   const discordUserId = lockedMember.discord_user_id as string | null;
   if (!discordUserId) {
@@ -422,7 +477,7 @@ async function attemptRoleSync(
     return;
   }
   try {
-    await deps.syncRole(discordUserId, action);
+    await deps.syncRole(discordUserId, action, roleId);
   } catch (roleSyncErr) {
     deps.log({
       timestamp: formatRfc3339Utc(new Date()),
@@ -433,6 +488,7 @@ async function attemptRoleSync(
       member_id: lockedMember.id as string,
       discord_user_id: discordUserId,
       action,
+      roleId,
       roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
     } as unknown as LogEntry);
     // Mark role_state as unknown so daily resync can recover
@@ -441,8 +497,6 @@ async function attemptRoleSync(
         lockedMember.id,
       ]);
     } catch (dbErr) {
-      // Both role sync AND role_state DB update failed — member is stuck; daily resync cannot recover automatically.
-      // Log as critical_failure so monitoring can alert on this condition.
       deps.log({
         timestamp: formatRfc3339Utc(new Date()),
         service: 'sync-service',
@@ -452,10 +506,49 @@ async function attemptRoleSync(
         member_id: lockedMember.id as string,
         discord_user_id: discordUserId,
         action,
+        roleId,
         roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
         dbError: dbErr instanceof Error ? dbErr.message : String(dbErr),
       } as unknown as LogEntry);
     }
+  }
+}
+
+/** Revoke all plan roles when planId is unknown (safety fallback) */
+async function attemptRoleSyncAllRoles(
+  deps: WebhookHandlerDeps,
+  lockedMember: Record<string, unknown>,
+  action: 'grant' | 'revoke',
+  errorLabel: string,
+): Promise<void> {
+  for (const roleId of Object.values(deps.planRoleMapping)) {
+    await attemptRoleSync(deps, lockedMember, action, errorLabel, roleId);
+  }
+}
+
+async function logUnmappedPlanWarning(
+  deps: WebhookHandlerDeps,
+  lockedMember: Record<string, unknown>,
+  action: 'grant' | 'revoke',
+  planId: string | null,
+): Promise<void> {
+  deps.log({
+    timestamp: formatRfc3339Utc(new Date()),
+    service: 'sync-service',
+    endpoint: '/v1/payjp/webhook',
+    result: 'failure',
+    error: 'unmapped_plan_id',
+    member_id: lockedMember.id as string,
+    discord_user_id: (lockedMember.discord_user_id as string | null) ?? undefined,
+    action,
+    planId: planId ?? 'null',
+  } as unknown as LogEntry);
+  try {
+    await deps.db.query("UPDATE members SET role_state = 'unknown', updated_at = now() WHERE id = $1", [
+      lockedMember.id,
+    ]);
+  } catch {
+    // Best-effort; daily resync will catch this
   }
 }
 

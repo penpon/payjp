@@ -376,7 +376,7 @@ describe('PROP-BILL-016: validateRequiredEnvVars', () => {
     PAYJP_PLAN_IDS: 'plan_basic,plan_plus,plan_pro',
     DISCORD_BOT_TOKEN: 'bot_token',
     DISCORD_GUILD_ID: '111222333',
-    DISCORD_PAID_ROLE_ID: '444555666',
+    DISCORD_PLAN_ROLE_IDS: '444555666,555666777,666777888',
     BILLING_INTERVAL_MONTHS: '1',
     INITIAL_FREE_CYCLES: '2',
     CANCEL_NOTICE_CYCLES: '1',

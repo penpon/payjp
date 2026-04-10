@@ -1,6 +1,7 @@
 import type { BillingDeps, DiscordCheckResult } from '@hayane/billing-service';
 import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '@hayane/billing-service';
 import { buildCookieAttributes, decryptToken, serializeCookieAttributes } from '@hayane/shared';
+import { resolveRoleIdForPlan } from '@hayane/sync-service';
 import type { FastifyInstance } from 'fastify';
 
 function hasLinkableSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
@@ -9,36 +10,39 @@ function hasLinkableSubscription(status: string | null, accessEndAt: Date | null
   return false;
 }
 
+/** Retry delays in ms for Discord role assignment (0 = no delay on first attempt) */
+const ROLE_ASSIGN_RETRY_DELAYS_MS = [0, 1000, 2000] as const;
+const ROLE_ASSIGN_MAX_ATTEMPTS = ROLE_ASSIGN_RETRY_DELAYS_MS.length;
+
 async function tryAssignPaidRoleWithRetries(
   billingDeps: BillingDeps,
   discordUserId: string,
+  roleId: string,
   precheck?: DiscordCheckResult,
 ): Promise<boolean> {
   const discordCheck =
-    precheck ?? (await billingDeps.discord.checkMembership(billingDeps.config.discordGuildId, discordUserId));
+    precheck ?? (await billingDeps.discord.checkMembership(billingDeps.config.discordGuildId, discordUserId, roleId));
   if (!discordCheck.isMember || !discordCheck.canAssignRole) {
     return false;
   }
-  const delays = [0, 1000, 2000];
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (delays[attempt] > 0) {
-      await new Promise((r) => setTimeout(r, delays[attempt]));
+  for (let attempt = 0; attempt < ROLE_ASSIGN_MAX_ATTEMPTS; attempt++) {
+    const delay = ROLE_ASSIGN_RETRY_DELAYS_MS[attempt];
+    if (delay > 0) {
+      await new Promise((r) => setTimeout(r, delay));
     }
     try {
-      await billingDeps.discord.assignRole(
-        billingDeps.config.discordGuildId,
-        discordUserId,
-        billingDeps.config.discordPaidRoleId,
-      );
+      await billingDeps.discord.assignRole(billingDeps.config.discordGuildId, discordUserId, roleId);
       return true;
     } catch (roleErr) {
-      if (attempt === 2) {
+      const isLastAttempt = attempt === ROLE_ASSIGN_MAX_ATTEMPTS - 1;
+      if (isLastAttempt) {
         console.error(
           JSON.stringify({
             level: 'error',
             service: 'member-routes',
             message: 'Discord role assignment failed after retries',
             discordUserId,
+            roleId,
             error: roleErr instanceof Error ? roleErr.message : String(roleErr),
           }),
         );
@@ -249,51 +253,70 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
             }
 
             // Guild membership check + auto-join + role assignment
+            const memberRoleId = resolveRoleIdForPlan(member.payjp_plan_id, billingDeps.config.planRoleMapping);
             let roleGranted = false;
-            try {
-              const discordCheck = await billingDeps.discord.checkMembership(
-                billingDeps.config.discordGuildId,
-                discordUserId,
-              );
-              if (!discordCheck.isMember && plainAccessToken) {
-                // Auto-join guild with role (guilds.join)
-                try {
-                  const joinResult = await billingDeps.discord.addMemberToGuild(
-                    billingDeps.config.discordGuildId,
-                    discordUserId,
-                    plainAccessToken,
-                    billingDeps.config.discordPaidRoleId,
-                  );
-                  if (joinResult.joinedNew) {
-                    roleGranted = true;
-                  } else {
-                    // 204: user already in guild — roles from body were not applied (race with membership check)
-                    roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId);
-                  }
-                } catch (joinErr) {
-                  console.error(
-                    JSON.stringify({
-                      level: 'error',
-                      service: 'member-routes',
-                      message: 'Discord guild join failed',
-                      discordUserId,
-                      error: joinErr instanceof Error ? joinErr.message : String(joinErr),
-                    }),
-                  );
-                }
-              } else if (discordCheck.isMember && discordCheck.canAssignRole) {
-                roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId, discordCheck);
-              }
-            } catch (discordErr) {
-              console.error(
+            if (!memberRoleId) {
+              console.warn(
                 JSON.stringify({
-                  level: 'error',
+                  level: 'warn',
                   service: 'member-routes',
-                  message: 'Discord membership check failed',
+                  message: 'No role mapping for plan, skipping role assignment',
                   discordUserId,
-                  error: discordErr instanceof Error ? discordErr.message : String(discordErr),
+                  planId: member.payjp_plan_id,
                 }),
               );
+            } else {
+              try {
+                const discordCheck = await billingDeps.discord.checkMembership(
+                  billingDeps.config.discordGuildId,
+                  discordUserId,
+                  memberRoleId,
+                );
+                if (!discordCheck.isMember && plainAccessToken) {
+                  // Auto-join guild with role (guilds.join)
+                  try {
+                    const joinResult = await billingDeps.discord.addMemberToGuild(
+                      billingDeps.config.discordGuildId,
+                      discordUserId,
+                      plainAccessToken,
+                      memberRoleId,
+                    );
+                    if (joinResult.joinedNew) {
+                      roleGranted = true;
+                    } else {
+                      // 204: user already in guild — roles from body were not applied (race with membership check)
+                      roleGranted = await tryAssignPaidRoleWithRetries(billingDeps, discordUserId, memberRoleId);
+                    }
+                  } catch (joinErr) {
+                    console.error(
+                      JSON.stringify({
+                        level: 'error',
+                        service: 'member-routes',
+                        message: 'Discord guild join failed',
+                        discordUserId,
+                        error: joinErr instanceof Error ? joinErr.message : String(joinErr),
+                      }),
+                    );
+                  }
+                } else if (discordCheck.isMember && discordCheck.canAssignRole) {
+                  roleGranted = await tryAssignPaidRoleWithRetries(
+                    billingDeps,
+                    discordUserId,
+                    memberRoleId,
+                    discordCheck,
+                  );
+                }
+              } catch (discordErr) {
+                console.error(
+                  JSON.stringify({
+                    level: 'error',
+                    service: 'member-routes',
+                    message: 'Discord membership check failed',
+                    discordUserId,
+                    error: discordErr instanceof Error ? discordErr.message : String(discordErr),
+                  }),
+                );
+              }
             }
 
             // Revoke access_token after use (best-effort)

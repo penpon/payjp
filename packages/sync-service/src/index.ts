@@ -1,3 +1,5 @@
+export type { PlanRoleMapping } from './core/index.js';
+export { resolveRoleIdForPlan } from './core/index.js';
 export type {
   CliDeps,
   CliOutput,

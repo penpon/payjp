@@ -34,6 +34,7 @@ function createMockDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     createPayjpSubscription: vi.fn(async () => ({ id: 'sub_new', status: 'active' })),
     cancelPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'canceled' })),
     syncRole: vi.fn(async () => {}),
+    planRoleMapping: { plan_1: 'role_1' },
     log: vi.fn(),
     now: () => new Date('2026-04-06T12:00:00Z'),
     _queryResults: queryResults,
@@ -46,6 +47,7 @@ const MEMBER_WITH_INFLIGHT_SUBSCRIBE = {
   discord_user_id: 'user_1',
   email: 'test@example.com',
   subscription_status: 'active',
+  payjp_plan_id: 'plan_1',
   payjp_customer_id: 'cust_1',
   payjp_subscription_id: null,
   payjp_initial_charge_id: null,
@@ -243,6 +245,7 @@ describe('INT-SYNC-019: CLI --discord-user-id: full reconciliation', () => {
       id: 'mem_1',
       discord_user_id: 'user_1',
       subscription_status: 'active',
+      payjp_plan_id: 'plan_1',
       payjp_subscription_id: 'sub_1',
       access_end_at: new Date('2026-07-06T12:00:00Z'),
       last_payjp_event_created_at: null,
@@ -273,6 +276,7 @@ describe('INT-SYNC-020: CLI --all: iterate all + verify 0 inflight residual', ()
         id: 'mem_1',
         discord_user_id: 'user_1',
         subscription_status: 'active',
+        payjp_plan_id: 'plan_1',
         payjp_subscription_id: 'sub_1',
         access_end_at: new Date('2026-07-06T12:00:00Z'),
       },
@@ -280,6 +284,7 @@ describe('INT-SYNC-020: CLI --all: iterate all + verify 0 inflight residual', ()
         id: 'mem_2',
         discord_user_id: 'user_2',
         subscription_status: 'canceled',
+        payjp_plan_id: 'plan_1',
         payjp_subscription_id: 'sub_2',
         access_end_at: new Date('2026-03-06T12:00:00Z'),
       },
@@ -354,6 +359,7 @@ describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
         id: 'mem_1',
         discord_user_id: 'user_1',
         subscription_status: 'canceled',
+        payjp_plan_id: 'plan_1',
         payjp_subscription_id: 'sub_1',
         access_end_at: new Date('2026-04-05T12:00:00Z'), // past
       },
@@ -370,7 +376,7 @@ describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
     });
 
     const _result = await runResyncCli(['--all'], deps);
-    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_1');
   });
 });
 
@@ -382,6 +388,7 @@ describe('INT-SYNC-011: Daily resync: subscription 404', () => {
         id: 'mem_1',
         discord_user_id: 'user_1',
         subscription_status: 'active',
+        payjp_plan_id: 'plan_1',
         payjp_subscription_id: 'sub_1',
         access_end_at: new Date('2026-07-06T12:00:00Z'),
       },
@@ -399,7 +406,7 @@ describe('INT-SYNC-011: Daily resync: subscription 404', () => {
     });
 
     const _result = await runResyncCli(['--all'], deps);
-    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke');
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_1');
     const updateCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
       (c[0] as string).includes("'deleted'"),
     );
@@ -415,6 +422,7 @@ describe('INT-SYNC-012: Daily resync: does NOT clear inflight', () => {
         id: 'mem_1',
         discord_user_id: 'user_1',
         subscription_status: 'active',
+        payjp_plan_id: 'plan_1',
         payjp_subscription_id: 'sub_1',
         inflight_operation_id: 'op_1',
         inflight_operation_type: 'subscribe',
@@ -604,7 +612,8 @@ describe('INT-SYNC-035: Env var validation', () => {
       DATABASE_URL: 'postgres://...',
       DISCORD_BOT_TOKEN: 'bot_xxx',
       DISCORD_GUILD_ID: 'guild_1',
-      DISCORD_PAID_ROLE_ID: 'role_1',
+      PAYJP_PLAN_IDS: 'plan_starter,plan_business,plan_enterprise',
+      DISCORD_PLAN_ROLE_IDS: 'role_starter,role_business,role_enterprise',
       DAILY_RESYNC_CRON: '0 3 * * *',
       PAYJP_LIVEMODE: 'true',
     });
@@ -620,6 +629,7 @@ describe('INT-SYNC-037: Daily resync: individual member error → continue', () 
         id: 'mem_1',
         discord_user_id: 'user_1',
         subscription_status: 'active',
+        payjp_plan_id: 'plan_1',
         payjp_subscription_id: 'sub_1',
         access_end_at: new Date('2026-07-06T12:00:00Z'),
       },

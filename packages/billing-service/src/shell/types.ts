@@ -76,7 +76,8 @@ export interface AddGuildMemberResult {
 }
 
 export interface DiscordClient {
-  checkMembership(guildId: string, discordUserId: string): Promise<DiscordCheckResult>;
+  /** When `roleId` is set, `canAssignRole` reflects whether the bot can assign that specific role (plan tier). */
+  checkMembership(guildId: string, discordUserId: string, roleId?: string): Promise<DiscordCheckResult>;
   assignRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
   addMemberToGuild(
     guildId: string,
@@ -93,7 +94,7 @@ export interface BillingConfig {
   frontendBaseUrl: string;
   allowedPlanIds: string[];
   discordGuildId: string;
-  discordPaidRoleId: string;
+  planRoleMapping: Record<string, string>;
   initialChargeAmount: number;
   initialChargeAmountCurrency: string;
   discordTokenEncryptionKey?: string;

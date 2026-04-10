@@ -22,7 +22,9 @@ import {
   mapSubscriptionStatus,
   maskSensitiveLogFields,
   resolveEffectiveSubscriptionStatus,
+  resolveRoleIdForPlan,
   shouldGrantRole,
+  shouldSwapRole,
   shouldSyncRole,
   validateCliArgs,
   validateRequiredFields,
@@ -579,5 +581,51 @@ describe('PROP-SYNC-020: isInflightOperationStale', () => {
     const now = new Date('2026-04-06T12:31:00Z');
     const started = new Date('2026-04-06T12:00:00Z'); // 31 min ago
     expect(isInflightOperationStale(started, now, 30)).toBe(true);
+  });
+});
+
+// resolveRoleIdForPlan
+describe('resolveRoleIdForPlan', () => {
+  const mapping = { plan_starter: 'role_s', plan_business: 'role_b', plan_enterprise: 'role_e' };
+
+  it('known planId → mapped roleId', () => {
+    expect(resolveRoleIdForPlan('plan_starter', mapping)).toBe('role_s');
+    expect(resolveRoleIdForPlan('plan_business', mapping)).toBe('role_b');
+    expect(resolveRoleIdForPlan('plan_enterprise', mapping)).toBe('role_e');
+  });
+
+  it('unknown planId → null', () => {
+    expect(resolveRoleIdForPlan('plan_unknown', mapping)).toBeNull();
+  });
+
+  it('null planId → null', () => {
+    expect(resolveRoleIdForPlan(null, mapping)).toBeNull();
+  });
+
+  it('empty mapping → null for any planId', () => {
+    expect(resolveRoleIdForPlan('plan_starter', {})).toBeNull();
+  });
+});
+
+// shouldSwapRole
+describe('shouldSwapRole', () => {
+  it('same planId → false', () => {
+    expect(shouldSwapRole('plan_a', 'plan_a')).toBe(false);
+  });
+
+  it('different planIds → true', () => {
+    expect(shouldSwapRole('plan_a', 'plan_b')).toBe(true);
+  });
+
+  it('null oldPlanId → false', () => {
+    expect(shouldSwapRole(null, 'plan_b')).toBe(false);
+  });
+
+  it('null newPlanId → false', () => {
+    expect(shouldSwapRole('plan_a', null)).toBe(false);
+  });
+
+  it('both null → false', () => {
+    expect(shouldSwapRole(null, null)).toBe(false);
   });
 });

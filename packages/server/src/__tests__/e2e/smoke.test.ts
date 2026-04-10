@@ -18,6 +18,7 @@ import {
   closePool,
   createTestDb,
   E2E_BILLING_CONFIG,
+  E2E_PLAN_ROLE_MAPPING,
   E2E_WEBHOOK_TOKEN,
   makeMockDiscordClient,
   makeMockPayjpClient,
@@ -232,7 +233,11 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
       expect(member!.subscription_status).toBe('active');
 
       // syncRole が trial→active のロール付与で呼ばれた
-      expect(syncRole).toHaveBeenCalledWith(WEBHOOK_DISCORD_USER_ID, 'grant');
+      expect(syncRole).toHaveBeenCalledWith(
+        WEBHOOK_DISCORD_USER_ID,
+        'grant',
+        E2E_PLAN_ROLE_MAPPING[E2E_BILLING_CONFIG.allowedPlanIds[0]],
+      );
     });
 
     it('Scenario 4: 同一 event.id の重複送信 → 二重処理なし（冪等）', async () => {
