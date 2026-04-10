@@ -82,6 +82,7 @@ const env = Object.fromEntries(REQUIRED_ENV.map((k) => [k, process.env[k] as str
   RequiredEnvKey,
   string
 >;
+const discordTokenEncryptionKey = process.env.DISCORD_TOKEN_ENCRYPTION_KEY;
 
 // Validate FRONTEND_BASE_URL is a valid origin (scheme://host[:port], no path/query)
 try {
@@ -329,6 +330,7 @@ const billingDeps: BillingDeps = {
     discordPaidRoleId: env.DISCORD_PAID_ROLE_ID,
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    discordTokenEncryptionKey,
   },
   clock: () => new Date(),
   generateOperationId: () => randomUUID(),
@@ -354,6 +356,7 @@ const app = buildApp(
     discordClientId: env.DISCORD_CLIENT_ID,
     discordClientSecret: env.DISCORD_CLIENT_SECRET,
     discordRedirectUri: env.DISCORD_REDIRECT_URI,
+    discordTokenEncryptionKey,
     db: dbClient,
   },
   billingDeps,
