@@ -36,46 +36,17 @@ function renderLoading(): HTMLDivElement {
   ]);
 }
 
-function renderNotLinked(onConnect: () => void): HTMLDivElement {
+function renderError(message?: string): HTMLDivElement {
+  const reloadBtn = el('button', { type: 'button', class: 'submit-button' }, ['再読み込み']);
+  reloadBtn.addEventListener('click', () => {
+    window.location.reload();
+  });
   return createCard([
-    el('h1', { class: 'heading' }, ['Discord連携']),
-    el('p', { class: 'body-text' }, ['サービスを利用するには、Discordアカウントとの連携が必要です。']),
-    createDiscordButton(onConnect),
-  ]);
-}
-
-function renderLinked(onStartBilling?: () => void): HTMLDivElement {
-  const badge = el('div', { class: 'badge success-badge', role: 'status' }, [
-    el('span', { class: 'success-icon', 'aria-hidden': 'true' }, ['\u2713']),
-    el('span', {}, ['Discord連携済み']),
-  ]);
-
-  const children: Node[] = [el('h1', { class: 'heading' }, ['Discord連携']), badge];
-
-  if (onStartBilling) {
-    const startBtn = el('button', { type: 'button', class: 'submit-button start-billing-button' }, [
-      'プランを選択して登録する',
-    ]);
-    startBtn.addEventListener('click', onStartBilling);
-    children.push(el('div', { class: 'plan-placeholder' }, [startBtn]));
-  } else {
-    children.push(
-      el('div', { class: 'plan-placeholder' }, [
-        el('p', { class: 'body-text' }, ['プラン選択は次のステップで利用可能になります。']),
-      ]),
-    );
-  }
-
-  return createCard(children);
-}
-
-function renderError(onConnect: () => void, message?: string): HTMLDivElement {
-  return createCard([
-    el('h1', { class: 'heading' }, ['Discord連携']),
+    el('h1', { class: 'heading' }, ['エラー']),
     el('div', { class: 'badge error-badge', role: 'alert' }, [
-      message ?? '連携状態の確認に失敗しました。再度お試しください。',
+      message ?? '状態の確認に失敗しました。再度お試しください。',
     ]),
-    createDiscordButton(onConnect),
+    reloadBtn,
   ]);
 }
 
@@ -99,7 +70,6 @@ export function renderState(
   state: AppState,
   onConnect: () => void,
   extra?: {
-    onStartBilling?: () => void;
     billing?: BillingContext;
     subscribed?: SubscribedContext;
     errorMessage?: string;
@@ -119,9 +89,6 @@ export function renderState(
     case 'loading':
       container.appendChild(renderLoading());
       break;
-    case 'not_linked':
-      container.appendChild(renderNotLinked(onConnect));
-      break;
     case 'linked':
       if (extra?.subscribed) {
         renderSubscribed(
@@ -131,11 +98,11 @@ export function renderState(
           extra.subscribed.onStartCancel,
         );
       } else {
-        container.appendChild(renderLinked(extra?.onStartBilling));
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
     case 'error':
-      container.appendChild(renderError(onConnect, extra?.errorMessage));
+      container.appendChild(renderError(extra?.errorMessage));
       break;
     case 'billing':
       if (extra?.billing) {
@@ -148,7 +115,7 @@ export function renderState(
         );
       } else {
         console.error('[ui] renderState("billing") called without billing context');
-        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
     case 'register_complete':
@@ -169,7 +136,7 @@ export function renderState(
         container.appendChild(successEl);
       } else {
         console.error('[ui] renderState("register_complete") called without registerComplete context');
-        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
     case 'link_complete':
@@ -190,7 +157,7 @@ export function renderState(
           ]),
         );
       } else {
-        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
     case 'cancel_complete':
@@ -200,7 +167,7 @@ export function renderState(
         });
       } else {
         console.error('[ui] renderState("cancel_complete") called without cancelComplete context');
-        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
     case 'cancel_error':
@@ -213,7 +180,7 @@ export function renderState(
         });
       } else {
         console.error('[ui] renderState("cancel_error") called without cancelError context');
-        container.appendChild(renderError(onConnect, 'ページの表示に失敗しました。再読み込みしてください。'));
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;
   }

@@ -2,7 +2,6 @@
 
 export type AppState =
   | 'loading'
-  | 'not_linked'
   | 'linked'
   | 'error'
   | 'billing'
