@@ -22,6 +22,7 @@ import {
   buildSyncDepsForE2E,
   closePool,
   createTestDb,
+  E2E_PLAN_ROLE_MAPPING,
   E2E_WEBHOOK_TOKEN,
   makeWebhookEvent,
   type PgDbClient,
@@ -296,8 +297,8 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
 
       // canceled は GRANT_STATUSES に含まれるため active→canceled のステータス変化で syncRole は grant（revoke ではない）
       expect(syncRole).toHaveBeenCalledOnce();
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant');
-      expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_MAPPING.plan_e2e);
+      expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'revoke', expect.any(String));
     });
 
     it('6. subscription.paused → status = paused, Discord ロール即時 revoke', async () => {
@@ -329,7 +330,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
       ]);
       expect(member.rows[0].subscription_status).toBe('paused');
 
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
 
     it('7. subscription.deleted → status = deleted, Discord ロール即時 revoke', async () => {
@@ -362,7 +363,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
       ]);
       expect(member.rows[0].subscription_status).toBe('deleted');
 
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
 
     it('8. subscription.resumed → status = active, Discord ロール grant', async () => {
@@ -394,7 +395,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
       ]);
       expect(member.rows[0].subscription_status).toBe('active');
 
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
   });
 
@@ -427,7 +428,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
         discordUserId,
       ]);
       expect(member.rows[0].subscription_status).toBe('paused');
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
 
     it('10. canceled → deleted (subscription.deleted): status 変化 + ロール revoke', async () => {
@@ -455,7 +456,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
         discordUserId,
       ]);
       expect(member.rows[0].subscription_status).toBe('deleted');
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
   });
 
