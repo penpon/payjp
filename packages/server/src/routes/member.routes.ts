@@ -1,7 +1,13 @@
 import type { BillingDeps, DiscordCheckResult } from '@hayane/billing-service';
 import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '@hayane/billing-service';
+import type { Member } from '@hayane/shared';
 import { decryptToken } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
+
+/** Paid entitlement required to link Discord and grant the paid role (PAY.JP sync). */
+function hasActiveSubscriptionForDiscordLink(member: Member): boolean {
+  return member.subscription_status === 'active' || member.subscription_status === 'trial';
+}
 
 async function tryAssignPaidRoleWithRetries(
   billingDeps: BillingDeps,
@@ -161,6 +167,10 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           const existingMember = await billingDeps.db.findMemberByDiscordUserId(discordUserId);
           if (existingMember && existingMember.id !== memberId) {
             return reply.status(409).send({ ok: false, errorCode: 'DISCORD_ALREADY_USED' });
+          }
+
+          if (!hasActiveSubscriptionForDiscordLink(member)) {
+            return reply.status(403).send({ ok: false, errorCode: 'SUBSCRIPTION_INACTIVE' });
           }
 
           // Cross-member serialization for the same Discord account (subscribe/cancel use same key)

@@ -159,7 +159,7 @@ describe('POST /v1/members/link-discord', () => {
   });
 
   it('retries role grant on re-link when role_state is unknown', async () => {
-    const deps = makeDeps({ role_state: 'unknown' });
+    const deps = makeDeps({ role_state: 'unknown', subscription_status: 'active' });
     const app = buildApp(APP_CONFIG, deps);
 
     const res = await app.inject({
@@ -179,5 +179,25 @@ describe('POST /v1/members/link-discord', () => {
     expect(deps.discord.checkMembership).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID);
     expect(deps.discord.assignRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
     expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
+  });
+
+  it('returns 403 when subscription is not active or trial', async () => {
+    const deps = makeDeps({ role_state: 'unknown', subscription_status: 'canceled' });
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'SUBSCRIPTION_INACTIVE' });
+    expect(deps.db.updateMemberDiscordUserId).not.toHaveBeenCalled();
+    expect(deps.discord.checkMembership).not.toHaveBeenCalled();
   });
 });
