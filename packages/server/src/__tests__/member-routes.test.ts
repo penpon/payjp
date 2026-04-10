@@ -262,12 +262,12 @@ describe('POST /v1/members/link-discord', () => {
     expect(deps.db.updateMemberDiscordUserId).not.toHaveBeenCalled();
   });
 
-  it('clears inactive member Discord link and allows transfer', async () => {
+  it('clears canceled member Discord link and allows transfer even when access_end_at is in the future', async () => {
     const deps = makeDeps({ discord_user_id: null, subscription_status: 'active' });
     const inactiveMember = makeMember({
       id: 'other-member-001',
       subscription_status: 'canceled',
-      access_end_at: new Date('2020-01-01'),
+      access_end_at: new Date('2099-01-01'), // canceled but still within access period
     });
     (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValueOnce(inactiveMember);
     const app = buildApp(APP_CONFIG, deps);

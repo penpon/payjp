@@ -211,10 +211,12 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           // Check discord_user_id not used by another member
           const existingMember = await billingDeps.db.findMemberByDiscordUserId(discordUserId);
           if (existingMember && existingMember.id !== memberId) {
-            if (hasLinkableSubscription(existingMember.subscription_status, existingMember.access_end_at, now)) {
+            // active/trial のみブロック。canceled は解約済みなので Discord ID の独占権を手放す
+            const s = existingMember.subscription_status;
+            if (s === 'active' || s === 'trial') {
               return reply.status(409).send({ ok: false, errorCode: 'DISCORD_ALREADY_USED' });
             }
-            // 非アクティブなメンバーの Discord リンクをクリアして転送を許可
+            // 非アクティブ(canceled/paused/deleted/null): Discord リンクをクリアして転送を許可
             await billingDeps.db.clearMemberDiscordUserId(existingMember.id);
           }
 
