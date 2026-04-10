@@ -13,7 +13,11 @@
     "test:frontend": "vitest run --project @hayane/frontend",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "build:frontend": "npm -w frontend run build"
+    "build:frontend": "npm -w frontend run build",
+    "docker:compose": "bash scripts/docker-compose-op.sh",
+    "docker:up": "bash scripts/docker-compose-op.sh up --build",
+    "docker:down": "bash scripts/docker-compose-op.sh down",
+    "docker:logs": "bash scripts/docker-compose-op.sh logs -f"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
