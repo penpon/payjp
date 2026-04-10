@@ -126,6 +126,7 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     updateMemberAfterSubscribe: vi.fn().mockResolvedValue(undefined as never),
     updateMemberAfterCancel: vi.fn().mockResolvedValue(updatedMember),
     updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
+    clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),

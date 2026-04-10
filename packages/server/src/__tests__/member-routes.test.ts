@@ -106,6 +106,7 @@ function makeDeps(
     updateMemberAfterSubscribe: vi.fn(),
     updateMemberAfterCancel: vi.fn(),
     updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
+    clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn(),
@@ -233,5 +234,57 @@ describe('POST /v1/members/link-discord', () => {
     expect(res.json()).toEqual({ ok: false, errorCode: 'NO_SUBSCRIPTION' });
     expect(deps.db.updateMemberDiscordUserId).not.toHaveBeenCalled();
     expect(deps.discord.checkMembership).not.toHaveBeenCalled();
+  });
+
+  it('returns DISCORD_ALREADY_USED when another active member holds the same Discord ID', async () => {
+    const deps = makeDeps({ discord_user_id: null, subscription_status: 'active' });
+    const otherMember = makeMember({
+      id: 'other-member-001',
+      subscription_status: 'active',
+      access_end_at: new Date('2099-01-01'),
+    });
+    (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValue(otherMember);
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'DISCORD_ALREADY_USED' });
+    expect(deps.db.clearMemberDiscordUserId).not.toHaveBeenCalled();
+    expect(deps.db.updateMemberDiscordUserId).not.toHaveBeenCalled();
+  });
+
+  it('clears inactive member Discord link and allows transfer', async () => {
+    const deps = makeDeps({ discord_user_id: null, subscription_status: 'active' });
+    const inactiveMember = makeMember({
+      id: 'other-member-001',
+      subscription_status: 'canceled',
+      access_end_at: new Date('2020-01-01'),
+    });
+    (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValueOnce(inactiveMember);
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+    expect(deps.db.clearMemberDiscordUserId).toHaveBeenCalledWith('other-member-001');
+    expect(deps.db.updateMemberDiscordUserId).toHaveBeenCalledWith(MEMBER_ID, DISCORD_USER_ID);
   });
 });

@@ -52,6 +52,7 @@ export interface DbClient {
       inflight_operation_started_at: null;
     },
   ): Promise<Member>;
+  clearMemberDiscordUserId(memberId: string): Promise<void>;
   acquireAdvisoryLock(lockKey: string): Promise<boolean>;
   releaseAdvisoryLock(lockKey: string): Promise<void>;
   withTransactionLock<T>(lockKey: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
@@ -199,6 +200,10 @@ async function queryUpdateMemberDiscordUserId(q: Queryable, memberId: string, di
   );
   if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
   return toMember(result.rows[0] as Record<string, unknown>);
+}
+
+async function queryClearMemberDiscordUserId(q: Queryable, memberId: string): Promise<void> {
+  await q.query(`UPDATE members SET discord_user_id = NULL, updated_at = now() WHERE id = $1`, [memberId]);
 }
 
 async function queryFindLinkSession(q: Queryable, tokenHash: string): Promise<LinkSessionRecord | null> {
@@ -376,6 +381,9 @@ export class PgDbClient implements DbClient {
   }
   updateMemberDiscordUserId(memberId: string, discordUserId: string) {
     return queryUpdateMemberDiscordUserId(this.pool, memberId, discordUserId);
+  }
+  clearMemberDiscordUserId(memberId: string) {
+    return queryClearMemberDiscordUserId(this.pool, memberId);
   }
   findLinkSession(tokenHash: string) {
     return queryFindLinkSession(this.pool, tokenHash);
