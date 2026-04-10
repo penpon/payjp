@@ -1,6 +1,7 @@
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import type { LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
+import { encryptToken } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
@@ -82,15 +83,19 @@ function makeConfig(): BillingConfig {
   };
 }
 
-function makeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
+function makeDeps(
+  memberOverrides: Partial<Member> = {},
+  opts?: { linkSession?: Partial<LinkSessionRecord>; config?: Partial<BillingConfig> },
+): BillingDeps {
   const member = makeMember(memberOverrides);
+  const linkSession = makeLinkSession(opts?.linkSession ?? {});
   const db: DbClient = {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
     findMemberById: vi.fn().mockImplementation(async (id: string) => (id === MEMBER_ID ? member : null)),
     upsertProvisionalMember: vi.fn(),
     upsertProvisionalMemberByEmail: vi.fn(),
     updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
-    findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
+    findLinkSession: vi.fn().mockResolvedValue(linkSession),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
     insertMemberSession: vi.fn(),
     findMemberSession: vi.fn().mockResolvedValue(makeMemberSession()),
@@ -128,7 +133,7 @@ function makeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     db,
     payjp,
     discord,
-    config: makeConfig(),
+    config: { ...makeConfig(), ...opts?.config },
     clock: () => NOW,
     generateOperationId: () => 'op-001',
   };
@@ -156,6 +161,35 @@ describe('POST /v1/members/link-discord', () => {
     expect(deps.db.acquireAdvisoryLock).toHaveBeenCalledWith(`member-link:${MEMBER_ID}`);
     expect(deps.discord.checkMembership).not.toHaveBeenCalled();
     expect(deps.discord.assignRole).not.toHaveBeenCalled();
+    expect(deps.discord.revokeToken).not.toHaveBeenCalled();
+  });
+
+  it('idempotent path revokes Discord access token when link session stores encrypted token', async () => {
+    const keyHex = 'a'.repeat(64);
+    const plainAccess = 'oauth-access-token-for-revoke-test';
+    const encrypted = encryptToken(plainAccess, keyHex);
+    const deps = makeDeps(
+      { role_state: 'granted', subscription_status: 'active' },
+      {
+        config: { discordTokenEncryptionKey: keyHex },
+        linkSession: { discord_access_token_encrypted: encrypted },
+      },
+    );
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(deps.discord.revokeToken).toHaveBeenCalledWith(plainAccess);
+    expect(deps.discord.checkMembership).not.toHaveBeenCalled();
   });
 
   it('retries role grant on re-link when role_state is unknown', async () => {

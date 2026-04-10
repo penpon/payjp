@@ -352,7 +352,7 @@ async function init(): Promise<void> {
               memberId: member.memberId,
               subscriptionStatus: member.subscriptionStatus ?? 'active',
               planId: member.planId ?? '',
-              trialApplied: false,
+              trialApplied: member.subscriptionStatus === 'trial',
               accessEndAt: member.accessEndAt ?? '',
             },
             plans: PLANS,

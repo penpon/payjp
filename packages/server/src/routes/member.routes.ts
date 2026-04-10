@@ -160,7 +160,29 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
 
           // Idempotency: already linked and role already granted
           if (member.discord_user_id === discordUserId && member.role_state === 'granted') {
+            let plainAccessTokenIdempotent: string | undefined;
+            if (linkSession.discord_access_token_encrypted && billingDeps.config.discordTokenEncryptionKey) {
+              try {
+                plainAccessTokenIdempotent = decryptToken(
+                  linkSession.discord_access_token_encrypted,
+                  billingDeps.config.discordTokenEncryptionKey,
+                );
+              } catch (decErr) {
+                console.error(
+                  JSON.stringify({
+                    level: 'error',
+                    service: 'member-routes',
+                    message: 'Failed to decrypt Discord access token',
+                    discordUserId,
+                    error: decErr instanceof Error ? decErr.message : String(decErr),
+                  }),
+                );
+              }
+            }
             await billingDeps.db.consumeLinkSession(lsHash, now);
+            if (plainAccessTokenIdempotent) {
+              void billingDeps.discord.revokeToken(plainAccessTokenIdempotent).catch(() => {});
+            }
             return reply.status(200).send({ ok: true, discordUserId, roleGranted: true });
           }
 
