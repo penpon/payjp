@@ -538,7 +538,8 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
           object: 'subscription',
           status: 'active',
           metadata: { discord_user_id: discordUserId },
-          // plan フィールドを省略
+          // `plan: undefined` は JSON 化時に落ちるため、helper 既定値を明示的に無効化できる
+          plan: undefined,
         },
       });
 
@@ -599,7 +600,8 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
           status: 'active',
           metadata: { discord_user_id: discordUserId },
           plan: { id: 'plan_e2e' },
-          // current_period_end 省略
+          // `undefined` に上書きして helper 既定値の current_period_end を落とす
+          current_period_end: undefined,
         },
       });
 
@@ -627,7 +629,8 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
         data: {
           id: 'sub_test_e2e',
           object: 'subscription',
-          // status 意図的に省略
+          // `undefined` に上書きして helper 既定値の status を落とす
+          status: undefined,
           metadata: { discord_user_id: discordUserId },
         },
       });
