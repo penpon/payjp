@@ -224,7 +224,7 @@ try {
 }
 
 const discordClient: DiscordClient = {
-  async checkMembership(guildId, discordUserId) {
+  async checkMembership(guildId, discordUserId, roleId?: string) {
     try {
       await discordRest.get(`/guilds/${guildId}/members/${discordUserId}`);
     } catch (err: unknown) {
@@ -250,9 +250,11 @@ const discordClient: DiscordClient = {
       throw err;
     }
 
-    const canAssign = Object.values(planRoleMapping).some((roleId) =>
-      canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId }),
-    );
+    const canAssign = roleId
+      ? canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId })
+      : Object.values(planRoleMapping).some((rid) =>
+          canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId: rid }),
+        );
     return { isMember: true, canAssignRole: canAssign };
   },
   async assignRole(guildId, discordUserId, roleId) {

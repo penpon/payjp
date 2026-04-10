@@ -21,7 +21,7 @@ async function tryAssignPaidRoleWithRetries(
   precheck?: DiscordCheckResult,
 ): Promise<boolean> {
   const discordCheck =
-    precheck ?? (await billingDeps.discord.checkMembership(billingDeps.config.discordGuildId, discordUserId));
+    precheck ?? (await billingDeps.discord.checkMembership(billingDeps.config.discordGuildId, discordUserId, roleId));
   if (!discordCheck.isMember || !discordCheck.canAssignRole) {
     return false;
   }
@@ -270,6 +270,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
                 const discordCheck = await billingDeps.discord.checkMembership(
                   billingDeps.config.discordGuildId,
                   discordUserId,
+                  memberRoleId,
                 );
                 if (!discordCheck.isMember && plainAccessToken) {
                   // Auto-join guild with role (guilds.join)

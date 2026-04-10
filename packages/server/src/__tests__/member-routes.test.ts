@@ -210,7 +210,7 @@ describe('POST /v1/members/link-discord', () => {
     expect(res.json()).toEqual({ ok: true, discordUserId: DISCORD_USER_ID, roleGranted: true });
     expect(deps.db.acquireAdvisoryLock).toHaveBeenNthCalledWith(1, `member-link:${MEMBER_ID}`);
     expect(deps.db.acquireAdvisoryLock).toHaveBeenNthCalledWith(2, DISCORD_USER_ID);
-    expect(deps.discord.checkMembership).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID);
+    expect(deps.discord.checkMembership).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
     expect(deps.discord.assignRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
     expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'granted');
   });
