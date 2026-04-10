@@ -74,8 +74,8 @@ function createPayjpAdapter(): PayjpAdapter | null {
     console.error('[billing] PAY.JP.js (pay.js) が読み込まれていません');
     return null;
   }
-  if (!PAYJP_PUBLIC_KEY || PAYJP_PUBLIC_KEY === 'pk_test_') {
-    console.error('[billing] VITE_PAYJP_PUBLIC_KEY が未設定です。.env を確認してください');
+  if (!PAYJP_PUBLIC_KEY || !/^pk_(test|live)_[a-zA-Z0-9]{15,}$/.test(PAYJP_PUBLIC_KEY)) {
+    console.error('[billing] VITE_PAYJP_PUBLIC_KEY が未設定または不正です。.env を確認してください');
     return null;
   }
 

@@ -242,8 +242,9 @@ describe('main init()', () => {
   // --- PAY.JP SDK error ---
 
   it('shows error state when PAY.JP SDK initialization throws', async () => {
-    vi.mocked(getMember).mockResolvedValue(null);
-    vi.stubEnv('VITE_PAYJP_PUBLIC_KEY', 'pk_test_valid_like');
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
+    vi.stubEnv('VITE_PAYJP_PUBLIC_KEY', 'pk_test_0a1b2c3d4e5f6g7h');
 
     const payjpInitError = new Error('invalid key format');
     const originalPayjp = window.Payjp;
