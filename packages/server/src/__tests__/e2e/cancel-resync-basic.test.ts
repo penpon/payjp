@@ -163,7 +163,8 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
       const cliDeps = makeCliDeps(pool, {
         getPayjpSubscription: vi.fn().mockResolvedValue({
           id: 'sub_test_daily',
-          status: 'canceled',
+          // canceled は shouldGrantRole 対象のため 2 回目の sync が grant になり偽陽性 — 剥奪検証は paused
+          status: 'paused',
           current_period_end: pastTimestamp,
         }),
         syncRole,
@@ -171,7 +172,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
 
       await runDailyResync({ cliDeps, log: vi.fn() });
 
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke');
     });
   });
 });
