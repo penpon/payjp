@@ -33,9 +33,6 @@ export const PAYJP_MOCK_SCRIPT_BODY = `(function () {
   };
 })();`;
 
-/** @deprecated Prefer {@link installPayjpMockRoute} — real pay.js overwrites init scripts. */
-export const PAYJP_MOCK_INIT = PAYJP_MOCK_SCRIPT_BODY;
-
 /**
  * Block the real PAY.JP SDK and inject the mock (real script runs after init scripts and would overwrite `window.Payjp`).
  */
