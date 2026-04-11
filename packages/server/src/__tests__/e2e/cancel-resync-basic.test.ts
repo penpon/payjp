@@ -74,6 +74,8 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
 
       const payjpMock = makeMockPayjpClient();
+      // cancel ハンドラは PAY.JP の current_period_end で access_end_at を更新するため、
+      // メンバーに挿入した 15 日後と一致するタイムスタンプを返す。
       vi.mocked(payjpMock.cancelSubscription).mockResolvedValue({
         id: 'sub_test_e2e',
         status: 'canceled',
@@ -171,7 +173,8 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
       const cliDeps = makeCliDeps(pool, {
         getPayjpSubscription: vi.fn().mockResolvedValue({
           id: 'sub_test_daily',
-          status: 'canceled',
+          // canceled は shouldGrantRole 対象のため 2 回目の sync が grant になり偽陽性になる。
+          status: 'paused',
           current_period_end: pastTimestamp,
         }),
         syncRole,
@@ -179,7 +182,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
 
       await runDailyResync({ cliDeps, log: vi.fn() });
 
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke');
     });
   });
 });
