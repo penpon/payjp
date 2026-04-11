@@ -4,6 +4,21 @@ import { defineConfig, devices } from '@playwright/test';
 const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const apiPort = process.env.E2E_API_PORT ?? '3999';
 
+function buildUnsafelyTreatInsecureOriginsAsSecure(): string {
+  const origins = new Set<string>();
+  const frontend = new URL(baseURL);
+  origins.add(frontend.origin);
+  const fePort = frontend.port || (frontend.protocol === 'https:' ? '443' : '80');
+  if (frontend.hostname === 'localhost') {
+    origins.add(`http://127.0.0.1:${fePort}`);
+  } else if (frontend.hostname === '127.0.0.1') {
+    origins.add(`http://localhost:${fePort}`);
+  }
+  origins.add(`http://localhost:${apiPort}`);
+  origins.add(`http://127.0.0.1:${apiPort}`);
+  return [...origins].join(',');
+}
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -27,9 +42,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         /** `__Host-*` + Secure Cookie を http ローカルでも扱えるようにする（OAuth 実ブラウザ用） */
         launchOptions: {
-          args: [
-            '--unsafely-treat-insecure-origin-as-secure=http://localhost:5173,http://localhost:3999,http://127.0.0.1:5173,http://127.0.0.1:3999',
-          ],
+          args: [`--unsafely-treat-insecure-origin-as-secure=${buildUnsafelyTreatInsecureOriginsAsSecure()}`],
         },
       },
     },

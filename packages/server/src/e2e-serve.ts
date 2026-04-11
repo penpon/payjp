@@ -36,6 +36,9 @@ function installDiscordFetchMock(): void {
             ? (input as Request).url
             : String(input);
 
+    if (url.includes('discord.com/api/oauth2/token/revoke')) {
+      return new Response('', { status: 204 });
+    }
     if (url.includes('discord.com/api/oauth2/token')) {
       return new Response(JSON.stringify({ access_token: 'e2e_mock_access_token', token_type: 'Bearer' }), {
         status: 200,
@@ -47,9 +50,6 @@ function installDiscordFetchMock(): void {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-    }
-    if (url.includes('discord.com/api/oauth2/token/revoke')) {
-      return new Response('', { status: 204 });
     }
 
     return orig(input as Request, init);
