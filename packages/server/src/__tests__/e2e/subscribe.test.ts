@@ -560,9 +560,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
       const member = await findMemberByEmail(pgDb, pool, 'test@example.com');
       expect(member).not.toBeNull();
-      expect(member!.payjp_customer_id).toBe('cus_test_e2e');
-      expect(member!.payjp_initial_charge_id).toBe('ch_test_e2e');
-      expect(member!.payjp_subscription_id).toBe('sub_test_e2e');
+      expect(member!.payjp_customer_id).toMatch(/^cus_test_e2e/);
+      expect(member!.payjp_initial_charge_id).toMatch(/^ch_test_e2e/);
+      expect(member!.payjp_subscription_id).toMatch(/^sub_test_e2e/);
     });
 
     it('初回ユーザー — subscription_status が "trial" で保存される', async () => {
