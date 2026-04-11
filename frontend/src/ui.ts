@@ -152,7 +152,7 @@ export function renderState(
         const backBtn = el('button', { type: 'button', class: 'submit-button' }, ['トップに戻る']);
         backBtn.addEventListener('click', extra.linkComplete.onBackToTop);
         container.appendChild(
-          createCard([
+          el('div', { class: 'card card--centered' }, [
             el('h1', { class: 'heading' }, ['連携完了']),
             el('div', { class: 'badge success-badge', role: 'status' }, [
               el('span', { class: 'success-icon', 'aria-hidden': 'true' }, ['\u2713']),

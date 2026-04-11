@@ -1,6 +1,9 @@
-FROM node:22-alpine
+# Node 22: payjp@3 requires >=22; matches .github/workflows/ci.yml.
+FROM node:22-bookworm-slim
 
 WORKDIR /app
+
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 # Install dependencies (layer-cached before source copy)
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -17,7 +20,7 @@ RUN npm ci
 COPY packages/ packages/
 
 # Run as non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd --system appgroup && useradd --system --gid appgroup --no-create-home appuser
 USER appuser
 
 EXPOSE 3000
