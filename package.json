@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
-    "@biomejs/biome": "^2.4.10",
+    "@biomejs/biome": "^2.4.11",
     "@types/node": "^25",
     "lefthook": "^2.1.5",
     "vitest": "^4.1.4"
