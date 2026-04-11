@@ -16,6 +16,7 @@ import {
   isFirstTimeUser,
   isSameOrigin,
   isThreeDSecureVerified,
+  linkSessionTokenHash,
   memberSessionTokenHash,
   validatePlanId,
 } from '../core/index.js';
@@ -103,15 +104,31 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     return { ok: false, statusCode: 422, errorCode: 'CONSENT_REQUIRED', message: 'Privacy consent is required' };
   }
 
-  // Step 2: Advisory lock on normalized email (prevents duplicate subscriptions)
-  const lockAcquired = await db.acquireAdvisoryLock(normalizedEmail);
+  // Optional: resolve Discord user from link_session (same lock key as cancel / link-discord discord lock)
+  let discordUserIdFromLink: string | null = null;
+  const rawLinkToken = typeof req.linkSessionToken === 'string' ? req.linkSessionToken.trim() : '';
+  if (rawLinkToken.length > 0) {
+    const lsHash = linkSessionTokenHash(rawLinkToken);
+    const linkSession = await db.findLinkSession(lsHash);
+    if (linkSession && linkSession.expires_at > now && linkSession.used_at === null) {
+      discordUserIdFromLink = linkSession.discord_user_id;
+    }
+  }
+
+  const lockKey = discordUserIdFromLink ?? normalizedEmail;
+
+  // Step 2: Advisory lock (per Discord account when link_session is valid, else per email)
+  const lockAcquired = await db.acquireAdvisoryLock(lockKey);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
 
   try {
-    // Step 3: Upsert provisional member by email (discord_user_id=NULL)
-    const member = await db.upsertProvisionalMemberByEmail(normalizedEmail);
+    // Step 3: Provisional member — Discord-bound when link_session resolved, else email-only row
+    const member =
+      discordUserIdFromLink !== null
+        ? await db.upsertProvisionalMember(discordUserIdFromLink, normalizedEmail)
+        : await db.upsertProvisionalMemberByEmail(normalizedEmail);
 
     // Step 4: Inflight operation check
     if (hasInflightOperation(member.inflight_operation_id)) {
@@ -490,9 +507,9 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     };
   } finally {
     try {
-      await db.releaseAdvisoryLock(normalizedEmail);
+      await db.releaseAdvisoryLock(lockKey);
     } catch (err) {
-      slog('error', 'Advisory lock release failed', { email: normalizedEmail, error: String(err) });
+      slog('error', 'Advisory lock release failed', { email: normalizedEmail, lockKey, error: String(err) });
     }
   }
 }
