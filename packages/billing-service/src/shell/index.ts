@@ -1,4 +1,10 @@
-export { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionTokenHash } from '../core/index.js';
+export {
+  formatRfc3339Utc,
+  hasActiveSubscription,
+  isSameOrigin,
+  linkSessionTokenHash,
+  memberSessionTokenHash,
+} from '../core/index.js';
 export {
   handleCancel,
   handleCreateCancelFormLink,

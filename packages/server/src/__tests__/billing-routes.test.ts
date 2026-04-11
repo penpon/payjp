@@ -562,6 +562,74 @@ describe('GET /v1/subscriptions/status', () => {
     });
     expect(body.subscription.accessEndAt).toMatch(/2025-06-01/);
   });
+
+  it('returns 200 subscription null when member_session and canceled with access_end_at in the past', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'canceled',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-03-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
+
+  it('returns 200 with canceled subscription when member_session and canceled with access_end_at in the future', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'canceled',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-05-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { subscription: { status: string; planId: string; accessEndAt: string } };
+    expect(body.subscription).toMatchObject({
+      status: 'canceled',
+      planId: PLAN_ID,
+    });
+    expect(body.subscription.accessEndAt).toMatch(/2025-05-01/);
+  });
+
+  it('returns 200 subscription null when link_session and canceled with access_end_at in the past', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'canceled',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-03-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
 });
 
 // ---------------------------------------------------------------------------

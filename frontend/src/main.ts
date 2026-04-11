@@ -14,7 +14,8 @@ import type { BillingCallbacks } from './billing-ui.js';
 import { showCancelConfirmModal } from './cancel-ui.js';
 import { mapCancelError } from './map-cancel-error.js';
 import { mapSubscribeError } from './map-subscribe-error.js';
-import type { BillingFormState, MemberInfo, PayjpAdapter, PlanDef, SubscriptionInfo } from './types.js';
+import { buildSubscriptionForUi } from './member-entitlement.js';
+import type { BillingFormState, PayjpAdapter, PlanDef, SubscriptionInfo } from './types.js';
 import { renderState } from './ui.js';
 
 const CANCEL_POLL_MAX_MS = 30_000;
@@ -50,19 +51,6 @@ async function pollAfterGoogleFormSubmit(): Promise<void> {
     if (canceled) return;
     await sleep(CANCEL_POLL_INTERVAL_MS);
   }
-}
-
-/** When subscription status returns null but member still has canceled state (edge cases). */
-function buildSubscriptionForUi(member: MemberInfo, subscription: SubscriptionInfo | null): SubscriptionInfo | null {
-  if (subscription) return subscription;
-  if (member.subscriptionStatus === 'canceled') {
-    return {
-      status: 'canceled',
-      planId: member.planId,
-      accessEndAt: member.accessEndAt,
-    };
-  }
-  return null;
 }
 
 // --- Plan definitions (hardcoded for MVP) ---

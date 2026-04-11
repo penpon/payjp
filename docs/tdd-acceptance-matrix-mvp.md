@@ -383,3 +383,14 @@
 - `failed_count > 0` 時の同日中復旧継続の実施記録（再同期再実行時刻、担当者、結果）
 - 6時間超確定不能時のエスカレーション記録（解除可否/担当者/実施時刻、該当時のみ）:
 - `deep-research-report.md` 未確定事項3件（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順）のベンダー回答ソースと採用判断:
+
+## 6. Post-MVP 拡張（CR-005 / CR-006 管理画面）
+
+- **管理画面（運用UI）は MVP の R1–R9 / `T-P0-01`〜`T-P0-07` の対象外**である。Go-Live 判定に新規テストIDは不要。
+- 実装時は別Issueで **受け入れテストIDを新設**し、本マトリクスへ追記する。境界・認証・段階導入の正本は `docs/admin-console-boundary.md` と `2weeks-spec.md` の **CR-005 / CR-006** を参照する。
+- 追加候補の検証観点は以下とする。
+  - `T-ADM-01`: `admin.and--line.com` が Cloudflare Access 未通過では origin に到達できない
+  - `T-ADM-02`: 許可対象外ユーザが `admin.and--line.com` にログインできない
+  - `T-ADM-03`: Phase A が read-only で、副作用操作を持たない
+  - `T-ADM-04`: Phase B の緊急操作で理由入力と監査ログが必須
+  - `T-ADM-05`: 緊急操作が `inflight_operation_*` / fail-close ルールを破らない

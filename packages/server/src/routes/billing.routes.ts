@@ -11,10 +11,12 @@ import {
   handleCreateCancelFormLink,
   handleGoogleCancelSubmit,
   handleSubscribe,
+  hasActiveSubscription,
   isSameOrigin,
   linkSessionTokenHash,
   memberSessionTokenHash,
 } from '@hayane/billing-service';
+import type { Member } from '@hayane/shared';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
@@ -29,6 +31,29 @@ function extractRequestContext(request: FastifyRequest): {
     origin: typeof request.headers.origin === 'string' ? request.headers.origin : '',
     linkSessionToken: request.cookies['__Host-link_session'] ?? '',
     memberSessionToken: request.cookies['__Host-member_session'] ?? '',
+  };
+}
+
+/** Same entitlement rule as subscribe / sync: active/trial, or canceled until access_end_at. */
+function subscriptionStatusBodyForMember(
+  member: Member,
+  now: Date,
+):
+  | { subscription: null }
+  | { subscription: { status: string; planId: string | null; accessEndAt: string | null } }
+  | null {
+  if (!member.subscription_status || member.subscription_status === 'deleted') {
+    return null;
+  }
+  if (!hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
+    return { subscription: null };
+  }
+  return {
+    subscription: {
+      status: member.subscription_status,
+      planId: member.payjp_plan_id,
+      accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
+    },
   };
 }
 
@@ -118,14 +143,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           const ms = await billingDeps.db.findMemberSession(msHash);
           if (ms && ms.expires_at > now) {
             const member = await billingDeps.db.findMemberById(ms.member_id);
-            if (member?.subscription_status && member.subscription_status !== 'deleted') {
-              return reply.status(200).send({
-                subscription: {
-                  status: member.subscription_status,
-                  planId: member.payjp_plan_id,
-                  accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
-                },
-              });
+            if (member) {
+              const body = subscriptionStatusBodyForMember(member, now);
+              if (body !== null) {
+                return reply.status(200).send(body);
+              }
             }
           }
         }
@@ -137,14 +159,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           const linkSession = await billingDeps.db.findLinkSession(tokenHash);
           if (linkSession && linkSession.expires_at > now) {
             const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
-            if (member?.subscription_status && member.subscription_status !== 'deleted') {
-              return reply.status(200).send({
-                subscription: {
-                  status: member.subscription_status,
-                  planId: member.payjp_plan_id,
-                  accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
-                },
-              });
+            if (member) {
+              const body = subscriptionStatusBodyForMember(member, now);
+              if (body !== null) {
+                return reply.status(200).send(body);
+              }
             }
           }
         }

@@ -83,6 +83,7 @@
 | `POST /v1/subscriptions/cancel/google-form-link` | `{}` + `__Host-member_session` + `Origin` | `{ ok: true, formUrl: string, expiresAt: string(RFC3339 UTC) }` | `401/403/409/503` |
 | `POST /v1/subscriptions/cancel/google-submit` | `{ name, email, reason, token }` + `X-Cancel-Secret`（移行期間は旧 `X-Google-Cancel-Secret` も可） | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/409/503` |
 | `POST /v1/subscriptions/cancel` | `{}` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/403/409/503` |
+| `GET /v1/subscriptions/status` | `__Host-member_session` または有効な `__Host-link_session` + `Origin`（任意） | `200 { subscription: null }` または `200 { subscription: { status, planId, accessEndAt } }` | `403`（Origin）, `503` |
 | `POST /v1/payjp/webhook` | PAY.JPイベント + `X-Payjp-Webhook-Token` | `200`（処理/ignored/failed/重複） | `401`（token不一致）, `503`（DB受理不能） |
 
 補足:
@@ -90,6 +91,7 @@
 - `GET /v1/auth/discord/callback` の `302 Location` には OAuth/link トークンを載せない（query/fragment禁止）
 - Cookie連携API（`GET /v1/auth/discord/session`, `POST /v1/subscriptions`, `POST /v1/subscriptions/cancel/google-form-link`, `POST /v1/subscriptions/cancel`）は `FRONTEND_BASE_URL` のみを許可Originに固定し、`Access-Control-Allow-Credentials: true` を必須とする
 - 成功レスポンスの日時項目（`accessEndAt`, `cancelEffectiveAt`, `roleRemovalAt`）は RFC 3339 UTC 文字列で返し、Unix秒やJST文字列は返さない
+- `GET /v1/subscriptions/status` の `subscription` は、billing-service の `hasActiveSubscription`（`active` / `trial`、または `canceled` かつ `access_end_at > now`）が真のときのみオブジェクトを返す。`canceled` かつ利用終了日経過後は `subscription: null` とし、フロントは再入会のため `POST /v1/subscriptions`（課金フォーム）へ遷移できる
 
 ### 3.2 エラーコード意味（固定）
 
@@ -246,3 +248,17 @@
 - Go-Live受け入れ前に `DAILY_RESYNC_CRON` 固定値、変更凍結時刻、直近1回の成功ログ参照を証跡へ残す
 - Go-Live受け入れ前に運用文書「再同期CLI手順」「手動ロール剥奪手順」を最終化し、証跡へ紐づける
 - Go-Live受け入れ前に `deep-research-report.md` の未確定事項3件（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順）の回答ソースと採用判断を証跡化する（実装着手のブロッカーにはしない）
+
+## 9. 将来拡張（管理画面）— CR-005 / CR-006
+
+MVP の明確な非スコープ（§ 明確な非スコープ）に従い、**2026-04-20 まで管理画面は追加しない**。リリース後に運用UIを実装する場合の **API・認証・配置の境界** は `docs/admin-console-boundary.md` を正とする。
+
+要点のみここに固定する:
+
+1. **ホスト名**: 管理画面は `admin.and--line.com` に固定する。利用者向け `www.and--line.com` / `api.and--line.com` と **オリジンを分離** し、導線・CORS 許可・Cookie 共有を行わない。
+2. **認証**: Cloudflare Access を前段に置き、**外部IdP + MFA** を主とする。許可対象は明示ユーザまたは管理者グループに限定し、default deny とする。HTTP Basic は補助に留める。
+3. **ランタイム**: **同一VPS** を使うが、公開系とは **別プロセス/別コンテナ/別ポート** に分離する。必要に応じて第2段階で別VPS化を検討する。
+4. **実装**: ブラウザから DB / PAY.JP / Discord へ直接アクセスしない。管理用バックエンド経由で、既存の CLI 相当・コア整合ルール（`inflight_operation_*`、fail-close）を踏襲する。
+5. **段階導入**: Phase A は **read-only**（会員検索・一覧・詳細・未解決影響確認）。Phase B は **単一会員中心の緊急操作**（再同期・ロール調整・課金停止相当）を限定追加する。`--all` 相当の一括操作は初期UIに含めない。
+
+Change Request 履歴: `2weeks-spec.md` の **CR-005 / CR-006** を参照。

@@ -662,7 +662,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 ## 15. 将来拡張（リリース後）
 
 1. プロダクト機能拡張（会員ポータル、プラン変更、プラン別ロール、独自grace period）
-2. 運用UI/管理機能（管理画面、会員状態検索、手動修復補助）
+2. 運用UI/管理機能（管理画面、会員状態検索、手動修復補助）。**導入境界・認証・段階ロールアウトの正本は `docs/admin-console-boundary.md` とする（CR-005, CR-006）。MVP Go-Live までに実装しない。**
 3. 課金API堅牢化（`Idempotency-Key` 厳密検証、レスポンス再返却）
 4. Webhook高度化（`event.id` 再取得照合、厳密時刻補正、補償upsert、DLQ）
 5. 同期/ジョブ基盤拡張（ロール同期の非同期化、期限切れデータ掃除ジョブ）
@@ -713,3 +713,27 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: 退会申請後は PAY.JP で定期請求を停止しつつ、`members.access_end_at = subscription.current_period_end` とし、それまではアプリ利用とDiscord有料ロールを維持する。`members.cancel_requested_at` は課金停止申請日時として別項目で保持する。`access_end_at` 到達後は日次再同期/Webhookでロール剥奪を行う。
 - 理由: 利用期間終了までの利用可否とUI表示を一致させ、誤解を防ぐため
 - 影響範囲: §2 scope item5、§5 user flow、§6.3〜6.6、Webhook、billing/sync/server routes、frontend 購読画面
+
+### CR-005: 管理画面（運用UI）導入方針の文書化
+
+- 日付: 2026-04-11
+- 起票: 管理画面導入方針（別サブドメイン・認証境界・VPS分離の判断基準）
+- 変更内容: Go-Live 後に検討する運用UIについて、**MVP では実装しない**前提を維持しつつ、`docs/admin-console-boundary.md` に **別サブドメイン・セッション分離・IdP+MFA 主軸・同一VPSからの開始可・段階ロールアウト** を固定する。実装は別Issueとする。
+- 理由: 利用者向け `__Host-` セッションと管理操作を混在させず、緊急時の手動手段を安全な境界で追加するため
+- 影響範囲: §15 item2、`docs/implementation-design-mvp.md` §9、`docs/tdd-acceptance-matrix-mvp.md` §6
+
+### CR-006: 管理画面の具体仕様固定（`admin.and--line.com` / Cloudflare Access / 同一VPS）
+
+- 日付: 2026-04-11
+- 起票: 管理画面仕様化（ホスト名・認証・段階導入）
+- 変更内容: 管理画面のホスト名を `admin.and--line.com` に固定し、前段認証を Cloudflare Access + 外部IdP + MFA に固定する。配置は同一VPSとするが、公開アプリとは別プロセス/別コンテナ/別ポートで隔離する。Phase A は read-only、Phase B は単一会員中心の緊急操作とし、利用者向け導線・CORS 許可・Cookie 共有を禁止する。
+- 理由: 利用者が誤って到達・利用できない境界を明確化しつつ、リリース後の運用UI実装を安全に進められるようにするため
+- 影響範囲: §15 item2、`docs/admin-console-boundary.md` 全体、`docs/implementation-design-mvp.md` §9、`docs/tdd-acceptance-matrix-mvp.md` §6
+
+### CR-007: 利用終了後の再入会（`GET /v1/subscriptions/status` とフロント導線）
+
+- 日付: 2026-04-11
+- 起票: 退会済みユーザの再入会（画面から課金フォームへ）
+- 変更内容: `members.access_end_at` 到達後は、課金コアの `hasActiveSubscription` と同一の判定で「有効な購読なし」とみなし、`GET /v1/subscriptions/status` は `subscription: null` を返す（DB上 `subscription_status=canceled` が残っていても同様）。フロントは同じ判定で退会済み表示の合成を猶予期間内に限定し、Discord 連携済みかつ購読なしの場合は既存の課金フォーム（`POST /v1/subscriptions`）へ誘導する。
+- 理由: 退会後の利用終了日経過後も購読状況画面に固定され再入会できない問題を解消し、仕様どおり再加入（トライアル再適用なし等）を画面から可能にするため
+- 影響範囲: `GET /v1/subscriptions/status`、server `billing.routes`、frontend `member-entitlement` / `main` 初期化、`docs/implementation-design-mvp.md` §3.1
