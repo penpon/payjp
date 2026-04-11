@@ -16,6 +16,7 @@ import {
   closePool,
   createTestDb,
   E2E_BILLING_CONFIG,
+  E2E_PLAN_ROLE_MAPPING,
   insertLinkedSession,
   makeCliDeps,
   makeMockDiscordClient,
@@ -155,18 +156,29 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
   // Scenario 3: Daily Resync 基本 — access_end_at 期限切れ → ロール剥奪
   // ---------------------------------------------------------------------------
   describe('Scenario 3: Daily resync basic — access_end_at 期限切れ → ロール剥奪', () => {
-    it('runDailyResync → syncRole が (discordUserId, "revoke") で呼ばれる', async () => {
+    it('runDailyResync → syncRole が (discordUserId, "revoke", roleId) で呼ばれる', async () => {
       const discordUserId = `daily-resync-basic-${randomUUID()}`;
       const pastTimestamp = Math.floor(Date.now() / 1000) - 86400; // 昨日
 
+      const planId = E2E_BILLING_CONFIG.allowedPlanIds[0];
+      const expectedRoleId = E2E_PLAN_ROLE_MAPPING[planId];
+
       // メンバーを事前挿入（canceled / access_end_at = 昨日 / role_state = granted）
+      // payjp_plan_id があると revoke は単一ロールに限定される（未設定だと mapping 全ロールが対象）。
       await pool.query(
         `INSERT INTO members
            (id, discord_user_id, email, subscription_status,
-            payjp_customer_id, payjp_subscription_id,
+            payjp_customer_id, payjp_subscription_id, payjp_plan_id,
             access_end_at, role_state)
-         VALUES ($1, $2, $3, 'canceled', $4, $5, NOW() - INTERVAL '1 day', 'granted')`,
-        [randomUUID(), discordUserId, `${discordUserId}@e2e-test.example.com`, 'cus_test_e2e', 'sub_test_daily'],
+         VALUES ($1, $2, $3, 'canceled', $4, $5, $6, NOW() - INTERVAL '1 day', 'granted')`,
+        [
+          randomUUID(),
+          discordUserId,
+          `${discordUserId}@e2e-test.example.com`,
+          'cus_test_e2e',
+          'sub_test_daily',
+          planId,
+        ],
       );
 
       const syncRole = vi.fn().mockResolvedValue(undefined);
@@ -182,7 +194,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
 
       await runDailyResync({ cliDeps, log: vi.fn() });
 
-      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke', expectedRoleId);
     });
   });
 });
