@@ -140,6 +140,7 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
 
   const db: DbClient = {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
+    findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),

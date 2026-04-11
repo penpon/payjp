@@ -91,6 +91,8 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
           origin: 'https://example.com',
         },
         cookies: { '__Host-link_session': rawToken },
+        // Empty JSON object — Fastify returns 400 if Content-Type is application/json but body is absent.
+        payload: {},
       });
 
       expect(res.statusCode).toBe(200);

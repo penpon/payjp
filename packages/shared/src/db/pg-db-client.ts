@@ -3,6 +3,7 @@ import type { LinkSessionRecord, Member, OAuthStateRecord } from '../types.js';
 
 export interface DbClient {
   findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
+  findMemberById(memberId: string): Promise<Member | null>;
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
@@ -138,6 +139,11 @@ type Queryable = Pick<pg.Pool, 'query'>;
 
 async function queryFindMemberByDiscordUserId(q: Queryable, discordUserId: string): Promise<Member | null> {
   const result = await q.query('SELECT * FROM members WHERE discord_user_id = $1', [discordUserId]);
+  return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
+}
+
+async function queryFindMemberById(q: Queryable, memberId: string): Promise<Member | null> {
+  const result = await q.query('SELECT * FROM members WHERE id = $1', [memberId]);
   return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
 }
 
@@ -316,6 +322,9 @@ export class PgDbClient implements DbClient {
 
   findMemberByDiscordUserId(discordUserId: string) {
     return queryFindMemberByDiscordUserId(this.pool, discordUserId);
+  }
+  findMemberById(memberId: string) {
+    return queryFindMemberById(this.pool, memberId);
   }
   upsertProvisionalMember(discordUserId: string, email: string) {
     return queryUpsertProvisionalMember(this.pool, discordUserId, email);
