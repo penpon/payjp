@@ -93,6 +93,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
           planId: member.payjp_plan_id,
           accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
           discordLinked: member.discord_user_id !== null,
+          roleState: member.role_state,
         },
       });
     } catch (err) {

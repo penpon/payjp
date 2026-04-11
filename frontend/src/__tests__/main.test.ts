@@ -67,6 +67,7 @@ describe('main init()', () => {
     appDiv.id = 'app';
     document.body.appendChild(appDiv);
     vi.resetModules();
+    window.history.replaceState({}, '', '/');
   });
 
   afterEach(() => {
@@ -108,6 +109,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
+      roleState: 'granted',
     });
     // No link_session → checkSession returns 401
     vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(401, 'Session check failed: 401'));
@@ -129,6 +131,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: true,
+      roleState: 'granted',
     });
     vi.mocked(fetchSubscriptionStatus).mockResolvedValue({
       status: 'active',
@@ -144,6 +147,32 @@ describe('main init()', () => {
     expect(appDiv.textContent).toContain('購読状況');
   });
 
+  it('should strip ?cancel=submitted, poll, then show withdrawn when canceled and role revoked', async () => {
+    window.history.replaceState({}, '', '/?cancel=submitted');
+
+    vi.mocked(getMember).mockResolvedValue({
+      memberId: TEST_MEMBER_ID,
+      subscriptionStatus: 'canceled',
+      planId: 'plan_business',
+      accessEndAt: '2026-05-07T00:00:00Z',
+      discordLinked: true,
+      roleState: 'revoked',
+    });
+    vi.mocked(fetchSubscriptionStatus).mockResolvedValue({
+      status: 'canceled',
+      planId: 'plan_business',
+      accessEndAt: '2026-05-07T00:00:00Z',
+    });
+
+    await runInit();
+
+    expect(getMember.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(fetchSubscriptionStatus).toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+    expect(appDiv.textContent).toContain('退会済み');
+    expect(appDiv.querySelector('.warning-banner')).toBeNull();
+  });
+
   // --- Member exists, discord linked, no subscription → billing form ---
 
   it('should show billing form when member has discord linked but no subscription', async () => {
@@ -153,6 +182,7 @@ describe('main init()', () => {
       planId: null,
       accessEndAt: null,
       discordLinked: true,
+      roleState: null,
     });
     vi.mocked(fetchSubscriptionStatus).mockResolvedValue(null);
 
@@ -173,6 +203,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: true,
+      roleState: 'granted',
     });
     vi.mocked(fetchSubscriptionStatus).mockRejectedValue(new SubscriptionStatusError(503, 'down'));
 
@@ -210,6 +241,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
+      roleState: 'granted',
     });
     vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(503, 'Session check failed: 503'));
 
@@ -228,6 +260,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
+      roleState: 'granted',
     });
     vi.mocked(checkSession).mockRejectedValue(new SessionCheckError(401, 'Session check failed: 401'));
 
@@ -270,6 +303,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
+      roleState: 'granted',
     });
     vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(linkDiscord).mockResolvedValue({ ok: true, discordUserId: 'discord-test-user', roleGranted: true });
@@ -288,6 +322,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
+      roleState: 'granted',
     });
     vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(linkDiscord).mockResolvedValue({ ok: false, errorCode: 'LINK_FAILED' });
@@ -307,6 +342,7 @@ describe('main init()', () => {
       planId: 'plan_business',
       accessEndAt: '2026-05-07T00:00:00Z',
       discordLinked: false,
+      roleState: 'granted',
     });
     vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.mocked(linkDiscord).mockRejectedValue(new TypeError('Failed to fetch'));

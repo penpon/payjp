@@ -62,12 +62,16 @@ export interface SubscribeResponse {
   accessEndAt: string;
 }
 
+/** Mirrors `members.role_state` from GET /v1/members/me */
+export type MemberRoleState = 'granted' | 'revoked' | 'unknown';
+
 export interface MemberInfo {
   memberId: string;
   subscriptionStatus: string | null;
   planId: string | null;
   accessEndAt: string | null;
   discordLinked: boolean;
+  roleState: MemberRoleState | null;
 }
 
 export interface LinkDiscordResponse {

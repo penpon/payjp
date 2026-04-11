@@ -2,6 +2,7 @@ import type {
   CancelFormLinkResponse,
   LinkDiscordResponse,
   MemberInfo,
+  MemberRoleState,
   SessionResponse,
   SubscribeResponse,
   SubscriptionInfo,
@@ -251,12 +252,18 @@ export async function getMember(): Promise<MemberInfo | null> {
   const m = obj.member as Record<string, unknown>;
   const memberId = typeof m.memberId === 'string' ? m.memberId : null;
   if (!memberId) return null;
+  const roleRaw = m.roleState;
+  let roleState: MemberRoleState | null = null;
+  if (roleRaw === 'granted' || roleRaw === 'revoked' || roleRaw === 'unknown') {
+    roleState = roleRaw;
+  }
   return {
     memberId,
     subscriptionStatus: typeof m.subscriptionStatus === 'string' ? m.subscriptionStatus : null,
     planId: typeof m.planId === 'string' ? m.planId : null,
     accessEndAt: typeof m.accessEndAt === 'string' ? m.accessEndAt : null,
     discordLinked: m.discordLinked === true,
+    roleState,
   };
 }
 

@@ -124,6 +124,10 @@ open http://localhost:5173
 
 メールアドレス項目とトークン項目は事前入力に使うため、フォームの「事前入力したリンクを取得」から `entry.<id>` を控えて `.env` の `GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID` と `GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID` に設定する。
 
+#### フォーム完了後にアプリへ戻す（推奨）
+
+Google Form の標準完了画面のままでは、アプリ側の「退会済み」表示まで自動遷移しません。**完了後のメッセージ**に、本番アプリのトップ URL にクエリ `?cancel=submitted` を付けたリンクを書いてください（例: `https://<your-app>/` → `https://<your-app>/?cancel=submitted`）。ユーザーが同じブラウザでそのリンクを開くと、`__Host-member_session` が送信され、アプリが退会反映を短時間ポーリングして購読状況を更新します。
+
 ### 2. Apps Script の作成
 
 フォーム回答に紐づくスプレッドシートで Apps Script を作成し、フォーム送信トリガーから以下を実行する。
@@ -138,7 +142,8 @@ function onFormSubmit(e) {
     token: values["トークン"][0],
   };
 
-  UrlFetchApp.fetch("https://app.example.com/v1/subscriptions/cancel/google-submit", {
+  const url = "https://app.example.com/v1/subscriptions/cancel/google-submit";
+  const response = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
     headers: {
@@ -147,8 +152,16 @@ function onFormSubmit(e) {
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
+  const code = response.getResponseCode();
+  const body = response.getContentText();
+  Logger.log("google-submit HTTP " + code + " " + body);
+  if (code < 200 || code >= 300) {
+    throw new Error("google-submit failed: " + code);
+  }
 }
 ```
+
+実行ログ（Apps Script の「実行数」→ 該当実行）で HTTP ステータスが `200` か確認してください。`401` の場合は `X-Google-Cancel-Secret` とアプリ側 `GOOGLE_FORM_CANCEL_SECRET` の不一致、ペイロードのメール/トークン不一致、トークン TTL 切れなどが典型です。
 
 ### 3. Script Properties
 
@@ -160,6 +173,7 @@ function onFormSubmit(e) {
 - Form URL に `entry.<email>` と `entry.<token>` が含まれる
 - フォーム送信後、スプレッドシートに回答が残る
 - 同時に `POST /v1/subscriptions/cancel/google-submit` が `200` になり、会員が `canceled`、Discord role が revoke される
+- （推奨）フォーム完了メッセージのリンク `?cancel=submitted` からアプリに戻り、購読状況が「退会済み」になる（Discord ロール剥奪が未確定のときは警告が出る）
 
 ## デプロイ構成（Cloudflare Pages + API サーバー）
 

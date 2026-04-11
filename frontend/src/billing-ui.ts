@@ -10,6 +10,7 @@ import { formatDate } from './format.js';
 import type {
   BillingError,
   BillingFormState,
+  MemberRoleState,
   PayjpAdapter,
   PayjpCardElement,
   PlanDef,
@@ -88,6 +89,7 @@ export function renderSubscribed(
   subscription: SubscriptionInfo,
   plans: PlanDef[],
   onStartCancel?: () => void,
+  memberRoleState?: MemberRoleState | null,
 ): void {
   const plan = plans.find((p) => p.id === subscription.planId);
   const planName = plan?.name ?? subscription.planId ?? '不明';
@@ -95,6 +97,7 @@ export function renderSubscribed(
   const STATUS_LABELS: Record<string, string> = { active: '有効', trial: 'トライアル' };
   const statusLabel = STATUS_LABELS[subscription.status] ?? subscription.status;
   const isWithdrawn = subscription.status === 'canceled';
+  const needsDiscordRoleConfirmation = isWithdrawn && (memberRoleState === 'unknown' || memberRoleState === 'granted');
 
   const statusRowChildren: (Node | string)[] = [];
   if (!isWithdrawn) {
@@ -107,7 +110,20 @@ export function renderSubscribed(
 
   const cardChildren: (Node | string)[] = [
     el('h1', { class: 'heading' }, ['購読状況']),
-    el('div', { class: `subscribed-status${isWithdrawn ? ' subscribed-status--withdrawn' : ''}` }, statusRowChildren),
+    ...(needsDiscordRoleConfirmation
+      ? [
+          renderWarningBanner(
+            '課金停止は反映済みです。Discordロールの削除を確認中です。しばらくしてからページを再読み込みしてください。',
+          ),
+        ]
+      : []),
+    el(
+      'div',
+      {
+        class: `subscribed-status${isWithdrawn ? ' subscribed-status--withdrawn' : ''}${needsDiscordRoleConfirmation ? ' subscribed-status--pending-discord' : ''}`,
+      },
+      statusRowChildren,
+    ),
     ...(subscription.accessEndAt
       ? [el('p', { class: 'subscribed-detail' }, [`次回更新日: ${formatDate(subscription.accessEndAt)}`])]
       : []),

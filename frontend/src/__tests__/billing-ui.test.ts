@@ -549,6 +549,34 @@ describe('billing-ui', () => {
       );
     });
 
+    it('should show warning when canceled but Discord role state is unknown', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        undefined,
+        'unknown',
+      );
+
+      expect(container.querySelector('.warning-banner')).not.toBeNull();
+      expect(container.textContent).toContain('Discordロールの削除を確認中');
+      expect(
+        container.querySelector('.subscribed-status')?.classList.contains('subscribed-status--pending-discord'),
+      ).toBe(true);
+    });
+
+    it('should not show Discord pending warning when canceled and role revoked', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        undefined,
+        'revoked',
+      );
+
+      expect(container.querySelector('.warning-banner')).toBeNull();
+    });
+
     it('should describe Google Form cancel flow in cancel section for active users', () => {
       renderSubscribed(
         container,

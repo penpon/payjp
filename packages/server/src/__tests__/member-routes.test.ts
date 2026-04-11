@@ -162,6 +162,32 @@ function makeDeps(
   };
 }
 
+describe('GET /v1/members/me', () => {
+  it('returns member including roleState', async () => {
+    const deps = makeDeps({ subscription_status: 'canceled', role_state: 'revoked' });
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/members/me',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      member: {
+        memberId: MEMBER_ID,
+        subscriptionStatus: 'canceled',
+        planId: 'plan-001',
+        accessEndAt: null,
+        discordLinked: true,
+        roleState: 'revoked',
+      },
+    });
+  });
+});
+
 describe('POST /v1/members/link-discord', () => {
   it('keeps idempotent short-circuit when already granted', async () => {
     const deps = makeDeps({ role_state: 'granted', subscription_status: 'active' });

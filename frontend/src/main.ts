@@ -14,8 +14,56 @@ import type { BillingCallbacks } from './billing-ui.js';
 import { showCancelConfirmModal } from './cancel-ui.js';
 import { mapCancelError } from './map-cancel-error.js';
 import { mapSubscribeError } from './map-subscribe-error.js';
-import type { BillingFormState, PayjpAdapter, PlanDef } from './types.js';
+import type { BillingFormState, MemberInfo, PayjpAdapter, PlanDef, SubscriptionInfo } from './types.js';
 import { renderState } from './ui.js';
+
+const CANCEL_POLL_MAX_MS = 30_000;
+const CANCEL_POLL_INTERVAL_MS = 1_500;
+
+function consumeCancelSubmittedQuery(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('cancel') !== 'submitted') return false;
+  params.delete('cancel');
+  const qs = params.toString();
+  const path = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+  window.history.replaceState({}, '', path);
+  return true;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Poll until backend reflects cancel (Google Form → Apps Script → google-submit) or timeout. */
+async function pollAfterGoogleFormSubmit(): Promise<void> {
+  const deadline = Date.now() + CANCEL_POLL_MAX_MS;
+  while (Date.now() < deadline) {
+    const m = await getMember();
+    let sub: SubscriptionInfo | null = null;
+    try {
+      sub = await fetchSubscriptionStatus();
+    } catch (err) {
+      if (!(err instanceof SubscriptionStatusError)) throw err;
+    }
+    const canceled = m?.subscriptionStatus === 'canceled' || sub?.status === 'canceled';
+    if (canceled) return;
+    await sleep(CANCEL_POLL_INTERVAL_MS);
+  }
+}
+
+/** When subscription status returns null but member still has canceled state (edge cases). */
+function buildSubscriptionForUi(member: MemberInfo, subscription: SubscriptionInfo | null): SubscriptionInfo | null {
+  if (subscription) return subscription;
+  if (member.subscriptionStatus === 'canceled') {
+    return {
+      status: 'canceled',
+      planId: member.planId,
+      accessEndAt: member.accessEndAt,
+    };
+  }
+  return null;
+}
 
 // --- Plan definitions (hardcoded for MVP) ---
 
@@ -302,6 +350,15 @@ async function init(): Promise<void> {
   renderState(app, 'loading', startOAuth);
 
   try {
+    const returnedFromGoogleForm = consumeCancelSubmittedQuery();
+    if (returnedFromGoogleForm) {
+      try {
+        await pollAfterGoogleFormSubmit();
+      } catch (err) {
+        console.error('[init] pollAfterGoogleFormSubmit failed:', err);
+      }
+    }
+
     // Billing-first flow: check member_session first
     const member = await getMember();
 
@@ -399,12 +456,14 @@ async function init(): Promise<void> {
         throw err;
       }
 
-      if (subscription) {
+      const subscriptionForUi = buildSubscriptionForUi(member, subscription);
+      if (subscriptionForUi) {
         renderState(app, 'linked', startOAuth, {
           subscribed: {
-            subscription,
+            subscription: subscriptionForUi,
             plans: PLANS,
             onStartCancel: () => startCancelFlow(app),
+            memberRoleState: member.roleState,
           },
         });
         return;

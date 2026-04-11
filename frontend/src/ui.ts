@@ -7,6 +7,7 @@ import type {
   BillingFormState,
   CancelResponse,
   CancelUIError,
+  MemberRoleState,
   PayjpAdapter,
   PlanDef,
   SubscribeResponse,
@@ -63,6 +64,8 @@ export interface SubscribedContext {
   subscription: SubscriptionInfo;
   plans: PlanDef[];
   onStartCancel?: () => void;
+  /** From GET /v1/members/me — Discord role revoke state when subscription is canceled */
+  memberRoleState?: MemberRoleState | null;
 }
 
 export function renderState(
@@ -97,6 +100,7 @@ export function renderState(
           extra.subscribed.subscription,
           extra.subscribed.plans,
           extra.subscribed.onStartCancel,
+          extra.subscribed.memberRoleState,
         );
       } else {
         container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
