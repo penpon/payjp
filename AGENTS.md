@@ -52,7 +52,7 @@ Prefer the smallest command that validates your change (scoped tests before full
 ## Workflows (when to use what)
 
 - **Business logic** in the three services: follow the VCSDD pipeline when changing pure core/shell (see `CLAUDE.md` for phase order and `/vcsdd-*` commands in Claude Code).
-- **Integration layer** (HTTP servers, DB wiring, frontend, E2E, deploy): issue-driven + TDD; see `.claude/rules/workflow.md` for review steps and optional slash commands (`/issue-start`, `/code-review`, etc.).
+- **Integration layer** (HTTP servers, DB wiring, frontend, E2E, deploy): issue-driven + TDD; see `.claude/rules/workflow.md` for review steps and optional slash commands (`/issue-start`, `/code-review`, etc.). E2E conventions: `.claude/rules/e2e.md`; Playwright config: `playwright.config.ts`.
 
 ## Security and secrets (non-negotiable)
 
