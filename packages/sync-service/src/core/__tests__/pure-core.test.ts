@@ -187,6 +187,10 @@ describe('shouldGrantPaidDiscordAccess', () => {
     expect(shouldGrantPaidDiscordAccess('canceled', future, now)).toBe(true);
   });
 
+  it('canceled with future access_end as ISO string (timestamptz text) → true', () => {
+    expect(shouldGrantPaidDiscordAccess('canceled', '2026-05-01T00:00:00.000Z', now)).toBe(true);
+  });
+
   it('canceled with past or null access_end → false', () => {
     expect(shouldGrantPaidDiscordAccess('canceled', past, now)).toBe(false);
     expect(shouldGrantPaidDiscordAccess('canceled', null, now)).toBe(false);
