@@ -534,6 +534,33 @@ describe('billing-ui', () => {
       expect(container.querySelector('.cancel-button')).toBeNull();
     });
 
+    it('should show withdrawn headline and no plan name when status is canceled', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+      );
+
+      expect(container.querySelector('.subscribed-plan-name')?.textContent).toBe('退会済み');
+      expect(container.textContent).not.toContain('ビジネスプラン');
+      expect(container.querySelector('.status-badge')).toBeNull();
+      expect(container.querySelector('.subscribed-status')?.classList.contains('subscribed-status--withdrawn')).toBe(
+        true,
+      );
+    });
+
+    it('should describe Google Form cancel flow in cancel section for active users', () => {
+      renderSubscribed(
+        container,
+        { status: 'active', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        vi.fn(),
+      );
+
+      expect(container.querySelector('.cancel-section-desc')?.textContent).toContain('Google Form');
+      expect(container.querySelector('.cancel-section-desc')?.textContent).not.toContain('Discordでの認証');
+    });
+
     it('should show subscription status for active user', () => {
       renderSubscribed(
         container,

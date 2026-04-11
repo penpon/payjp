@@ -92,16 +92,22 @@ export function renderSubscribed(
   const plan = plans.find((p) => p.id === subscription.planId);
   const planName = plan?.name ?? subscription.planId ?? '不明';
 
-  const STATUS_LABELS: Record<string, string> = { active: '有効', trial: 'トライアル', canceled: '解約予定' };
+  const STATUS_LABELS: Record<string, string> = { active: '有効', trial: 'トライアル' };
   const statusLabel = STATUS_LABELS[subscription.status] ?? subscription.status;
+  const isWithdrawn = subscription.status === 'canceled';
+
+  const statusRowChildren: (Node | string)[] = [];
+  if (!isWithdrawn) {
+    statusRowChildren.push(el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']));
+  }
+  statusRowChildren.push(el('p', { class: 'subscribed-plan-name' }, [isWithdrawn ? '退会済み' : planName]));
+  if (!isWithdrawn) {
+    statusRowChildren.push(el('div', { class: 'status-badge', role: 'status' }, [statusLabel]));
+  }
 
   const cardChildren: (Node | string)[] = [
     el('h1', { class: 'heading' }, ['購読状況']),
-    el('div', { class: 'subscribed-status' }, [
-      el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
-      el('p', { class: 'subscribed-plan-name' }, [planName]),
-      el('div', { class: 'status-badge', role: 'status' }, [statusLabel]),
-    ]),
+    el('div', { class: `subscribed-status${isWithdrawn ? ' subscribed-status--withdrawn' : ''}` }, statusRowChildren),
     ...(subscription.accessEndAt
       ? [el('p', { class: 'subscribed-detail' }, [`次回更新日: ${formatDate(subscription.accessEndAt)}`])]
       : []),
@@ -118,7 +124,7 @@ export function renderSubscribed(
       el('div', { class: 'cancel-section' }, [
         el('h2', { class: 'cancel-section-title' }, ['退会']),
         el('p', { class: 'cancel-section-desc' }, [
-          '退会後も現在の期間終了日までサービスをご利用いただけます。退会申請はDiscordでの認証が必要です。',
+          '退会後も現在の期間終了日までサービスをご利用いただけます。Google Formにて退会理由を送信すると、送信後に課金停止とDiscordロールの反映が行われます。',
         ]),
         cancelBtn,
       ]),
