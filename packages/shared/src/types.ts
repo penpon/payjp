@@ -21,6 +21,15 @@ export interface LinkSessionRecord {
   created_at: Date;
 }
 
+export interface CancelFormTokenRecord {
+  id: string;
+  member_id: string;
+  email: string;
+  expires_at: Date;
+  used_at: Date | null;
+  created_at: Date;
+}
+
 export interface CookieAttributes {
   name: CookieName;
   secure: true;
@@ -82,6 +91,12 @@ export interface CancelResponse {
   memberId: string;
   cancelEffectiveAt: string;
   roleRemovalAt: string;
+}
+
+export interface CancelFormLinkResponse {
+  ok: true;
+  formUrl: string;
+  expiresAt: string;
 }
 
 export interface MemberSessionRecord {

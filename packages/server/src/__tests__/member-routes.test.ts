@@ -1,6 +1,6 @@
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
-import type { LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
+import type { CancelFormTokenRecord, LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
 import { encryptToken } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
@@ -80,6 +80,24 @@ function makeConfig(): BillingConfig {
     planRoleMapping: { 'plan-001': 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
+    googleFormCancelEmailEntryId: '1111111111',
+    googleFormCancelTokenEntryId: '2222222222',
+    googleFormCancelSecret: 'google-shared-secret',
+    googleFormCancelTokenSecret: 'google-token-secret',
+    googleFormCancelTokenTtlSeconds: 900,
+  };
+}
+
+function makeCancelFormToken(overrides: Partial<CancelFormTokenRecord> = {}): CancelFormTokenRecord {
+  return {
+    id: '00000000-0000-0000-0000-000000000777',
+    member_id: MEMBER_ID,
+    email: 'test@example.com',
+    expires_at: new Date(NOW.getTime() + 60_000),
+    used_at: null,
+    created_at: NOW,
+    ...overrides,
   };
 }
 
@@ -97,6 +115,9 @@ function makeDeps(
     updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(linkSession),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
+    findCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
+    consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
     insertMemberSession: vi.fn(),
     findMemberSession: vi.fn().mockResolvedValue(makeMemberSession()),
     setInflightOperation: vi.fn(),
@@ -126,6 +147,7 @@ function makeDeps(
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
     addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
     revokeToken: vi.fn().mockResolvedValue(undefined),
   };

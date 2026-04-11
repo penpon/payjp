@@ -96,7 +96,7 @@ const ALLOWED_EVENT_TYPES = new Set([
 
 const KNOWN_STATUSES: Set<string> = new Set(['active', 'trial', 'canceled', 'paused', 'deleted']);
 
-const GRANT_STATUSES: Set<string> = new Set(['active', 'trial', 'canceled']);
+const GRANT_STATUSES: Set<string> = new Set(['active', 'trial']);
 
 const STATUS_NO_DATA_STATUS_REQUIRED = new Set(['subscription.created', 'subscription.deleted']);
 
@@ -370,7 +370,7 @@ export function evaluateChargeSearchResult(
 export function evaluateSubscriptionSearchResult(
   candidates: SubscriptionCandidate[],
   discordUserId: string,
-  accessEndAtUnix: number | null,
+  nextBillingAtUnix: number | null,
   memberId?: string,
 ): 'single-match' | 'fail-close' {
   if (candidates.length === 0) return 'fail-close';
@@ -388,8 +388,8 @@ export function evaluateSubscriptionSearchResult(
   }
 
   // Fallback: no metadata match, check period_end
-  if (accessEndAtUnix === null) return 'fail-close';
-  if (candidate.current_period_end === accessEndAtUnix) {
+  if (nextBillingAtUnix === null) return 'fail-close';
+  if (candidate.current_period_end === nextBillingAtUnix) {
     return 'single-match';
   }
 

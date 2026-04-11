@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../api.js', () => ({
   checkSession: vi.fn(),
+  createCancelFormLink: vi.fn(),
   getMember: vi.fn(),
   linkDiscord: vi.fn(),
   fetchSubscriptionStatus: vi.fn(),
   createSubscription: vi.fn(),
-  cancelSubscription: vi.fn(),
   startOAuth: vi.fn(),
   SessionCheckError: class SessionCheckError extends Error {
     status: number;
@@ -47,8 +47,8 @@ vi.mock('../api.js', () => ({
 }));
 
 import {
-  cancelSubscription,
   checkSession,
+  createCancelFormLink,
   fetchSubscriptionStatus,
   getMember,
   linkDiscord,
@@ -75,7 +75,7 @@ describe('main init()', () => {
     vi.mocked(checkSession).mockReset();
     vi.mocked(linkDiscord).mockReset();
     vi.mocked(fetchSubscriptionStatus).mockReset();
-    vi.mocked(cancelSubscription).mockReset();
+    vi.mocked(createCancelFormLink).mockReset();
     sessionStorage.clear();
     consoleSpy.mockClear();
   });
@@ -219,10 +219,9 @@ describe('main init()', () => {
     expect(consoleSpy).toHaveBeenCalled();
   });
 
-  // --- Cancel pending flow ---
+  // --- Cancel flow ---
 
-  it('should clear cancelPending when member has no discord link', async () => {
-    sessionStorage.setItem('cancelPending', String(Date.now()));
+  it('should keep register_complete when member has no discord link', async () => {
     vi.mocked(getMember).mockResolvedValue({
       memberId: TEST_MEMBER_ID,
       subscriptionStatus: 'active',
@@ -234,8 +233,6 @@ describe('main init()', () => {
 
     await runInit();
 
-    // cancelPending is not consumed because discord is not linked (cancel path requires discordLinked=true)
-    // The register_complete page is shown
     expect(appDiv.querySelector('.discord-button')).not.toBeNull();
   });
 

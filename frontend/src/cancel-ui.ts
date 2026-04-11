@@ -13,7 +13,7 @@ export function showCancelConfirmModal(
 ): () => void {
   const confirmBtn = el('button', { type: 'button', class: 'discord-button cancel-modal-confirm' }, [
     createDiscordLogoSvg(20),
-    el('span', {}, ['Discordで認証']),
+    el('span', {}, ['Google Formへ進む']),
   ]);
   confirmBtn.addEventListener('click', callbacks.onConfirm);
 
@@ -32,7 +32,7 @@ export function showCancelConfirmModal(
       el('div', { class: 'modal' }, [
         el('h2', { class: 'modal-title', id: 'cancel-modal-title' }, ['退会の確認']),
         el('p', { class: 'modal-body' }, [
-          '退会するにはDiscordで認証が必要です。認証後、退会手続きが完了します。退会後も現在の期間終了日まではサービスをご利用いただけます。',
+          'Google Formに移動して、氏名・メールアドレス・退会理由を送信してください。送信後に課金停止、アプリ利用停止、Discordロール削除が即時反映されます。',
         ]),
         el('div', { class: 'modal-actions' }, [confirmBtn, dismissBtn]),
       ]),

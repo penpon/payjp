@@ -1,8 +1,9 @@
 /**
  * billing-service Pure Core — Phase 2b (Green)
  */
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type {
+  CancelFormLinkResponse,
   CancelResponse,
   FixedEnvVarValidationResult,
   Member,
@@ -11,6 +12,18 @@ import type {
 } from '@hayane/shared';
 
 export type { EnvVarValidationResult } from './env.js';
+
+export interface CancelFormTokenPayload {
+  jti: string;
+  memberId: string;
+  email: string;
+  exp: number;
+  nonce: string;
+}
+
+export type CancelFormTokenVerificationResult =
+  | { ok: true; payload: CancelFormTokenPayload }
+  | { ok: false; reason: 'malformed' | 'invalid_signature' | 'expired' };
 
 // PROP-BILL-001: REQ-BILL-003
 export function validatePlanId(planId: string, allowedPlanIds: string[]): boolean {
@@ -24,9 +37,18 @@ export function isFirstTimeUser(firstTrialGrantedAt: Date | null): boolean {
 
 // PROP-BILL-003: REQ-BILL-007
 export function hasActiveSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
+  void accessEndAt;
+  void now;
   if (status === 'active' || status === 'trial') return true;
-  if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
   return false;
+}
+
+export function hasCancelableSubscription(status: string | null): boolean {
+  return status === 'active' || status === 'trial' || status === 'canceled';
+}
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 // PROP-BILL-004: REQ-BILL-006
@@ -165,6 +187,12 @@ const REQUIRED_ENV_VAR_NAMES = [
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
   'DISCORD_PLAN_ROLE_IDS',
+  'GOOGLE_FORM_CANCEL_BASE_URL',
+  'GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID',
+  'GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID',
+  'GOOGLE_FORM_CANCEL_SECRET',
+  'GOOGLE_FORM_CANCEL_TOKEN_SECRET',
+  'GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS',
   'BILLING_INTERVAL_MONTHS',
   'INITIAL_FREE_CYCLES',
   'CANCEL_NOTICE_CYCLES',
@@ -214,7 +242,7 @@ export function getCorsPreflight(frontendBaseUrl: string): Record<string, string
 // PROP-BILL-018: REQ-BILL-015
 export function shouldGrantRole(status: string | null): boolean {
   if (status === null) return false;
-  return status === 'active' || status === 'trial' || status === 'canceled';
+  return status === 'active' || status === 'trial';
 }
 
 // PROP-BILL-019: REQ-BILL-014
@@ -225,4 +253,83 @@ export function determineSubscriptionStatus(isFirstTime: boolean): 'trial' | 'ac
 // link session token hash (SHA-256, deterministic)
 export function linkSessionTokenHash(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+export function buildCancelFormLinkResponse(formUrl: string, expiresAt: Date): CancelFormLinkResponse {
+  return {
+    ok: true,
+    formUrl,
+    expiresAt: formatRfc3339Utc(expiresAt),
+  };
+}
+
+function encodeBase64Url(input: string): string {
+  return Buffer.from(input, 'utf8').toString('base64url');
+}
+
+function decodeBase64Url(input: string): string {
+  return Buffer.from(input, 'base64url').toString('utf8');
+}
+
+function compareSignatures(actual: string, expected: string): boolean {
+  const actualDigest = createHash('sha256').update(actual).digest();
+  const expectedDigest = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(actualDigest, expectedDigest);
+}
+
+export function createSignedCancelFormToken(payload: CancelFormTokenPayload, secret: string): string {
+  const payloadEncoded = encodeBase64Url(JSON.stringify(payload));
+  const signature = createHmac('sha256', secret).update(payloadEncoded).digest('base64url');
+  return `${payloadEncoded}.${signature}`;
+}
+
+export function verifySignedCancelFormToken(
+  token: string,
+  secret: string,
+  now: Date,
+): CancelFormTokenVerificationResult {
+  const segments = token.split('.');
+  if (segments.length !== 2 || !segments[0] || !segments[1]) {
+    return { ok: false, reason: 'malformed' };
+  }
+
+  const [payloadEncoded, signature] = segments;
+  const expectedSignature = createHmac('sha256', secret).update(payloadEncoded).digest('base64url');
+  if (!compareSignatures(signature, expectedSignature)) {
+    return { ok: false, reason: 'invalid_signature' };
+  }
+
+  try {
+    const raw = JSON.parse(decodeBase64Url(payloadEncoded)) as Record<string, unknown>;
+    const payload: CancelFormTokenPayload = {
+      jti: typeof raw.jti === 'string' ? raw.jti : '',
+      memberId: typeof raw.memberId === 'string' ? raw.memberId : '',
+      email: typeof raw.email === 'string' ? normalizeEmail(raw.email) : '',
+      exp: typeof raw.exp === 'number' ? raw.exp : Number.NaN,
+      nonce: typeof raw.nonce === 'string' ? raw.nonce : '',
+    };
+    if (!payload.jti || !payload.memberId || !payload.email || !payload.nonce || !Number.isFinite(payload.exp)) {
+      return { ok: false, reason: 'malformed' };
+    }
+    if (payload.exp <= Math.floor(now.getTime() / 1000)) {
+      return { ok: false, reason: 'expired' };
+    }
+    return { ok: true, payload };
+  } catch {
+    return { ok: false, reason: 'malformed' };
+  }
+}
+
+export function buildGoogleFormPrefillUrl(
+  baseUrl: string,
+  emailEntryId: string,
+  tokenEntryId: string,
+  email: string,
+  token: string,
+): string {
+  const url = new URL(baseUrl);
+  url.searchParams.set('usp', 'pp_url');
+  url.searchParams.set(`entry.${emailEntryId}`, normalizeEmail(email));
+  url.searchParams.set(`entry.${tokenEntryId}`, token);
+  return url.toString();
 }

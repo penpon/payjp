@@ -260,7 +260,10 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         updates.payjp_plan_id = event.data.plan.id;
       }
       if (event.data?.current_period_end) {
-        updates.access_end_at = new Date(event.data.current_period_end * 1000);
+        updates.next_billing_at = new Date(event.data.current_period_end * 1000);
+        if (newStatus === 'active' || newStatus === 'trial') {
+          updates.access_end_at = new Date(event.data.current_period_end * 1000);
+        }
       }
 
       await updateMemberFromWebhook(txDb, lockedMember.id as string, updates);

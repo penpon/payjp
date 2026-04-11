@@ -5,8 +5,9 @@ import { resolveRoleIdForPlan } from '@hayane/sync-service';
 import type { FastifyInstance } from 'fastify';
 
 function hasLinkableSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
+  void accessEndAt;
+  void now;
   if (status === 'active' || status === 'trial') return true;
-  if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
   return false;
 }
 

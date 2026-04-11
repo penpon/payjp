@@ -11,7 +11,9 @@ let db: PgDbClient;
 let dbAvailable = false;
 
 async function cleanDatabase() {
-  await pool.query('TRUNCATE members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs CASCADE');
+  await pool.query(
+    'TRUNCATE cancel_form_tokens, member_sessions, members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs CASCADE',
+  );
 }
 
 beforeAll(async () => {
@@ -148,6 +150,43 @@ describe('PgDbClient - discord_link_sessions', () => {
   });
 });
 
+describe('PgDbClient - cancel_form_tokens', () => {
+  it('insertCancelFormToken, findCancelFormToken and consumeCancelFormToken', async () => {
+    const member = await db.upsertProvisionalMember('discord-cancel-form-01', 'cancel-form@example.com');
+    const expiresAt = new Date(Date.now() + 900_000);
+
+    await db.insertCancelFormToken({
+      id: '00000000-0000-0000-0000-000000000123',
+      memberId: member.id,
+      email: member.email,
+      expiresAt,
+    });
+
+    const found = await db.findCancelFormToken('00000000-0000-0000-0000-000000000123');
+    expect(found).not.toBeNull();
+    expect(found!.member_id).toBe(member.id);
+    expect(found!.used_at).toBeNull();
+
+    await db.consumeCancelFormToken('00000000-0000-0000-0000-000000000123', new Date());
+    const consumed = await db.findCancelFormToken('00000000-0000-0000-0000-000000000123');
+    expect(consumed!.used_at).not.toBeNull();
+  });
+
+  it('consumeCancelFormToken throws on expired token', async () => {
+    const member = await db.upsertProvisionalMember('discord-cancel-form-02', 'expired-cancel@example.com');
+    await db.insertCancelFormToken({
+      id: '00000000-0000-0000-0000-000000000124',
+      memberId: member.id,
+      email: member.email,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    await expect(db.consumeCancelFormToken('00000000-0000-0000-0000-000000000124', new Date())).rejects.toThrow(
+      'Cancel form token not found, already consumed, or expired',
+    );
+  });
+});
+
 describe('PgDbClient - updateMemberAfterSubscribe', () => {
   it('updates subscribe fields and does not modify inflight columns', async () => {
     const member = await db.upsertProvisionalMember('discord-030', 'sub@example.com');
@@ -186,7 +225,8 @@ describe('PgDbClient - updateMemberAfterCancel', () => {
     const updated = await db.updateMemberAfterCancel(member.id, {
       cancel_requested_at: now,
       subscription_status: 'canceled',
-      access_end_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+      access_end_at: now,
+      next_billing_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
       inflight_operation_id: null,
       inflight_operation_type: null,
       inflight_operation_started_at: null,
@@ -194,6 +234,8 @@ describe('PgDbClient - updateMemberAfterCancel', () => {
 
     expect(updated.subscription_status).toBe('canceled');
     expect(updated.cancel_requested_at).not.toBeNull();
+    expect(updated.access_end_at!.getTime()).toBe(now.getTime());
+    expect(updated.next_billing_at).not.toBeNull();
     expect(updated.inflight_operation_id).toBeNull();
   });
 });

@@ -32,17 +32,17 @@ describe('cancel-ui', () => {
       dismiss();
     });
 
-    it('should render Discord auth button and cancel button', () => {
+    it('should render Google Form button and cancel button', () => {
       const dismiss = showCancelConfirmModal(container, { onConfirm: vi.fn(), onDismiss: vi.fn() });
 
       expect(container.querySelector('.cancel-modal-confirm')).not.toBeNull();
-      expect(container.querySelector('.cancel-modal-confirm')?.textContent).toContain('Discordで認証');
+      expect(container.querySelector('.cancel-modal-confirm')?.textContent).toContain('Google Formへ進む');
       expect(container.querySelector('.ghost-neutral-button')?.textContent).toBe('キャンセル');
 
       dismiss();
     });
 
-    it('should call onConfirm when Discord auth button is clicked', () => {
+    it('should call onConfirm when Google Form button is clicked', () => {
       const onConfirm = vi.fn();
       const dismiss = showCancelConfirmModal(container, { onConfirm, onDismiss: vi.fn() });
 

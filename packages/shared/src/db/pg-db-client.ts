@@ -1,5 +1,11 @@
 import type pg from 'pg';
-import type { LinkSessionRecord, Member, MemberSessionRecord, OAuthStateRecord } from '../types.js';
+import type {
+  CancelFormTokenRecord,
+  LinkSessionRecord,
+  Member,
+  MemberSessionRecord,
+  OAuthStateRecord,
+} from '../types.js';
 
 export interface DbClient {
   findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
@@ -9,6 +15,14 @@ export interface DbClient {
   updateMemberDiscordUserId(memberId: string, discordUserId: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
+  insertCancelFormToken(record: {
+    id: string;
+    memberId: string;
+    email: string;
+    expiresAt: Date;
+  }): Promise<CancelFormTokenRecord>;
+  findCancelFormToken(tokenId: string): Promise<CancelFormTokenRecord | null>;
+  consumeCancelFormToken(tokenId: string, now: Date): Promise<void>;
   insertMemberSession(record: {
     memberSessionTokenHash: string;
     memberId: string;
@@ -47,6 +61,7 @@ export interface DbClient {
       cancel_requested_at: Date;
       subscription_status: 'canceled';
       access_end_at: Date;
+      next_billing_at: Date | null;
       inflight_operation_id: null;
       inflight_operation_type: null;
       inflight_operation_started_at: null;
@@ -64,6 +79,8 @@ export interface TransactionDbClient {
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
+  findCancelFormToken(tokenId: string): Promise<CancelFormTokenRecord | null>;
+  consumeCancelFormToken(tokenId: string, now: Date): Promise<void>;
   setInflightOperation(
     memberId: string,
     operationId: string,
@@ -142,6 +159,17 @@ function toLinkSession(row: Record<string, unknown>): LinkSessionRecord {
   };
 }
 
+function toCancelFormToken(row: Record<string, unknown>): CancelFormTokenRecord {
+  return {
+    id: row.id as string,
+    member_id: row.member_id as string,
+    email: row.email as string,
+    expires_at: row.expires_at as Date,
+    used_at: (row.used_at as Date) ?? null,
+    created_at: row.created_at as Date,
+  };
+}
+
 function toMemberSession(row: Record<string, unknown>): MemberSessionRecord {
   return {
     id: row.id as string,
@@ -211,6 +239,11 @@ async function queryFindLinkSession(q: Queryable, tokenHash: string): Promise<Li
   return result.rows[0] ? toLinkSession(result.rows[0] as Record<string, unknown>) : null;
 }
 
+async function queryFindCancelFormToken(q: Queryable, tokenId: string): Promise<CancelFormTokenRecord | null> {
+  const result = await q.query('SELECT * FROM cancel_form_tokens WHERE id = $1', [tokenId]);
+  return result.rows[0] ? toCancelFormToken(result.rows[0] as Record<string, unknown>) : null;
+}
+
 async function queryConsumeLinkSession(q: Queryable, tokenHash: string, now: Date): Promise<void> {
   const result = await q.query(
     `UPDATE discord_link_sessions SET used_at = $2
@@ -221,6 +254,19 @@ async function queryConsumeLinkSession(q: Queryable, tokenHash: string, now: Dat
   );
   if ((result.rowCount ?? 0) === 0) {
     throw new Error('Link session not found, already consumed, or expired');
+  }
+}
+
+async function queryConsumeCancelFormToken(q: Queryable, tokenId: string, now: Date): Promise<void> {
+  const result = await q.query(
+    `UPDATE cancel_form_tokens SET used_at = $2
+     WHERE id = $1
+       AND used_at IS NULL
+       AND expires_at > $2`,
+    [tokenId, now],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error('Cancel form token not found, already consumed, or expired');
   }
 }
 
@@ -345,13 +391,14 @@ async function queryUpdateMemberAfterCancel(
        cancel_requested_at = $2,
        subscription_status = $3,
        access_end_at = $4,
+       next_billing_at = $5,
        inflight_operation_id = NULL,
        inflight_operation_type = NULL,
        inflight_operation_started_at = NULL,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,
-    [memberId, params.cancel_requested_at, params.subscription_status, params.access_end_at],
+    [memberId, params.cancel_requested_at, params.subscription_status, params.access_end_at, params.next_billing_at],
   );
   if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
   return toMember(result.rows[0] as Record<string, unknown>);
@@ -390,6 +437,12 @@ export class PgDbClient implements DbClient {
   }
   consumeLinkSession(tokenHash: string, now: Date) {
     return queryConsumeLinkSession(this.pool, tokenHash, now);
+  }
+  findCancelFormToken(tokenId: string) {
+    return queryFindCancelFormToken(this.pool, tokenId);
+  }
+  consumeCancelFormToken(tokenId: string, now: Date) {
+    return queryConsumeCancelFormToken(this.pool, tokenId, now);
   }
   setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
     return querySetInflightOperation(this.pool, memberId, operationId, operationType, now);
@@ -526,6 +579,21 @@ export class PgDbClient implements DbClient {
       [record.linkSessionTokenHash, record.discordUserId, record.discordAccessTokenEncrypted ?? null, record.expiresAt],
     );
     return toLinkSession(result.rows[0] as Record<string, unknown>);
+  }
+
+  async insertCancelFormToken(record: {
+    id: string;
+    memberId: string;
+    email: string;
+    expiresAt: Date;
+  }): Promise<CancelFormTokenRecord> {
+    const result = await this.pool.query(
+      `INSERT INTO cancel_form_tokens (id, member_id, email, expires_at)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [record.id, record.memberId, record.email, record.expiresAt],
+    );
+    return toCancelFormToken(result.rows[0] as Record<string, unknown>);
   }
 
   // --- member_sessions ---
@@ -669,6 +737,12 @@ class PgTransactionClient implements TransactionDbClient {
   }
   consumeLinkSession(tokenHash: string, now: Date) {
     return queryConsumeLinkSession(this.client, tokenHash, now);
+  }
+  findCancelFormToken(tokenId: string) {
+    return queryFindCancelFormToken(this.client, tokenId);
+  }
+  consumeCancelFormToken(tokenId: string, now: Date) {
+    return queryConsumeCancelFormToken(this.client, tokenId, now);
   }
   setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
     return querySetInflightOperation(this.client, memberId, operationId, operationType, now);

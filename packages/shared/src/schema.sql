@@ -72,7 +72,20 @@ CREATE TABLE IF NOT EXISTS discord_link_sessions (
 
 CREATE INDEX IF NOT EXISTS discord_link_sessions_expires_at_idx ON discord_link_sessions (expires_at);
 
--- Table 5: member_sessions — 課金完了後のセッション管理 (billing-service 発行)
+-- Table 5: cancel_form_tokens — Google Form退会の署名付きワンタイムトークン
+CREATE TABLE IF NOT EXISTS cancel_form_tokens (
+  id              UUID PRIMARY KEY,
+  member_id       UUID NOT NULL REFERENCES members(id),
+  email           TEXT NOT NULL,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  used_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS cancel_form_tokens_member_id_idx ON cancel_form_tokens (member_id);
+CREATE INDEX IF NOT EXISTS cancel_form_tokens_expires_at_idx ON cancel_form_tokens (expires_at);
+
+-- Table 6: member_sessions — 課金完了後のセッション管理 (billing-service 発行)
 CREATE TABLE IF NOT EXISTS member_sessions (
   id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_session_token_hash   TEXT NOT NULL UNIQUE,
@@ -84,7 +97,7 @@ CREATE TABLE IF NOT EXISTS member_sessions (
 CREATE INDEX IF NOT EXISTS member_sessions_expires_at_idx ON member_sessions (expires_at);
 CREATE INDEX IF NOT EXISTS member_sessions_member_id_idx ON member_sessions (member_id);
 
--- Table 6: member_impact_logs — 会員影響の未解決/解消追跡 (sync-service / resync CLI 管理)
+-- Table 7: member_impact_logs — 会員影響の未解決/解消追跡 (sync-service / resync CLI 管理)
 CREATE TABLE IF NOT EXISTS member_impact_logs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id       UUID NOT NULL REFERENCES members(id),

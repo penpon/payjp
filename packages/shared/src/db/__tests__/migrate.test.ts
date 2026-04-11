@@ -27,13 +27,21 @@ afterAll(async () => {
 });
 
 describe('runMigrations', () => {
-  it('creates all 5 tables', async () => {
+  it('creates all 7 tables', async () => {
     await runMigrations(pool);
 
     const result = await pool.query(`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
-      AND table_name IN ('members', 'payjp_events', 'oauth_states', 'discord_link_sessions', 'member_impact_logs')
+      AND table_name IN (
+        'members',
+        'payjp_events',
+        'oauth_states',
+        'discord_link_sessions',
+        'cancel_form_tokens',
+        'member_sessions',
+        'member_impact_logs'
+      )
       ORDER BY table_name
     `);
 
@@ -42,6 +50,8 @@ describe('runMigrations', () => {
     expect(tables).toContain('payjp_events');
     expect(tables).toContain('oauth_states');
     expect(tables).toContain('discord_link_sessions');
+    expect(tables).toContain('cancel_form_tokens');
+    expect(tables).toContain('member_sessions');
     expect(tables).toContain('member_impact_logs');
   });
 

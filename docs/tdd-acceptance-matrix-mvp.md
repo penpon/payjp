@@ -12,7 +12,7 @@
 | R2 | 3プラン購読開始 | `T-P0-02`, `T-P0-03` |
 | R3 | 初回1か月課金 + 2か月目/3か月目無料 | `T-P0-02` |
 | R4 | 4か月目以降月次課金 | `T-P0-02` |
-| R5 | cancel受付境界・終了日維持 | `T-P0-05` |
+| R5 | Google Form退会受付 + 即時退会完了 | `T-P0-05` |
 | R6 | PAY.JP Webhook反映 | `T-P0-07` |
 | R7 | ロール付与/剥奪 | `T-P0-02`, `T-P0-06`, `T-P0-07` |
 | R8 | 日次再同期・手動再同期CLI | `T-P0-04`, `T-P0-06` |
@@ -24,8 +24,8 @@
 2. `T-P0-02` 購読作成（3プラン・3DS・Origin・事前検証）
 3. `T-P0-03` 並列登録と既存契約ガード
 4. `T-P0-04` subscribe不確定失敗 `503 + operationId` とCLI復旧
-5. `T-P0-05` cancel境界・冪等・不確定失敗復旧
-6. `T-P0-06` `access_end_at` / `paused` / `deleted` の剥奪
+5. `T-P0-05` Google Form退会・冪等・不確定失敗復旧
+6. `T-P0-06` `canceled` / `paused` / `deleted` の即時剥奪
 7. `T-P0-07` Webhook fail-close・冪等・古いイベント無視・ログ非保存
 
 ## 2.1 `deep-research-report.md` 由来の固定検証観点
@@ -207,60 +207,63 @@
 ### T-P0-05（R5）
 
 - Red:
-  - 受付開始日前に `409` にならない
+  - `POST /v1/subscriptions/cancel/google-form-link` が `__Host-member_session` なしでもURLを返してしまう
   - `Origin` 欠落/`Origin: null` で `403` にならない
-  - `Origin` 正規化比較が崩れ、port違いを誤って通す
-  - 消費済み `__Host-link_session` 再送で `401` にならない
-  - 並列 `cancel` でロックが効かず、PAY.JP cancel API が重複実行される
+  - Google Form用トークンにTTL・一回性・改ざん検知が無い
+  - Google Form URLにメールまたはトークンが事前入力されない
+  - `POST /v1/subscriptions/cancel/google-submit` が共有シークレット不一致でも受理される
+  - Google送信メールとトークン内メールが不一致でも受理される
+  - 並列 `google-submit` でロックが効かず、PAY.JP cancel API が重複実行される
   - `active/trial/canceled` 既存購読が無いケースで `409` にならない
   - `payjp_subscription_id` 未設定で `409` にならず、cancel APIが実行される
   - `payjp_subscription_id` 欠落時の再構築で `GET /v1/customers/:id/subscriptions` を使わず、手動判断に依存して誤ったsubscriptionを採用する
   - `GET /v1/customers/:id/subscriptions` のページングを先頭1ページで打ち切る、または `offset<=900` 上限到達時の `has_more=true` を未定義のまま走査して誤判定/無限走査になる
-  - `metadata.discord_user_id` 欠落かつ `status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.access_end_at))`（UTC・整数秒）一致のケースで補正保存できず、退会不能になる
-  - `metadata.discord_user_id` 欠落時に `current_period_end != floor(extract(epoch from members.access_end_at))`（UTC・整数秒）または `members.access_end_at IS NULL` でも誤って補正採用してしまう
+  - `metadata.discord_user_id` 欠落かつ `status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）一致のケースで補正保存できず、退会不能になる
+  - `metadata.discord_user_id` 欠落時に `current_period_end != floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）または `members.next_billing_at IS NULL` でも誤って補正採用してしまう
   - `payjp_subscription_id` 再構築候補が0件/複数件でもfail-closeで停止せず、cancelが実行される
   - `cancel_requested_at` 既存時にPAY.JP cancel APIが再実行される
   - `inflight_operation_id` 既存時に即 `503 + 既存operationId` にならない
-  - `inflight_operation_id` 既存時の `503` 応答で `__Host-link_session` が誤って消費される
-  - `access_end_at` 未設定で `409` にならない
-  - 月末繰上げ境界（例: `3/31`）が不正
   - 不確定失敗で `503 + operationId` が返らない
   - PAY.JP書き込み前の確定失敗で `inflight_operation_*` がクリアされない
   - PAY.JP書き込み後の確定失敗で整合未確認でも `inflight_operation_*` が誤ってクリアされる
-  - CLI復旧で未cancel時/済み時の分岐が無く、cancel API再実行回数が保証されない
+  - Discordロール剥奪失敗時に `role_state = unknown` が残らない
+  - Google送信後の即時退会で `access_end_at = now()` にならず、アプリ利用停止が遅延する
   - PAY.JP書き込み実行時/不確定失敗時に `operationId` ログキーが欠落する
   - 解約APIログで raw header/body またはカード情報が保存される、あるいは固定キー機密マスクが行われない
-  - `POST /v1/subscriptions/cancel` 成功レスポンスの `cancelEffectiveAt` / `roleRemovalAt` が RFC 3339 UTC 文字列で固定されず、型揺れを許してしまう
+  - `POST /v1/subscriptions/cancel/google-submit` 成功レスポンスの `cancelEffectiveAt` / `roleRemovalAt` が RFC 3339 UTC 文字列で固定されず、型揺れを許してしまう
 - Green:
-  - JST 1か月前同日00:00境界判定（存在しない日は月末繰上げ）
+  - `POST /v1/subscriptions/cancel/google-form-link` は `__Host-member_session` と `Origin` を検証し、署名付きワンタイムトークン入りのGoogle Form URLを返す
   - `Origin` 欠落/不一致/`Origin: null` は `403` を返す
   - `Origin` は `scheme+host+port` 正規化比較で厳密検証
-  - `pg_advisory_lock(discord_user_id::bigint)` により並列 `cancel` を排他する
+  - Google Formトークンは TTL・一回性・改ざん検知を持ち、同一トークンの再送は冪等成功または明示失敗に収束する
+  - `X-Google-Cancel-Secret` 不一致は `401` を返す
+  - `pg_advisory_lock(member_id)` 相当の排他により並列 `google-submit` を排他する
   - `active/trial/canceled` 既存購読が無い場合は `409`
   - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
   - `payjp_subscription_id` 欠落時は `GET /v1/customers/:id/subscriptions` を `limit=100`・`offset=0,100,200,...` で `has_more=false` まで走査し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == discord_user_id` が1件のみの場合に補正保存する。`offset<=900` 上限到達時に `has_more=true` の場合は一致件数に関わらず fail-close で停止する（cancel API実行禁止、`inflight_operation_*` 解除禁止）
-  - `metadata.discord_user_id` 欠落時は、`status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.access_end_at))`（UTC・整数秒）一致の場合に限りその1件を補正保存し、0件または複数件（または `members.access_end_at IS NULL` / 不一致）はfail-closeで停止する
+  - `metadata.discord_user_id` 欠落時は、`status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）一致の場合に限りその1件を補正保存し、0件または複数件（または `members.next_billing_at IS NULL` / 不一致）はfail-closeで停止する
   - `members.payjp_customer_id` 欠落時は fail-close（cancel実行/`inflight_operation_*` 解除禁止）とし、`member_impact_logs` 記録とエスカレーションを行う
   - 候補が0件または複数件の場合は確定不能としてfail-closeで停止し、`inflight_operation_*` を解除せずcancelを実行しない
-  - 初回cancelのみPAY.JP cancel API実行、消費済みCookie再送は `401`、再OAuth後再実行は冪等 `200`（PAY.JP再呼び出しなし）
+  - 初回 `google-submit` のみPAY.JP cancel API実行、再送時はPAY.JP再呼び出しなしで冪等 `200`（必要ならロール剥奪のみ再試行）となる
   - PAY.JP cancel APIは `members.payjp_subscription_id` 指定で実行する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId`（PAY.JP書き込み0回）
-  - `inflight_operation_id` 既存時は `__Host-link_session` 未消費で返し、再OAuthなしで同一Cookie再送しても再度 `503` を返す
   - PAY.JP書き込み前の確定失敗では `inflight_operation_*` をクリアする
   - PAY.JP書き込み後の確定失敗では整合確認できた場合のみ `inflight_operation_*` をクリアする
   - CLI復旧で未cancel時のみcancel APIを1回実行し、cancel済みはAPI再実行なしで反映のみ行う
   - 不確定失敗時は `inflight_operation_*` 保持で `503`
+  - 成功時は `subscription_status='canceled'`, `access_end_at=now()`, `next_billing_at=current_period_end`, `role_state='revoked'` を満たす
+  - Discordロール剥奪失敗時は `503` と `role_state='unknown'` を返し、再同期または再送で回復できる
   - CLI再同期で整合回復
   - 成功レスポンスは `{ ok: true, memberId: uuid文字列, cancelEffectiveAt: RFC3339 UTC文字列, roleRemovalAt: RFC3339 UTC文字列 }` を満たすことを検証する
   - PAY.JP書き込み実行時/不確定失敗時の `operationId` 必須ログを検証する
   - 解約APIログで raw header/body 非保存、カード情報非保存/非出力、固定キー機密マスクを検証
 - Refactor:
-  - 日付境界計算ロジックを純関数化
-  - cancel冪等判定とoperation管理の責務分離
+  - Google Formトークン生成/検証ロジックを純関数化
+  - cancel冪等判定と即時ロール剥奪の責務分離
 - モック/注入要件:
-  - JST固定クロック注入
+  - Google Apps Script 相当のヘッダ/ボディ送信をスタブ化
   - **決定的503注入**: cancel API呼び出し後にtimeoutを発生
-  - A/Bテストユーザー切替をテストデータで固定
+  - Discordロール剥奪失敗を注入可能にする
 - 受け入れ証跡:
   - 実施日時:
   - コマンドorテストID: `T-P0-05`
@@ -270,7 +273,7 @@
 ### T-P0-06（R7/R8）
 
 - Red:
-  - `access_end_at` 到達後にロールが残る
+  - `canceled` でロール剥奪されない
   - `paused/deleted` でロール剥奪されない
   - ロール同期で Discord API `429/5xx` 発生時に短時間リトライ（最大3回）が走らない
   - 日次再同期でPAY.JP `subscription 404` を `deleted` 扱いできない
@@ -278,7 +281,7 @@
   - 不整合解消時に同一 `member_id + issue_code` の `member_impact_logs` だけをクローズできない
   - `failed_count` が未出力、または `resolved_at IS NULL` 件数と一致しない
 - Green:
-  - Webhookまたは日次再同期で剥奪条件を適用
+  - Webhookまたは日次再同期で `canceled/paused/deleted` の剥奪条件を適用
   - ロール同期は Discord API `429/5xx` に対して短時間リトライ最大3回（`0秒/1秒/2秒` 待機、各回timeout `1秒`、総処理 `6秒` 以内）を検証する
   - `subscription 404` を `deleted` 扱いで補正
   - `member_impact_logs` の未解決は同一 `member_id + issue_code` をキーに再同期で解消

@@ -150,13 +150,13 @@ describe('PROP-SYNC-004: mapSubscriptionStatus', () => {
 
 // PROP-SYNC-005: shouldGrantRole
 describe('PROP-SYNC-005: shouldGrantRole', () => {
-  it('active/trial/canceled → true', () => {
+  it('active/trial → true', () => {
     expect(shouldGrantRole('active')).toBe(true);
     expect(shouldGrantRole('trial')).toBe(true);
-    expect(shouldGrantRole('canceled')).toBe(true);
   });
 
-  it('paused/deleted/null → false', () => {
+  it('canceled/paused/deleted/null → false', () => {
+    expect(shouldGrantRole('canceled')).toBe(false);
     expect(shouldGrantRole('paused')).toBe(false);
     expect(shouldGrantRole('deleted')).toBe(false);
     expect(shouldGrantRole(null)).toBe(false);
@@ -165,7 +165,7 @@ describe('PROP-SYNC-005: shouldGrantRole', () => {
   it('arbitrary other strings → false', () => {
     fc.assert(
       fc.property(fc.string(), (s) => {
-        fc.pre(!['active', 'trial', 'canceled'].includes(s));
+        fc.pre(!['active', 'trial'].includes(s));
         expect(shouldGrantRole(s)).toBe(false);
       }),
     );

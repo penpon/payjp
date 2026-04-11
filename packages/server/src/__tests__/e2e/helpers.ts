@@ -23,7 +23,7 @@ export const TEST_DB_URL = process.env.DATABASE_URL_TEST ?? process.env.DATABASE
 
 /** TRUNCATE 順: FK 依存順（member_impact_logs は members を参照するため先に消す） */
 const TRUNCATE_SQL = `
-  TRUNCATE member_impact_logs, payjp_events, discord_link_sessions, oauth_states, members
+  TRUNCATE member_impact_logs, cancel_form_tokens, member_sessions, payjp_events, discord_link_sessions, oauth_states, members
   CASCADE
 `;
 
@@ -108,6 +108,7 @@ export function makeMockDiscordClient(): DiscordClient {
   return {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
     addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
     revokeToken: vi.fn().mockResolvedValue(undefined),
   };
@@ -130,6 +131,12 @@ export const E2E_BILLING_CONFIG: BillingConfig = {
   planRoleMapping: E2E_PLAN_ROLE_MAPPING,
   initialChargeAmount: 1000,
   initialChargeAmountCurrency: 'jpy',
+  googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/e2e-test-form/viewform',
+  googleFormCancelEmailEntryId: '1111111111',
+  googleFormCancelTokenEntryId: '2222222222',
+  googleFormCancelSecret: 'e2e-google-secret',
+  googleFormCancelTokenSecret: 'e2e-google-token-secret',
+  googleFormCancelTokenTtlSeconds: 900,
 };
 
 export const E2E_WEBHOOK_TOKEN = 'whsec_e2e_test_token';

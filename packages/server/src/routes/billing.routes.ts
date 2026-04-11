@@ -1,7 +1,15 @@
-import type { BillingDeps, CancelRequest, SubscribeRequest } from '@hayane/billing-service';
+import type {
+  BillingDeps,
+  CancelFormLinkRequest,
+  CancelRequest,
+  GoogleCancelSubmitRequest,
+  SubscribeRequest,
+} from '@hayane/billing-service';
 import {
   formatRfc3339Utc,
   handleCancel,
+  handleCreateCancelFormLink,
+  handleGoogleCancelSubmit,
   handleSubscribe,
   isSameOrigin,
   linkSessionTokenHash,
@@ -14,11 +22,13 @@ function extractRequestContext(request: FastifyRequest): {
   body: Record<string, unknown> | null;
   origin: string;
   linkSessionToken: string;
+  memberSessionToken: string;
 } {
   return {
     body: request.body as Record<string, unknown> | null,
     origin: typeof request.headers.origin === 'string' ? request.headers.origin : '',
     linkSessionToken: request.cookies['__Host-link_session'] ?? '',
+    memberSessionToken: request.cookies['__Host-member_session'] ?? '',
   };
 }
 
@@ -156,6 +166,97 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           statusCode: 503,
           errorCode: 'STATUS_UNAVAILABLE',
           message: 'Could not load subscription status',
+        });
+      }
+    },
+  );
+
+  app.post(
+    '/v1/subscriptions/cancel/google-form-link',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const { origin, memberSessionToken } = extractRequestContext(request);
+
+      const req: CancelFormLinkRequest = {
+        origin,
+        memberSessionToken,
+      };
+
+      try {
+        const result = await handleCreateCancelFormLink(req, billingDeps);
+        return sendBillingResponse(reply, result);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'cancel google-form-link handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
+        });
+      }
+    },
+  );
+
+  app.post(
+    '/v1/subscriptions/cancel/google-submit',
+    {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email', 'name', 'reason', 'token'],
+          properties: {
+            email: { type: 'string', maxLength: 254 },
+            name: { type: 'string', maxLength: 200 },
+            reason: { type: 'string', maxLength: 5000 },
+            token: { type: 'string', maxLength: 4096 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { body } = extractRequestContext(request);
+
+      const req: GoogleCancelSubmitRequest = {
+        email: typeof body?.email === 'string' ? body.email : '',
+        name: typeof body?.name === 'string' ? body.name : '',
+        reason: typeof body?.reason === 'string' ? body.reason : '',
+        token: typeof body?.token === 'string' ? body.token : '',
+        secret:
+          typeof request.headers['x-google-cancel-secret'] === 'string'
+            ? request.headers['x-google-cancel-secret']
+            : '',
+      };
+
+      try {
+        const result = await handleGoogleCancelSubmit(req, billingDeps);
+        return sendBillingResponse(reply, result);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'cancel google-submit handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
         });
       }
     },

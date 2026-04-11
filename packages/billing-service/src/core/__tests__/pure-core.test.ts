@@ -9,24 +9,30 @@ import type { Member } from '@hayane/shared';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+  buildCancelFormLinkResponse,
   buildCancelResponse,
+  buildGoogleFormPrefillUrl,
   buildSubscriptionMetadata,
   buildSubscriptionResponse,
   calculateTrialEnd,
+  createSignedCancelFormToken,
   determineSubscriptionStatus,
   formatRfc3339Utc,
   getCorsHeaders,
   hasActiveSubscription,
+  hasCancelableSubscription,
   hasInflightOperation,
   isFirstTimeUser,
   isSameOrigin,
   isThreeDSecureVerified,
   maskSensitiveLogFields,
+  normalizeEmail,
   shouldGrantRole,
   validateFixedEnvVars,
   validateFrontendBaseUrl,
   validatePlanId,
   validateRequiredEnvVars,
+  verifySignedCancelFormToken,
 } from '../index.js';
 
 // ---------------------------------------------------------------------------
@@ -118,13 +124,26 @@ describe('PROP-BILL-003: hasActiveSubscription', () => {
   it.each([
     { status: 'active', accessEndAt: future, expected: true },
     { status: 'trial', accessEndAt: future, expected: true },
-    { status: 'canceled', accessEndAt: future, expected: true },
+    { status: 'canceled', accessEndAt: future, expected: false },
     { status: 'canceled', accessEndAt: past, expected: false },
     { status: 'paused', accessEndAt: future, expected: false },
     { status: 'deleted', accessEndAt: null, expected: false },
     { status: null, accessEndAt: null, expected: false },
   ])('status=$status, accessEndAt=$accessEndAt → $expected', ({ status, accessEndAt, expected }) => {
     expect(hasActiveSubscription(status, accessEndAt, now)).toBe(expected);
+  });
+});
+
+describe('hasCancelableSubscription', () => {
+  it.each([
+    { status: 'active', expected: true },
+    { status: 'trial', expected: true },
+    { status: 'canceled', expected: true },
+    { status: 'paused', expected: false },
+    { status: 'deleted', expected: false },
+    { status: null, expected: false },
+  ])('status=$status → $expected', ({ status, expected }) => {
+    expect(hasCancelableSubscription(status)).toBe(expected);
   });
 });
 
@@ -377,6 +396,12 @@ describe('PROP-BILL-016: validateRequiredEnvVars', () => {
     DISCORD_BOT_TOKEN: 'bot_token',
     DISCORD_GUILD_ID: '111222333',
     DISCORD_PLAN_ROLE_IDS: '444555666,555666777,666777888',
+    GOOGLE_FORM_CANCEL_BASE_URL: 'https://docs.google.com/forms/d/e/test-form/viewform',
+    GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID: '1111111111',
+    GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID: '2222222222',
+    GOOGLE_FORM_CANCEL_SECRET: 'google-shared-secret',
+    GOOGLE_FORM_CANCEL_TOKEN_SECRET: 'google-token-secret',
+    GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS: '900',
     BILLING_INTERVAL_MONTHS: '1',
     INITIAL_FREE_CYCLES: '2',
     CANCEL_NOTICE_CYCLES: '1',
@@ -455,7 +480,7 @@ describe('PROP-BILL-018: shouldGrantRole', () => {
   it.each([
     { status: 'active', expected: true },
     { status: 'trial', expected: true },
-    { status: 'canceled', expected: true },
+    { status: 'canceled', expected: false },
     { status: 'paused', expected: false },
     { status: 'deleted', expected: false },
     { status: null, expected: false },
@@ -474,5 +499,69 @@ describe('PROP-BILL-019: determineSubscriptionStatus', () => {
 
   it('returns "active" for non-first-time user', () => {
     expect(determineSubscriptionStatus(false)).toBe('active');
+  });
+});
+
+describe('Google cancel helpers', () => {
+  it('normalizeEmail trims and lowercases', () => {
+    expect(normalizeEmail(' Test@Example.COM ')).toBe('test@example.com');
+  });
+
+  it('buildCancelFormLinkResponse formats expiresAt as RFC3339 UTC', () => {
+    expect(buildCancelFormLinkResponse('https://example.com', new Date('2026-01-01T00:00:00Z'))).toEqual({
+      ok: true,
+      formUrl: 'https://example.com',
+      expiresAt: '2026-01-01T00:00:00Z',
+    });
+  });
+
+  it('creates and verifies signed cancel form token', () => {
+    const token = createSignedCancelFormToken(
+      {
+        jti: '00000000-0000-0000-0000-000000000001',
+        memberId: '00000000-0000-0000-0000-000000000002',
+        email: 'test@example.com',
+        exp: Math.floor(new Date('2026-01-01T00:15:00Z').getTime() / 1000),
+        nonce: 'nonce-123',
+      },
+      'secret',
+    );
+
+    const result = verifySignedCancelFormToken(token, 'secret', new Date('2026-01-01T00:00:00Z'));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.email).toBe('test@example.com');
+    }
+  });
+
+  it('rejects expired signed cancel form token', () => {
+    const token = createSignedCancelFormToken(
+      {
+        jti: '00000000-0000-0000-0000-000000000001',
+        memberId: '00000000-0000-0000-0000-000000000002',
+        email: 'test@example.com',
+        exp: Math.floor(new Date('2026-01-01T00:00:00Z').getTime() / 1000),
+        nonce: 'nonce-123',
+      },
+      'secret',
+    );
+
+    expect(verifySignedCancelFormToken(token, 'secret', new Date('2026-01-01T00:00:01Z'))).toEqual({
+      ok: false,
+      reason: 'expired',
+    });
+  });
+
+  it('builds Google Form prefill URL with email and token entries', () => {
+    const url = buildGoogleFormPrefillUrl(
+      'https://docs.google.com/forms/d/e/test-form/viewform',
+      '1111111111',
+      '2222222222',
+      'test@example.com',
+      'signed-token',
+    );
+    expect(url).toContain('entry.1111111111=test%40example.com');
+    expect(url).toContain('entry.2222222222=signed-token');
+    expect(url).toContain('usp=pp_url');
   });
 });

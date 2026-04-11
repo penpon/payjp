@@ -69,6 +69,12 @@ const REQUIRED_ENV = [
   'PAYJP_LIVEMODE',
   'PAYJP_PLAN_IDS',
   'FRONTEND_BASE_URL',
+  'GOOGLE_FORM_CANCEL_BASE_URL',
+  'GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID',
+  'GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID',
+  'GOOGLE_FORM_CANCEL_SECRET',
+  'GOOGLE_FORM_CANCEL_TOKEN_SECRET',
+  'GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS',
 ] as const;
 
 type RequiredEnvKey = (typeof REQUIRED_ENV)[number];
@@ -101,6 +107,14 @@ try {
 
 if (env.PAYJP_LIVEMODE !== 'true' && env.PAYJP_LIVEMODE !== 'false') {
   process.stderr.write(`[startup] PAYJP_LIVEMODE must be "true" or "false", got: "${env.PAYJP_LIVEMODE}"\n`);
+  process.exit(1);
+}
+
+const googleFormCancelTokenTtlSeconds = Number(env.GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS);
+if (!Number.isInteger(googleFormCancelTokenTtlSeconds) || googleFormCancelTokenTtlSeconds <= 0) {
+  process.stderr.write(
+    `[startup] GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS must be a positive integer, got: "${env.GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS}"\n`,
+  );
   process.exit(1);
 }
 
@@ -259,6 +273,9 @@ const discordClient: DiscordClient = {
   async assignRole(guildId, discordUserId, roleId) {
     await discordRest.put(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
   },
+  async removeRole(guildId, discordUserId, roleId) {
+    await discordRest.delete(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
+  },
   async addMemberToGuild(guildId, discordUserId, accessToken, roleId): Promise<AddGuildMemberResult> {
     const body: Record<string, unknown> = { access_token: accessToken };
     if (roleId) body.roles = [roleId];
@@ -345,6 +362,12 @@ const billingDeps: BillingDeps = {
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     discordTokenEncryptionKey,
+    googleFormCancelBaseUrl: env.GOOGLE_FORM_CANCEL_BASE_URL,
+    googleFormCancelEmailEntryId: env.GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID,
+    googleFormCancelTokenEntryId: env.GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID,
+    googleFormCancelSecret: env.GOOGLE_FORM_CANCEL_SECRET,
+    googleFormCancelTokenSecret: env.GOOGLE_FORM_CANCEL_TOKEN_SECRET,
+    googleFormCancelTokenTtlSeconds,
   },
   clock: () => new Date(),
   generateOperationId: () => randomUUID(),

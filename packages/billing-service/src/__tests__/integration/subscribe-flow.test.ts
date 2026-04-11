@@ -94,6 +94,12 @@ function makeConfig(): BillingConfig {
     planRoleMapping: { plan_test: 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
+    googleFormCancelEmailEntryId: '1111111111',
+    googleFormCancelTokenEntryId: '2222222222',
+    googleFormCancelSecret: 'google-shared-secret',
+    googleFormCancelTokenSecret: 'google-token-secret',
+    googleFormCancelTokenTtlSeconds: 900,
   };
 }
 
@@ -133,6 +139,9 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(null),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertCancelFormToken: vi.fn().mockResolvedValue(undefined as never),
+    findCancelFormToken: vi.fn().mockResolvedValue(null),
+    consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
     insertMemberSession: vi.fn().mockResolvedValue({
       id: 'ms-1',
       member_session_token_hash: 'h',
@@ -168,6 +177,7 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
     addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
     revokeToken: vi.fn().mockResolvedValue(undefined),
   };

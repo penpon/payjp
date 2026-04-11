@@ -358,9 +358,9 @@ async function handleCancelRecovery(
       }
     }
 
-    const accessEndAt = member.access_end_at as Date | null;
-    const accessEndAtUnix = accessEndAt ? Math.floor(accessEndAt.getTime() / 1000) : null;
-    const evaluation = evaluateSubscriptionSearchResult(candidates, discordUserId ?? '', accessEndAtUnix, memberId);
+    const nextBillingAt = member.next_billing_at as Date | null;
+    const nextBillingAtUnix = nextBillingAt ? Math.floor(nextBillingAt.getTime() / 1000) : null;
+    const evaluation = evaluateSubscriptionSearchResult(candidates, discordUserId ?? '', nextBillingAtUnix, memberId);
 
     if (evaluation === 'fail-close') {
       await insertImpactLog(deps.db, memberId, 'cancel_recovery_subscription_ambiguous', operationId);
@@ -391,6 +391,7 @@ async function handleCancelRecovery(
       `UPDATE members SET
         subscription_status = 'canceled',
         cancel_requested_at = now(),
+        access_end_at = now(),
         inflight_operation_id = NULL,
         inflight_operation_type = NULL,
         inflight_operation_started_at = NULL,

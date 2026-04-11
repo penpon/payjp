@@ -1,6 +1,6 @@
 import {
-  cancelSubscription,
   checkSession,
+  createCancelFormLink,
   createSubscription,
   fetchSubscriptionStatus,
   getMember,
@@ -16,24 +16,6 @@ import { mapCancelError } from './map-cancel-error.js';
 import { mapSubscribeError } from './map-subscribe-error.js';
 import type { BillingFormState, PayjpAdapter, PlanDef } from './types.js';
 import { renderState } from './ui.js';
-
-const CANCEL_PENDING_KEY = 'cancelPending';
-const CANCEL_PENDING_TTL_MS = 10 * 60 * 1000;
-
-function setCancelPending(): void {
-  sessionStorage.setItem(CANCEL_PENDING_KEY, String(Date.now()));
-}
-
-function isCancelPendingValid(): boolean {
-  const raw = sessionStorage.getItem(CANCEL_PENDING_KEY);
-  if (!raw) return false;
-  const ts = Number(raw);
-  return !Number.isNaN(ts) && Date.now() - ts < CANCEL_PENDING_TTL_MS;
-}
-
-function clearStaleCancelPending(): void {
-  sessionStorage.removeItem(CANCEL_PENDING_KEY);
-}
 
 // --- Plan definitions (hardcoded for MVP) ---
 
@@ -280,10 +262,25 @@ function startBillingFlow(app: HTMLElement): void {
 function startCancelFlow(app: HTMLElement): void {
   let dismiss: (() => void) | null = null;
   dismiss = showCancelConfirmModal(app, {
-    onConfirm: () => {
+    onConfirm: async () => {
       dismiss?.();
-      setCancelPending();
-      startOAuth();
+      try {
+        const result = await createCancelFormLink();
+        window.location.href = result.formUrl;
+      } catch (err) {
+        console.error('[cancel] createCancelFormLink failed:', err);
+        const cancelError = mapCancelError(err);
+        renderState(
+          app,
+          'cancel_error',
+          cancelError.kind === 'session_expired'
+            ? () => {
+                startOAuth();
+              }
+            : startOAuth,
+          { cancelError },
+        );
+      }
     },
     onDismiss: () => {
       dismiss?.();
@@ -389,31 +386,6 @@ async function init(): Promise<void> {
       }
 
       // Discord連携済み → 購読状態表示
-      // Cancel pending check
-      if (isCancelPendingValid()) {
-        sessionStorage.removeItem(CANCEL_PENDING_KEY);
-        renderState(app, 'loading', startOAuth);
-        try {
-          const result = await cancelSubscription();
-          renderState(app, 'cancel_complete', startOAuth, { cancelComplete: { result } });
-        } catch (err) {
-          console.error('[cancel] cancelSubscription failed:', err);
-          const cancelError = mapCancelError(err);
-          renderState(
-            app,
-            'cancel_error',
-            cancelError.kind === 'session_expired'
-              ? () => {
-                  setCancelPending();
-                  startOAuth();
-                }
-              : startOAuth,
-            { cancelError },
-          );
-        }
-        return;
-      }
-
       let subscription: Awaited<ReturnType<typeof fetchSubscriptionStatus>>;
       try {
         subscription = await fetchSubscriptionStatus();
@@ -444,7 +416,6 @@ async function init(): Promise<void> {
     }
 
     // member_session なし → 課金フォーム表示（初回 or Cookie期限切れ）
-    clearStaleCancelPending();
     startBillingFlow(app);
   } catch (err) {
     console.error('[init] failed:', err);

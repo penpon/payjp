@@ -5,7 +5,7 @@
  * pure core 関数は src/core/ に実装済み。
  * shell 層はこれらの依存型を受け取りオーケストレーションを実施する。
  */
-import type { DbClient } from '@hayane/shared';
+import type { CancelFormLinkResponse, DbClient } from '@hayane/shared';
 
 // PAY.JP レスポンス型
 
@@ -79,6 +79,7 @@ export interface DiscordClient {
   /** When `roleId` is set, `canAssignRole` reflects whether the bot can assign that specific role (plan tier). */
   checkMembership(guildId: string, discordUserId: string, roleId?: string): Promise<DiscordCheckResult>;
   assignRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
+  removeRole(guildId: string, discordUserId: string, roleId: string): Promise<void>;
   addMemberToGuild(
     guildId: string,
     discordUserId: string,
@@ -98,6 +99,12 @@ export interface BillingConfig {
   initialChargeAmount: number;
   initialChargeAmountCurrency: string;
   discordTokenEncryptionKey?: string;
+  googleFormCancelBaseUrl: string;
+  googleFormCancelEmailEntryId: string;
+  googleFormCancelTokenEntryId: string;
+  googleFormCancelSecret: string;
+  googleFormCancelTokenSecret: string;
+  googleFormCancelTokenTtlSeconds: number;
 }
 
 export interface BillingDeps {
@@ -124,6 +131,19 @@ export interface CancelRequest {
   linkSessionToken: string;
 }
 
+export interface CancelFormLinkRequest {
+  origin: string;
+  memberSessionToken: string;
+}
+
+export interface GoogleCancelSubmitRequest {
+  email: string;
+  name: string;
+  reason: string;
+  token: string;
+  secret: string;
+}
+
 // レスポンス型
 
 export interface OperationError {
@@ -137,5 +157,7 @@ export interface OperationError {
 export type SubscribeResult =
   | { ok: true; data: import('@hayane/shared').SubscriptionResponse; memberSessionToken?: string }
   | OperationError;
+
+export type CancelFormLinkResult = { ok: true; data: CancelFormLinkResponse } | OperationError;
 
 export type CancelResult = { ok: true; data: import('@hayane/shared').CancelResponse } | OperationError;

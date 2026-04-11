@@ -1,5 +1,5 @@
 import type {
-  CancelResponse,
+  CancelFormLinkResponse,
   LinkDiscordResponse,
   MemberInfo,
   SessionResponse,
@@ -192,19 +192,14 @@ export class CancelError extends Error {
   }
 }
 
-function isCancelResponse(data: unknown): data is CancelResponse {
+function isCancelFormLinkResponse(data: unknown): data is CancelFormLinkResponse {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
-  return (
-    obj.ok === true &&
-    typeof obj.memberId === 'string' &&
-    typeof obj.cancelEffectiveAt === 'string' &&
-    typeof obj.roleRemovalAt === 'string'
-  );
+  return obj.ok === true && typeof obj.formUrl === 'string' && typeof obj.expiresAt === 'string';
 }
 
-export async function cancelSubscription(): Promise<CancelResponse> {
-  const res = await fetch('/v1/subscriptions/cancel', {
+export async function createCancelFormLink(): Promise<CancelFormLinkResponse> {
+  const res = await fetch('/v1/subscriptions/cancel/google-form-link', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -218,13 +213,13 @@ export async function cancelSubscription(): Promise<CancelResponse> {
       res.status,
       parsedError.errorCode,
       parsedError.operationId,
-      parsedError.message ?? `Cancel failed: ${res.status}`,
+      parsedError.message ?? `Cancel form link failed: ${res.status}`,
     );
   }
 
   const data: unknown = await res.json();
-  if (!isCancelResponse(data)) {
-    throw new Error('Invalid cancel response');
+  if (!isCancelFormLinkResponse(data)) {
+    throw new Error('Invalid cancel form link response');
   }
   return data;
 }

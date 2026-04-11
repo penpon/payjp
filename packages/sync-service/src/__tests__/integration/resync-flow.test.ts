@@ -210,7 +210,11 @@ describe('INT-SYNC-017: CLI cancel recovery: subscription search + cancel', () =
 // INT-SYNC-018: CLI cancel recovery: metadata fallback
 describe('INT-SYNC-018: CLI cancel recovery: metadata fallback with period_end', () => {
   it('no metadata, 1 candidate + period_end match → adopt', async () => {
-    const memberNoSubId = { ...MEMBER_WITH_INFLIGHT_CANCEL, payjp_subscription_id: null };
+    const memberNoSubId = {
+      ...MEMBER_WITH_INFLIGHT_CANCEL,
+      payjp_subscription_id: null,
+      next_billing_at: new Date('2026-07-06T12:00:00Z'),
+    };
     const deps = createMockDeps({
       db: mockDbPool(
         vi.fn(async (text: string) => {

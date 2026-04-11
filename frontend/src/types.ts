@@ -92,6 +92,12 @@ export interface CancelResponse {
   roleRemovalAt: string;
 }
 
+export interface CancelFormLinkResponse {
+  ok: true;
+  formUrl: string;
+  expiresAt: string;
+}
+
 export type CancelErrorKind = 'no_subscription' | 'session_expired' | 'inflight' | 'server_error';
 
 export interface CancelUIError {
