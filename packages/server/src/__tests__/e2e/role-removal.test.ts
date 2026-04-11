@@ -130,12 +130,22 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       });
 
       const syncRole = vi.fn().mockResolvedValue(undefined);
-      const cliDeps = makeCliDeps(pool, { syncRole, db: createPgPool(pool) });
+      const cliDeps = makeCliDeps(pool, {
+        syncRole,
+        db: createPgPool(pool),
+        // Default makeCliDeps returns status 'active' → reconcileMember would call grant after access_end revoke
+        getPayjpSubscription: vi.fn().mockResolvedValue({
+          id: 'sub_test',
+          status: 'paused',
+          metadata: {},
+          current_period_end: Math.floor(Date.now() / 1000),
+        }),
+      });
 
       const output = await runResyncCli(['--all'], cliDeps);
 
       expect(output.exitCode).toBe(0);
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke');
     });
 
     it('2. Webhook subscription.paused → syncRole("revoke") が即時呼ばれる', async () => {
@@ -412,14 +422,25 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       });
 
       const syncRole = vi.fn().mockResolvedValue(undefined);
-      const cliDeps = makeCliDeps(pool, { syncRole, db: createPgPool(pool) });
+      const cliDeps = makeCliDeps(pool, {
+        syncRole,
+        db: createPgPool(pool),
+        getPayjpSubscription: vi.fn().mockImplementation(async (subId: string) => ({
+          id: subId,
+          status: 'paused',
+          metadata: {},
+          current_period_end: Math.floor(Date.now() / 1000),
+        })),
+      });
 
       const output = await runResyncCli(['--all'], cliDeps);
 
       expect(output.exitCode).toBe(0);
       expect(output.result.processed_count).toBe(2);
-      expect(syncRole).toHaveBeenCalledWith(user1, 'revoke');
-      expect(syncRole).toHaveBeenCalledWith(user2, 'revoke');
+      const lastCallFor = (userId: string) =>
+        syncRole.mock.calls.filter((c) => c[0] === userId).at(-1) as [string, string] | undefined;
+      expect(lastCallFor(user1)).toEqual([user1, 'revoke']);
+      expect(lastCallFor(user2)).toEqual([user2, 'revoke']);
     });
 
     it('11. syncRole が常に失敗 → exitCode=2, failed_count > 0', async () => {
