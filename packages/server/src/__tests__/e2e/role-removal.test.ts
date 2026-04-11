@@ -221,15 +221,12 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
   // グループ 2: Discord API 障害時の挙動
   // =========================================================================
   describe('Discord API 障害時の挙動', () => {
-    it('5. syncRole が初回失敗後に成功 → Webhook レスポンスは 200 で DB 更新済み', async () => {
+    it('5. syncRole が 1 回失敗（429）→ Webhook は 200、DB は paused、リトライなしで role_state=unknown', async () => {
       const discordUserId = `role-rm-${randomUUID().slice(0, 8)}`;
       await insertMember(pool, { discordUserId, status: 'active', roleState: 'granted' });
 
-      // 1 回目: throw、2 回目: resolve
-      const syncRole = vi
-        .fn()
-        .mockRejectedValueOnce(new Error('Discord 429 Too Many Requests'))
-        .mockResolvedValueOnce(undefined);
+      // attemptRoleSync は syncRole を 1 回だけ呼ぶ（失敗時の再試行はない）
+      const syncRole = vi.fn().mockRejectedValueOnce(new Error('Discord 429 Too Many Requests'));
 
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
 
@@ -248,12 +245,15 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
 
       // Webhook は syncRole 失敗に関わらず 200 を返す（best-effort）
       expect(res.statusCode).toBe(200);
+      expect(syncRole).toHaveBeenCalledTimes(1);
 
       // DB の subscription_status は paused に更新されていること（トランザクション内で先に実施）
-      const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
-        discordUserId,
-      ]);
+      const member = await pool.query(
+        'SELECT subscription_status, role_state FROM members WHERE discord_user_id = $1',
+        [discordUserId],
+      );
       expect(member.rows[0].subscription_status).toBe('paused');
+      expect(member.rows[0].role_state).toBe('unknown');
     });
 
     it('6. syncRole が常に失敗（4xx 永続エラー）→ Webhook は 200 で DB status は paused に更新', async () => {
