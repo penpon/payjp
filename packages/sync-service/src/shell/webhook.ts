@@ -260,8 +260,10 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
       if (event.data?.plan?.id) {
         updates.payjp_plan_id = event.data.plan.id;
       }
-      if (event.data?.current_period_end) {
-        const periodEnd = new Date(event.data.current_period_end * 1000);
+      const rawCpe = event.data?.current_period_end;
+      const cpeUnix = rawCpe === undefined || rawCpe === null ? Number.NaN : Number(rawCpe);
+      if (Number.isFinite(cpeUnix) && cpeUnix > 0) {
+        const periodEnd = new Date(Math.floor(cpeUnix) * 1000);
         updates.next_billing_at = periodEnd;
         if (newStatus === 'active' || newStatus === 'trial' || newStatus === 'canceled') {
           updates.access_end_at = periodEnd;
