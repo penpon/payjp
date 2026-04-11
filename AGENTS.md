@@ -62,11 +62,33 @@ Full rules: `.claude/rules/security.md`. In short:
 - **Cookies**: `__Host-` prefix cookies keep fixed attributes (Secure, `Path=/`, HttpOnly, `SameSite=Lax`); do not weaken.
 - **Secrets**: Do **not** read `.env*` or dump environment (`Read`/`cat`/`grep` on env files, `printenv`, `docker exec … env`, etc.). Do not add files that embed secrets. Use `op read` / `op run` patterns documented for this repo when keys are required.
 
-## Tooling hints (optional MCP)
+## MCP for cloud agents (efficient use)
 
-- Library docs: Context7 (or project docs) for PAY.JP, Discord API, Node.
-- Deep refactors / symbol-aware edits: Serena (if available).
-- Browser E2E: Playwright.
+Use MCP to reduce guesswork and avoid stale training data. Prefer **this repo’s specs and code** first; call MCP when you need **external API semantics** or **design validation**.
+
+### Context7 — library and framework docs
+
+- **When**: Implementing or debugging against an npm/SDK API (e.g. `payjp`, `@discordjs/rest`, Vitest, Playwright); verifying parameter names, error shapes, or migration notes.
+- **How**: Resolve the library ID first, then ask a **narrow** question (concrete API surface or error). Avoid broad “explain everything” queries; cap follow-up queries to what the task needs.
+- **When not**: Behavior already fixed in `2weeks-spec.md` / `implementation-design-mvp.md` — follow the repo, not generic docs.
+
+### Serena — planning and structural edits
+
+- **When**: Choosing between approaches, before a large refactor, or when you want a quick sanity pass on a plan (use `sanity_check` early, not only at the end).
+- **When not**: Trivial one-file edits where reading local code is enough.
+
+### DeepWiki — external repo / wiki-style summaries
+
+- **When**: You need a **high-level map** of a third-party repository or ecosystem page (architecture, main modules, how pieces connect) and repo-local search is insufficient.
+- **How**: Pass a specific `owner/repo` or URL; prefer **shallow** depth unless you need multiple linked pages. Distill into actions in *this* codebase; do not treat DeepWiki as authoritative over pinned versions in `package.json`.
+
+### Suggested order
+
+1. Specs + grep/read in this repo.  
+2. **Serena** `sanity_check` if the approach is non-obvious or high-risk.  
+3. **Context7** for exact SDK/API usage.  
+4. **DeepWiki** only if you still lack a mental model of an external project.  
+5. **Playwright** (or local scripts) for browser/E2E verification when the change is user-visible.
 
 ## When unsure
 
