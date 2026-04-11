@@ -828,7 +828,7 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
       url: URL,
       headers: {
         'content-type': 'application/json',
-        'x-google-cancel-secret': 'google-shared-secret',
+        'x-cancel-secret': 'google-shared-secret',
       },
       payload: {
         email: EMAIL,
@@ -844,6 +844,35 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     expect(deps.db.consumeCancelFormToken).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts legacy X-Google-Cancel-Secret when X-Cancel-Secret is absent', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const linkRes = await app.inject(
+      injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
+    );
+    const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
+    const token = formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1];
+    expect(token).toBeTruthy();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-google-cancel-secret': 'google-shared-secret',
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: decodeURIComponent(token ?? ''),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+  });
+
   it('returns 401 when shared secret is invalid', async () => {
     const deps = createGoogleSubmitDeps();
     const app = createApp(deps);
@@ -853,7 +882,7 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
       url: URL,
       headers: {
         'content-type': 'application/json',
-        'x-google-cancel-secret': 'wrong-secret',
+        'x-cancel-secret': 'wrong-secret',
       },
       payload: {
         email: EMAIL,

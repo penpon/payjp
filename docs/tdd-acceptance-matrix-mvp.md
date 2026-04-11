@@ -236,7 +236,7 @@
   - `Origin` 欠落/不一致/`Origin: null` は `403` を返す
   - `Origin` は `scheme+host+port` 正規化比較で厳密検証
   - Google Formトークンは TTL・一回性・改ざん検知を持ち、同一トークンの再送は冪等成功または明示失敗に収束する
-  - `X-Google-Cancel-Secret` 不一致は `401` を返す
+  - `X-Cancel-Secret`（または移行期間の旧 `X-Google-Cancel-Secret`）不一致は `401` を返す
   - `pg_advisory_lock(member_id)` 相当の排他により並列 `google-submit` を排他する
   - `active/trial/canceled` 既存購読が無い場合は `409`
   - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する

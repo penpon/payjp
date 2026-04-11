@@ -1,7 +1,7 @@
 # PAY.JP × Discord 連携サービス 2週間MVP仕様書（OAuth Lite + Multi Plan + Monthly Billing版）
 
 - 作成日: 2026-03-28
-- 更新日: 2026-04-03
+- 更新日: 2026-04-11
 - 対象: 日本向け有料Discordコミュニティ（約150名）
 - 体制: 1名
 - リリース目標: 2026-04-20（当初2週間目安: 2026-04-15 から変更）
@@ -229,7 +229,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 目的: Google Form送信後の即時退会実行
 - 入力: `{ name, email, reason, token }`
 - 処理:
-  - `X-Google-Cancel-Secret` を検証し、不一致は `401` で拒否する
+  - `X-Cancel-Secret` を検証し、不一致は `401` で拒否する（移行期間は旧 `X-Google-Cancel-Secret` もフォールバックで受け付ける）
   - 署名付きワンタイムトークンを検証し、失効/不正/消費済みは `401` で拒否する
   - トークンの会員情報とフォーム送信メールアドレスが一致することを検証する
   - ユーザー単位の排他制御として `pg_advisory_lock(member_id)` 相当のロックを取得する
@@ -697,3 +697,11 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: 退会導線を `Discord再OAuth -> POST /v1/subscriptions/cancel` から `POST /v1/subscriptions/cancel/google-form-link -> Google Form -> Apps Script -> POST /v1/subscriptions/cancel/google-submit` へ切り替える
 - 理由: 退会理由をGoogle Sheetsへ集約しつつ、PAY.JP解約・アプリ利用停止・Discordロール剥奪をフォーム送信直後に即時反映するため
 - 影響範囲: §2 scope item5、§5 user flow step9-11、§6.1 front-end cancel flow、§6.2 cancel APIs、§6.3-6.5 role/cancel policy、§8 security、§10 resync、§12.1 P0-5/6、frontend cancel UI、billing/sync/server routes
+
+### CR-003: `google-submit` 共有シークレット用ヘッダー名の変更
+
+- 日付: 2026-04-11
+- 起票: Google Form Secret Header Fix（Apps Script 実地調査）
+- 変更内容: `POST /v1/subscriptions/cancel/google-submit` の共有シークレット検証用 HTTP ヘッダーを `X-Google-Cancel-Secret` から `X-Cancel-Secret` に変更する。移行期間は `X-Google-Cancel-Secret` をフォールバックとして受け付ける
+- 理由: Google Apps Script `UrlFetchApp` から `X-Google-*` カスタムヘッダーがサーバーに届かない可能性があり、curl では通過するが Apps Script では `401 INVALID_GOOGLE_SECRET` になる事象を解消するため
+- 影響範囲: §6.2 item7 `google-submit`、README Apps Script サンプル、server `billing.routes`、運用手順

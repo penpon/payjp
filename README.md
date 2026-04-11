@@ -147,7 +147,7 @@ function onFormSubmit(e) {
     method: "post",
     contentType: "application/json",
     headers: {
-      "X-Google-Cancel-Secret": PropertiesService.getScriptProperties().getProperty("GOOGLE_FORM_CANCEL_SECRET"),
+      "X-Cancel-Secret": PropertiesService.getScriptProperties().getProperty("GOOGLE_FORM_CANCEL_SECRET"),
     },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
@@ -161,7 +161,7 @@ function onFormSubmit(e) {
 }
 ```
 
-実行ログ（Apps Script の「実行数」→ 該当実行）で HTTP ステータスが `200` か確認してください。`401` の場合は `X-Google-Cancel-Secret` とアプリ側 `GOOGLE_FORM_CANCEL_SECRET` の不一致、ペイロードのメール/トークン不一致、トークン TTL 切れなどが典型です。
+実行ログ（Apps Script の「実行数」→ 該当実行）で HTTP ステータスが `200` か確認してください。`401` の場合は `X-Cancel-Secret` とアプリ側 `GOOGLE_FORM_CANCEL_SECRET` の不一致、ペイロードのメール/トークン不一致、トークン TTL 切れなどが典型です（移行期間のみ、サーバーは旧 `X-Google-Cancel-Secret` もフォールバックで受け付けます）。
 
 ### 3. Script Properties
 

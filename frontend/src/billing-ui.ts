@@ -94,19 +94,20 @@ export function renderSubscribed(
   const plan = plans.find((p) => p.id === subscription.planId);
   const planName = plan?.name ?? subscription.planId ?? '不明';
 
-  const STATUS_LABELS: Record<string, string> = { active: '有効', trial: 'トライアル' };
+  const STATUS_LABELS: Record<string, string> = {
+    active: '有効',
+    trial: 'トライアル',
+    canceled: '退会済み',
+  };
   const statusLabel = STATUS_LABELS[subscription.status] ?? subscription.status;
   const isWithdrawn = subscription.status === 'canceled';
   const needsDiscordRoleConfirmation = isWithdrawn && (memberRoleState === 'unknown' || memberRoleState === 'granted');
 
-  const statusRowChildren: (Node | string)[] = [];
-  if (!isWithdrawn) {
-    statusRowChildren.push(el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']));
-  }
-  statusRowChildren.push(el('p', { class: 'subscribed-plan-name' }, [isWithdrawn ? '退会済み' : planName]));
-  if (!isWithdrawn) {
-    statusRowChildren.push(el('div', { class: 'status-badge', role: 'status' }, [statusLabel]));
-  }
+  const statusRowChildren: (Node | string)[] = [
+    el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
+    el('p', { class: 'subscribed-plan-name' }, [planName]),
+    el('div', { class: 'status-badge', role: 'status' }, [statusLabel]),
+  ];
 
   const cardChildren: (Node | string)[] = [
     el('h1', { class: 'heading' }, ['購読状況']),
@@ -120,7 +121,7 @@ export function renderSubscribed(
     el(
       'div',
       {
-        class: `subscribed-status${isWithdrawn ? ' subscribed-status--withdrawn' : ''}${needsDiscordRoleConfirmation ? ' subscribed-status--pending-discord' : ''}`,
+        class: `subscribed-status${needsDiscordRoleConfirmation ? ' subscribed-status--pending-discord' : ''}`,
       },
       statusRowChildren,
     ),
@@ -131,7 +132,18 @@ export function renderSubscribed(
 
   cardChildren.push(el('p', { class: 'subscribed-detail discord-linked-badge' }, ['Discord: 連携済み ✓']));
 
-  if (onStartCancel && subscription.status !== 'canceled') {
+  if (isWithdrawn) {
+    cardChildren.push(
+      el('hr', { class: 'cancel-separator' }),
+      el('div', { class: 'cancel-section' }, [
+        el('h2', { class: 'cancel-section-title' }, ['退会']),
+        el('p', { class: 'cancel-section-desc' }, [
+          '退会手続きが完了しています。現在の期間終了日までサービスをご利用いただけます。',
+        ]),
+        el('p', { class: 'cancel-section-withdrawn', role: 'status' }, ['退会済み']),
+      ]),
+    );
+  } else if (onStartCancel) {
     const cancelBtn = el('button', { type: 'button', class: 'cancel-button' }, ['退会する']);
     cancelBtn.addEventListener('click', onStartCancel);
 

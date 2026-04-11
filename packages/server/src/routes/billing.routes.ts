@@ -227,15 +227,20 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     async (request, reply) => {
       const { body } = extractRequestContext(request);
 
+      const h = request.headers;
+      const sharedSecret =
+        typeof h['x-cancel-secret'] === 'string'
+          ? h['x-cancel-secret']
+          : typeof h['x-google-cancel-secret'] === 'string'
+            ? h['x-google-cancel-secret']
+            : '';
+
       const req: GoogleCancelSubmitRequest = {
         email: typeof body?.email === 'string' ? body.email : '',
         name: typeof body?.name === 'string' ? body.name : '',
         reason: typeof body?.reason === 'string' ? body.reason : '',
         token: typeof body?.token === 'string' ? body.token : '',
-        secret:
-          typeof request.headers['x-google-cancel-secret'] === 'string'
-            ? request.headers['x-google-cancel-secret']
-            : '',
+        secret: sharedSecret,
       };
 
       try {

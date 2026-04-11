@@ -81,7 +81,7 @@
 | `GET /v1/auth/discord/session` | `__Host-link_session` | `{ linked: boolean }` | - |
 | `POST /v1/subscriptions` | `{ planId, email, payjpToken }` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), subscriptionStatus: "active"|"trial"|"canceled"|"paused"|"deleted", planId: string, trialApplied: boolean, accessEndAt: string(RFC3339 UTC) }` | `401/403/409/422/503` |
 | `POST /v1/subscriptions/cancel/google-form-link` | `{}` + `__Host-member_session` + `Origin` | `{ ok: true, formUrl: string, expiresAt: string(RFC3339 UTC) }` | `401/403/409/503` |
-| `POST /v1/subscriptions/cancel/google-submit` | `{ name, email, reason, token }` + `X-Google-Cancel-Secret` | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/409/503` |
+| `POST /v1/subscriptions/cancel/google-submit` | `{ name, email, reason, token }` + `X-Cancel-Secret`（移行期間は旧 `X-Google-Cancel-Secret` も可） | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/409/503` |
 | `POST /v1/subscriptions/cancel` | `{}` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/403/409/503` |
 | `POST /v1/payjp/webhook` | PAY.JPイベント + `X-Payjp-Webhook-Token` | `200`（処理/ignored/failed/重複） | `401`（token不一致）, `503`（DB受理不能） |
 
@@ -145,7 +145,7 @@
 
 ### 5.3 Google Form送信後の退会実行（`POST /v1/subscriptions/cancel/google-submit`）
 
-1. `X-Google-Cancel-Secret` を検証する
+1. `X-Cancel-Secret` を検証する（移行期間は旧 `X-Google-Cancel-Secret` をフォールバックで受け付ける）
 2. 署名付きワンタイムトークンを検証し、会員IDとメールアドレスを確定する
 3. `pg_advisory_lock(member_id)` 相当の排他を取得する
 4. `active/trial/canceled` の既存購読が無い場合は `409` を返す

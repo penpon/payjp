@@ -166,10 +166,11 @@ describe('main init()', () => {
 
     await runInit();
 
-    expect(getMember.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(vi.mocked(getMember).mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(fetchSubscriptionStatus).toHaveBeenCalled();
     expect(window.location.search).toBe('');
     expect(appDiv.textContent).toContain('退会済み');
+    expect(appDiv.textContent).toContain('ビジネスプラン');
     expect(appDiv.querySelector('.warning-banner')).toBeNull();
   });
 
