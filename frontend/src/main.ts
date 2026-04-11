@@ -98,7 +98,8 @@ function createPayjpAdapter(): PayjpAdapter | null {
   }
 
   try {
-    const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'subwindow' });
+    // iframe型: サブウィンドウ型よりポップアップブロック等の影響を受けにくい（2weeks-spec の iframe 固定に合わせる）
+    const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'iframe' });
     const elements = payjp.elements({ locale: 'ja' });
     let cachedElements: import('./types.js').PayjpCardElements | null = null;
 
@@ -128,11 +129,10 @@ function createPayjpAdapter(): PayjpAdapter | null {
       },
       async createToken(cardNumberElement, data) {
         try {
-          const result = await payjp.createToken(
-            cardNumberElement,
-            { three_d_secure: true, card: { name: data.name, email: data.email } },
-            { threeDSecureDialogOptions: { timeout: 1800000 } },
-          );
+          const result = await payjp.createToken(cardNumberElement, {
+            three_d_secure: true,
+            card: { name: data.name, email: data.email },
+          });
           if (result.error) {
             return { error: result.error.message };
           }

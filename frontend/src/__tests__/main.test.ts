@@ -295,6 +295,40 @@ describe('main init()', () => {
     }
   });
 
+  it('initializes PAY.JP with threeDSecureWorkflow iframe when SDK is available', async () => {
+    vi.mocked(getMember).mockResolvedValue(null);
+    vi.stubEnv('VITE_PAYJP_PUBLIC_KEY', 'pk_test_0123456789012345');
+
+    const mockPayjp = vi.fn((_pk: string, opts?: { threeDSecureWorkflow?: string }) => {
+      expect(opts).toEqual({ threeDSecureWorkflow: 'iframe' });
+      return {
+        elements: () => ({
+          create: () => ({
+            mount: vi.fn(),
+            unmount: vi.fn(),
+            clear: vi.fn(),
+            on: vi.fn(),
+          }),
+        }),
+        createToken: vi.fn(),
+      };
+    });
+    const originalPayjp = window.Payjp;
+    window.Payjp = mockPayjp;
+
+    try {
+      await runInit();
+
+      expect(mockPayjp).toHaveBeenCalledWith('pk_test_0123456789012345', {
+        threeDSecureWorkflow: 'iframe',
+      });
+      expect(appDiv.textContent).not.toContain('カード入力機能を読み込めませんでした');
+    } finally {
+      window.Payjp = originalPayjp;
+      vi.unstubAllEnvs();
+    }
+  });
+
   // --- Discord link flow (OAuth callback return) ---
 
   it('should call linkDiscord and show link_complete when member has no discord but checkSession returns linked', async () => {

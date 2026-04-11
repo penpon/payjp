@@ -112,6 +112,18 @@ export interface CancelUIError {
 
 // --- PAY.JP.js v2 types ---
 
+/** PAY.JP.js `Payjp()` 初期化時の 3Dセキュアワークフロー */
+export type PayjpThreeDSecureWorkflow = 'iframe' | 'redirect' | 'subwindow';
+
+export interface PayjpInitOptions {
+  threeDSecureWorkflow?: PayjpThreeDSecureWorkflow;
+}
+
+/** サブウィンドウ型の `createToken` 第3引数で利用（iframe型では通常不要） */
+export interface PayjpCreateTokenOptions {
+  threeDSecureDialogOptions?: { timeout?: number; windowFeatures?: Record<string, unknown> };
+}
+
 export interface PayjpCardElement {
   mount(target: string | HTMLElement): void;
   unmount(): void;
@@ -149,13 +161,13 @@ export interface PayjpInstance {
   createToken(
     element: PayjpCardElement,
     data?: { three_d_secure?: boolean; card?: { name?: string; email?: string } },
-    options?: { threeDSecureDialogOptions?: { timeout?: number } },
+    options?: PayjpCreateTokenOptions,
   ): Promise<PayjpCreateTokenResult>;
 }
 
 declare global {
   interface Window {
-    Payjp?: (publicKey: string, options?: { threeDSecureWorkflow?: string }) => PayjpInstance;
+    Payjp?: (publicKey: string, options?: PayjpInitOptions) => PayjpInstance;
   }
 }
 
