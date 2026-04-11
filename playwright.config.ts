@@ -1,3 +1,7 @@
+/**
+ * Playwright E2E 設定（起動・baseURL・webServer 等の事実はここが正）。
+ * テストの書き方・仕様正本との整合・手動確認との役割は `.claude/rules/e2e.md` を参照。
+ */
 import { defineConfig, devices } from '@playwright/test';
 
 /** localhost の方が http + Secure Cookie（__Host-*）の組み合わせで安定しやすい */

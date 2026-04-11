@@ -82,6 +82,14 @@ async function getMember(pool: pg.Pool, discordUserId: string): Promise<Record<s
   return res.rows[0] as Record<string, unknown> | undefined;
 }
 
+/** 課金先行 subscribe は email で member を作る（discord_user_id は link-discord まで NULL） */
+const FAILURE_RECOVERY_SUBSCRIBE_EMAIL = 'failure-recovery-test@example.com';
+
+async function getMemberByEmail(pool: pg.Pool, email: string): Promise<Record<string, unknown> | undefined> {
+  const res = await pool.query('SELECT * FROM members WHERE email = $1', [email]);
+  return res.rows[0] as Record<string, unknown> | undefined;
+}
+
 /** member_impact_logs を member_id で取得する */
 async function getImpactLogs(pool: pg.Pool, memberId: string): Promise<Array<Record<string, unknown>>> {
   const res = await pool.query('SELECT * FROM member_impact_logs WHERE member_id = $1', [memberId]);
@@ -144,7 +152,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       expect(res.statusCode).toBe(503);
       const { operationId } = res.json<{ operationId: string }>();
 
-      const member = await getMember(pool, discordUserId);
+      const member = await getMemberByEmail(pool, FAILURE_RECOVERY_SUBSCRIBE_EMAIL);
       expect(member).toBeDefined();
       expect(member!.inflight_operation_id).toBe(operationId);
       expect(member!.inflight_operation_type).toBe('subscribe');
@@ -408,7 +416,8 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       expect(output.exitCode).toBe(0);
 
       const member = await getMember(pool, discordUserId);
-      const updatedTimestamp = member!.last_payjp_event_created_at as number;
+      expect(member).toBeDefined();
+      const updatedTimestamp = Number(member!.last_payjp_event_created_at);
       // 古いタイムスタンプより新しく更新されている
       expect(updatedTimestamp).toBeGreaterThanOrEqual(oldTimestamp);
       // CLI 実行前の時刻以上（リカバリ時刻が反映される）
@@ -542,7 +551,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       expect(typeof body.operationId).toBe('string');
 
       // DB 確認: payjp_customer_id は設定済み（customer 作成は成功）、charge_id は未設定
-      const member = await getMember(pool, discordUserId);
+      const member = await getMemberByEmail(pool, FAILURE_RECOVERY_SUBSCRIBE_EMAIL);
       expect(member).toBeDefined();
       expect(member!.payjp_customer_id).not.toBeNull();
       expect(member!.payjp_initial_charge_id).toBeNull();

@@ -349,8 +349,14 @@ export function isAccessEndExpired(accessEndAt: Date | null, now: Date): boolean
 }
 
 // REQ-SYNC-019: PROP-SYNC-010
-export function calculateLastEventTimestamp(existing: number | null, resyncStartUnix: number): number {
-  return Math.max(existing ?? 0, resyncStartUnix);
+/** Coerces DB BIGINT (number | bigint | string from node-pg) before Math.max — mixing bigint and number throws. */
+export function calculateLastEventTimestamp(
+  existing: number | bigint | string | null,
+  resyncStartUnix: number,
+): number {
+  const existingNum = existing == null ? 0 : Number(existing);
+  const safeExisting = Number.isFinite(existingNum) ? existingNum : 0;
+  return Math.max(safeExisting, resyncStartUnix);
 }
 
 // REQ-SYNC-024: PROP-SYNC-020
