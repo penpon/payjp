@@ -479,10 +479,8 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       const syncRole = vi.fn().mockResolvedValue(undefined);
       const cliDeps = makeCliDeps(pool, { syncRole, db: createPgPool(pool) });
 
-      // クラッシュしないこと
-      await expect(runResyncCli(['--all'], cliDeps)).resolves.toBeDefined();
-
-      // exitCode は 0 であること（revoke 済みでも成功扱い）
+      // 1 回のみ: 2 回目は getPayjpSubscription のデフォルト active で DB が変わり、
+      // 「revoke 済みでも成功」の前提とズレるため。
       const output = await runResyncCli(['--all'], cliDeps);
       expect(output.exitCode).toBe(0);
     });
