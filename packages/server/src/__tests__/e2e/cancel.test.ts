@@ -435,8 +435,8 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       });
 
       await insertSubscribedMember(pool, discordUserId, accessEndAt);
-      // 既に期限切れ: expiresIn = -1ms
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId, undefined, -1);
+      // 既に期限切れ: expiresIn = -1ms（expiresAt はアプリの clock と同じ基準で計算）
+      const { rawToken } = await insertLinkedSession(pgDb, discordUserId, undefined, -1, () => fixedDate);
 
       const res = await app.inject(buildCancelRequest(rawToken));
 
