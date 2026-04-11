@@ -100,6 +100,7 @@ function makeConfig(): BillingConfig {
     googleFormCancelSecret: 'google-shared-secret',
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
+    cancelNoticeCycles: 1,
   };
 }
 

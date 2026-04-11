@@ -105,6 +105,8 @@ export interface BillingConfig {
   googleFormCancelSecret: string;
   googleFormCancelTokenSecret: string;
   googleFormCancelTokenTtlSeconds: number;
+  /** Months of notice before `access_end_at` (JST calendar) when self-serve cancel opens; MVP fixed to 1. */
+  cancelNoticeCycles: number;
 }
 
 export interface BillingDeps {
