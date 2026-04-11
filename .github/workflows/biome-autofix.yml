@@ -1,0 +1,45 @@
+# Applies safe mechanical fixes (format, organize imports, and other Biome --write fixes)
+# to the PR branch so CI and local lefthook (staged-files-only) stay aligned.
+name: Biome autofix
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: biome-autofix-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  autofix:
+    name: Apply Biome autofix
+    # Fork PRs cannot be updated with GITHUB_TOKEN from the base repo workflow.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply Biome safe fixes
+        run: npx biome check --write .
+      - name: Commit and push if changed
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No Biome changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: apply Biome autofix"
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
