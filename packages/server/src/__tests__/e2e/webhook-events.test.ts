@@ -271,7 +271,8 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
 
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_e2e_${randomUUID().slice(0, 8)}`;
-      const periodEnd = DEFAULT_EVENT_CREATED + 15 * 86400;
+      // access_end_at must be in the future for canceled to be grant-eligible
+      const periodEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
       const event = makeWebhookEvent({
         id: eventId,
         type: 'subscription.canceled',
