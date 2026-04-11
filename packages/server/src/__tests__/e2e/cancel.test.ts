@@ -76,23 +76,26 @@ async function insertSubscribedMember(
     inflightOperationType = null,
   } = overrides;
 
+  const email = `${discordUserId}@e2e.test`;
+
   await pool.query(
     `INSERT INTO members (
-       id, discord_user_id, subscription_status,
+       id, discord_user_id, email, subscription_status,
        payjp_customer_id, payjp_subscription_id, payjp_plan_id,
        access_end_at, first_trial_granted_at,
        cancel_requested_at,
        inflight_operation_id, inflight_operation_type, inflight_operation_started_at
      ) VALUES (
-       $1, $2, $3,
-       'cus_test', $4, 'plan_e2e',
-       $5, NOW(),
-       $6,
-       $7, $8, CASE WHEN $7 IS NOT NULL THEN NOW() ELSE NULL END
+       $1, $2, $3, $4,
+       'cus_test', $5, 'plan_e2e',
+       $6, NOW(),
+       $7,
+       $8::text, $9::text, CASE WHEN $8::text IS NOT NULL THEN NOW() ELSE NULL END
      )`,
     [
       memberId,
       discordUserId,
+      email,
       subscriptionStatus,
       payjpSubscriptionId,
       accessEndAt,
@@ -556,9 +559,9 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       // access_end_at = NULL を直接挿入
       const memberId = randomUUID();
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at, first_trial_granted_at)
-         VALUES ($1, $2, 'active', 'cus_test', 'sub_test', 'plan_e2e', NULL, NOW())`,
-        [memberId, discordUserId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at, first_trial_granted_at)
+         VALUES ($1, $2, $3, 'active', 'cus_test', 'sub_test', 'plan_e2e', NULL, NOW())`,
+        [memberId, discordUserId, `${discordUserId}@e2e.test`],
       );
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
 
