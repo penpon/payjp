@@ -381,6 +381,43 @@ describe('INT-SYNC-010: Daily resync: access_end_at expired', () => {
 
     const _result = await runResyncCli(['--all'], deps);
     expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_1');
+    expect(deps.syncRole).not.toHaveBeenCalledWith('user_1', 'grant', 'role_1');
+    expect(vi.mocked(deps.syncRole).mock.calls.at(-1)).toEqual(['user_1', 'revoke', 'role_1']);
+  });
+});
+
+// INT-SYNC-010b: expired access + PAY.JP canceled must not re-grant (grace status)
+describe('INT-SYNC-010b: Daily resync: expired access + canceled subscription → revoke only', () => {
+  it('canceled in grace is grant-worthy only while access_end in future; after expiry → final revoke', async () => {
+    const members = [
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'active',
+        payjp_subscription_id: 'sub_1',
+        access_end_at: new Date('2026-04-05T12:00:00Z'),
+      },
+    ];
+    const deps = createMockDeps({
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
+          if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
+            return { rows: members, rowCount: 1 };
+          }
+          return { rows: [], rowCount: 0 };
+        }),
+      ),
+      getPayjpSubscription: vi.fn(async () => ({
+        id: 'sub_1',
+        status: 'canceled',
+        metadata: { discord_user_id: 'user_1' },
+      })),
+    });
+
+    await runResyncCli(['--all'], deps);
+    expect(deps.syncRole).toHaveBeenCalledTimes(1);
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'revoke', 'role_1');
+    expect(deps.syncRole).not.toHaveBeenCalledWith('user_1', 'grant', 'role_1');
   });
 });
 

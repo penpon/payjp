@@ -188,8 +188,10 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     const cliOutput = await runResyncCli(['--all'], cliDeps);
     expect(cliOutput.exitCode).toBe(0);
 
-    // ロール剥奪が実行されたことを確認
-    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+    // ロール剥奪が最終的に適用されること（期限内 canceled は grant と見なすため、最後の呼び出しが revoke である必要がある）
+    const callsAfterCli = syncRole.mock.calls.filter(([uid]) => uid === discordUserId);
+    expect(callsAfterCli.at(-1)).toEqual([discordUserId, 'revoke']);
+    expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'grant');
   });
 
   // =========================================================================
