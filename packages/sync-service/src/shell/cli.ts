@@ -18,7 +18,7 @@ import {
   type PlanRoleMapping,
   resolveRoleIdForPlan,
   type SubscriptionCandidate,
-  shouldGrantRole,
+  shouldGrantPaidDiscordAccess,
   validateCliArgs,
 } from '../core/index.js';
 import type { DbPool } from './types.js';
@@ -305,7 +305,9 @@ async function handleSubscribeRecovery(
 
     // Sync role — use PAY.JP subscription plan when member row has not persisted payjp_plan_id yet
     const planIdForSync = (member.payjp_plan_id as string | null) ?? planIdFromPayjp;
-    const action = shouldGrantRole(status) ? 'grant' : 'revoke';
+    const cpe = (payjpSub as { current_period_end?: number }).current_period_end;
+    const accessEndAt = cpe != null && cpe !== 0 ? new Date(cpe * 1000) : (member.access_end_at as Date | null);
+    const action = shouldGrantPaidDiscordAccess(status, accessEndAt, deps.now()) ? 'grant' : 'revoke';
     await syncRoleIds(deps, discordUserId, action, resolveRoleIdsForSync(planIdForSync, action, deps.planRoleMapping));
 
     // Resolve impact logs
@@ -387,17 +389,20 @@ async function handleCancelRecovery(
 
   // Step 5: Clear inflight on confirmed integrity
   if (canResolveInflightOperation('canceled', subscriptionId, subscriptionId, customerId)) {
+    const periodEndUnix = (payjpSub as { current_period_end?: number }).current_period_end;
+    const periodEndDate = periodEndUnix != null && periodEndUnix !== 0 ? new Date(periodEndUnix * 1000) : deps.now();
     await deps.db.query(
       `UPDATE members SET
         subscription_status = 'canceled',
         cancel_requested_at = now(),
-        access_end_at = now(),
+        access_end_at = $2,
+        next_billing_at = $2,
         inflight_operation_id = NULL,
         inflight_operation_type = NULL,
         inflight_operation_started_at = NULL,
         updated_at = now()
        WHERE id = $1`,
-      [memberId],
+      [memberId, periodEndDate],
     );
 
     const existing = member.last_payjp_event_created_at as number | null;
@@ -486,7 +491,9 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
         newStatus,
         memberId,
       ]);
-      const action = shouldGrantRole(newStatus) ? 'grant' : 'revoke';
+      const cpe = (payjpSub as { current_period_end?: number }).current_period_end;
+      const mergedAccessEnd = cpe != null && cpe !== 0 ? new Date(cpe * 1000) : (member.access_end_at as Date | null);
+      const action = shouldGrantPaidDiscordAccess(newStatus, mergedAccessEnd, deps.now()) ? 'grant' : 'revoke';
       const roleIds = resolveRoleIdsForSync(planId, action, deps.planRoleMapping);
       if (roleIds.length === 0 && action === 'grant') {
         deps.log({

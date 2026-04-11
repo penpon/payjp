@@ -12,9 +12,9 @@
 | R2 | 3プランから1つを選択して定期課金開始 | billing-service | `planId` 許可リストで登録成功 |
 | R3 | 初回ユーザーは1か月目課金 + 2か月目/3か月目無料 | billing-service | `discord_user_id` 単位の `first_trial_granted_at` で一度のみ適用 |
 | R4 | 4か月目以降は月次課金 | billing-service | 非初回は `trial_end` なし月次継続 |
-| R5 | Google Form退会受付 + 即時退会完了 | billing-service | Google Form送信後にPAY.JP解約・アプリ利用停止・Discordロール剥奪が完了 |
+| R5 | Google Form退会受付 + 即時退会完了 | billing-service | Google Form送信後にPAY.JP解約が完了し、`current_period_end` まで利用・ロールを維持する |
 | R6 | PAY.JP Webhook受信で課金状態反映 | sync-service | 許可イベントのみ冪等処理、fail-close |
-| R7 | 課金状態でDiscordロール付与/剥奪 | sync-service | `active/trial` 付与、`canceled/paused/deleted` 剥奪 |
+| R7 | 課金状態でDiscordロール付与/剥奪 | sync-service | `active/trial` 付与、`canceled` は `access_end_at` まで付与維持、その後および `paused/deleted` は剥奪 |
 | R8 | 日次再同期 + 手動再同期CLIで不整合修復 | sync-service | 日次1回 + CLI（operationId/discord_user_id/全体） |
 | R9 | 最低限の障害調査ログ | auth/billing/sync 共通 | 必須キーを構造化記録、過剰監査なし |
 
@@ -153,9 +153,9 @@
 6. `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
 7. `cancel_requested_at` 既存ならPAY.JP再呼び出しなしで冪等 `200`
 8. `operationId` 保存後に `members.payjp_subscription_id` 指定でPAY.JP cancel APIを1回実行する
-9. `cancel_requested_at`, `subscription_status='canceled'`, `access_end_at=now()`, `next_billing_at=current_period_end` を更新する
-10. Discordロール剥奪を即時実行し、成功時のみ `role_state='revoked'` とトークン消費を確定する
-11. Discordロール剥奪失敗時は `503` を返し、`role_state='unknown'` を残して日次再同期/再試行対象にする
+9. `cancel_requested_at`, `subscription_status='canceled'`, `access_end_at=current_period_end`, `next_billing_at=current_period_end` を更新する
+10. Discordロールは `access_end_at` 到達まで維持する（即時剥奪しない）。処理成功時にトークン消費を確定する
+11. DB確定やトークン消費が失敗した場合は `503` を返し、必要に応じて日次再同期で整合を取る
 12. 不確定失敗時は `503 + operationId` で保持し、復旧はCLIのみで実施する
 
 ### 5.4 既存ブラウザ退会API（`POST /v1/subscriptions/cancel`）
@@ -176,7 +176,7 @@
 8. `event.created < members.last_payjp_event_created_at` は `ignored`（巻き戻し防止）
 9. `event.created == members.last_payjp_event_created_at`（同秒）は `ignored` にせず処理対象とする（単一ワーカーでは到着順になり得るが、複数ワーカーではDBコミット順となり得るため順序は非決定）
 10. `succeeded` イベントは `status` 不変時も `last_payjp_event_created_at` を更新する
-11. `status` 不変の `subscription.updated` でも `payjp_plan_id` と `next_billing_at` を更新し、`active/trial` の場合のみ `access_end_at` も更新する。ロール同期は行わない
+11. `status` 不変の `subscription.updated` でも `payjp_plan_id` と `next_billing_at` を更新し、`active/trial` または `canceled` の場合は `current_period_end` が取れたとき `access_end_at` も更新する。ロール同期は行わない
 12. 検証通過イベントのみ `members` 更新、状態変化時のみロール同期（Discord API `429/5xx` は短時間リトライ最大3回: `0秒/1秒/2秒` 待機、各回timeout `1秒`、総処理 `6秒` 以内）
 13. 不明 `data.status` は `failed` + `members` 非更新 + 安全側でロール剥奪
 14. fail-closeの応答境界は固定する（検証失敗は `200`、token不一致のみ `401`、DB受理不能のみ `503`）

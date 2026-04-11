@@ -124,7 +124,7 @@ describe('PROP-BILL-003: hasActiveSubscription', () => {
   it.each([
     { status: 'active', accessEndAt: future, expected: true },
     { status: 'trial', accessEndAt: future, expected: true },
-    { status: 'canceled', accessEndAt: future, expected: false },
+    { status: 'canceled', accessEndAt: future, expected: true },
     { status: 'canceled', accessEndAt: past, expected: false },
     { status: 'paused', accessEndAt: future, expected: false },
     { status: 'deleted', accessEndAt: null, expected: false },

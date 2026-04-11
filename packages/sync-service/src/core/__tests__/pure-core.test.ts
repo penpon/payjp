@@ -23,6 +23,7 @@ import {
   maskSensitiveLogFields,
   resolveEffectiveSubscriptionStatus,
   resolveRoleIdForPlan,
+  shouldGrantPaidDiscordAccess,
   shouldGrantRole,
   shouldSwapRole,
   shouldSyncRole,
@@ -169,6 +170,26 @@ describe('PROP-SYNC-005: shouldGrantRole', () => {
         expect(shouldGrantRole(s)).toBe(false);
       }),
     );
+  });
+});
+
+describe('shouldGrantPaidDiscordAccess', () => {
+  const now = new Date('2026-04-06T12:00:00Z');
+  const future = new Date('2026-05-01T00:00:00Z');
+  const past = new Date('2026-03-01T00:00:00Z');
+
+  it('active/trial → true', () => {
+    expect(shouldGrantPaidDiscordAccess('active', past, now)).toBe(true);
+    expect(shouldGrantPaidDiscordAccess('trial', null, now)).toBe(true);
+  });
+
+  it('canceled with future access_end → true', () => {
+    expect(shouldGrantPaidDiscordAccess('canceled', future, now)).toBe(true);
+  });
+
+  it('canceled with past or null access_end → false', () => {
+    expect(shouldGrantPaidDiscordAccess('canceled', past, now)).toBe(false);
+    expect(shouldGrantPaidDiscordAccess('canceled', null, now)).toBe(false);
   });
 });
 

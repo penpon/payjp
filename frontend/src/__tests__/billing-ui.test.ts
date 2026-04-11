@@ -543,6 +543,9 @@ describe('billing-ui', () => {
 
       expect(container.querySelector('.subscribed-plan-name')?.textContent).toBe('ビジネスプラン');
       expect(container.querySelector('.status-badge')?.textContent).toBe('退会済み');
+      expect(container.textContent).toContain('ご利用終了日');
+      expect(container.textContent).not.toContain('次回更新日');
+      expect(container.textContent).toContain('2026/05/07');
       expect(container.querySelector('.cancel-section')).not.toBeNull();
       expect(container.querySelector('.cancel-section-withdrawn')?.textContent).toBe('退会済み');
       expect(container.querySelector('.cancel-section-desc')?.textContent).toContain('退会手続きが完了しています');

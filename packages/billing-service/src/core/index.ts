@@ -36,10 +36,10 @@ export function isFirstTimeUser(firstTrialGrantedAt: Date | null): boolean {
 }
 
 // PROP-BILL-003: REQ-BILL-007
+/** True if the member still has paid entitlement (active/trial, or canceled until current period end). */
 export function hasActiveSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
-  void accessEndAt;
-  void now;
   if (status === 'active' || status === 'trial') return true;
+  if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
   return false;
 }
 

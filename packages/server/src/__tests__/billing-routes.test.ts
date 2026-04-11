@@ -581,16 +581,17 @@ describe('POST /v1/subscriptions/cancel', () => {
       payjp_plan_id: PLAN_ID,
       role_state: 'granted',
     });
+    const periodEnd = new Date('2025-05-01T00:00:00Z');
     const updatedMember = {
       ...member,
       cancel_requested_at: NOW,
       subscription_status: 'canceled' as const,
-      access_end_at: NOW,
-      next_billing_at: new Date('2025-05-01T00:00:00Z'),
+      access_end_at: periodEnd,
+      next_billing_at: periodEnd,
       inflight_operation_id: null,
       inflight_operation_type: null,
       inflight_operation_started_at: null,
-      role_state: 'revoked' as const,
+      role_state: 'granted' as const,
     };
 
     const deps = makeMockDeps();
@@ -651,7 +652,7 @@ describe('POST /v1/subscriptions/cancel', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
     expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
-    expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
+    expect(deps.discord.removeRole).not.toHaveBeenCalled();
   });
 
   it('does not clear __Host-link_session cookie on cancel success (cookie expires naturally)', async () => {
@@ -702,18 +703,6 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(503);
     expect(res.json().operationId).toBe(OPERATION_ID);
-  });
-
-  it('returns 503 and marks role unknown when Discord role revoke fails', async () => {
-    const deps = makeCancelDeps();
-    (deps.discord.removeRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('discord 500'));
-    const app = createApp(deps);
-
-    const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload()));
-
-    expect(res.statusCode).toBe(503);
-    expect(res.json().errorCode).toBe('ROLE_REVOKE_FAILED');
-    expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'unknown');
   });
 
   it('returns 401 when link session is expired', async () => {
@@ -795,15 +784,16 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
       role_state: 'granted',
     });
     const deps = makeMockDeps(activeMember);
+    const periodEnd = new Date('2025-05-01T00:00:00Z');
     const updatedMember = makeMember({
       subscription_status: 'canceled',
       payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
       payjp_customer_id: PAYJP_CUSTOMER_ID,
       payjp_plan_id: PLAN_ID,
       cancel_requested_at: NOW,
-      access_end_at: NOW,
-      next_billing_at: new Date('2025-05-01T00:00:00Z'),
-      role_state: 'revoked',
+      access_end_at: periodEnd,
+      next_billing_at: periodEnd,
+      role_state: 'granted',
     });
     (deps.db.findMemberById as ReturnType<typeof vi.fn>).mockResolvedValue(activeMember);
     (deps.db.updateMemberAfterCancel as ReturnType<typeof vi.fn>).mockResolvedValue(updatedMember);
@@ -840,7 +830,7 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
-    expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
+    expect(deps.discord.removeRole).not.toHaveBeenCalled();
     expect(deps.db.consumeCancelFormToken).toHaveBeenCalledTimes(1);
   });
 

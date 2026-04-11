@@ -126,7 +126,13 @@ export function renderSubscribed(
       statusRowChildren,
     ),
     ...(subscription.accessEndAt
-      ? [el('p', { class: 'subscribed-detail' }, [`次回更新日: ${formatDate(subscription.accessEndAt)}`])]
+      ? [
+          el('p', { class: 'subscribed-detail' }, [
+            isWithdrawn
+              ? `ご利用終了日: ${formatDate(subscription.accessEndAt)}`
+              : `次回更新日: ${formatDate(subscription.accessEndAt)}`,
+          ]),
+        ]
       : []),
   ];
 
@@ -175,11 +181,8 @@ function renderBillingForm(
   let email = state.email;
   let cardholderName = state.cardholderName;
   let consented = state.privacyConsented;
-  // biome-ignore lint/style/useConst: reassigned in PAY.JP change handlers
   let cardNumberComplete = false;
-  // biome-ignore lint/style/useConst: reassigned in PAY.JP change handlers
   let cardExpiryComplete = false;
-  // biome-ignore lint/style/useConst: reassigned in PAY.JP change handlers
   let cardCvcComplete = false;
 
   // Plan selection

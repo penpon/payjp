@@ -200,6 +200,14 @@ export function shouldGrantRole(status: string | null): boolean {
   return GRANT_STATUSES.has(status);
 }
 
+/** Paid Discord role should be present: active/trial, or canceled until access_end_at (current period end). */
+export function shouldGrantPaidDiscordAccess(status: string | null, accessEndAt: Date | null, now: Date): boolean {
+  if (status === null) return false;
+  if (status === 'active' || status === 'trial') return true;
+  if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
+  return false;
+}
+
 // REQ-SYNC-010: PROP-SYNC-017
 export function shouldSyncRole(oldStatus: string | null, newStatus: string | null): boolean {
   return oldStatus !== newStatus;

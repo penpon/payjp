@@ -25,7 +25,7 @@
 3. `T-P0-03` 並列登録と既存契約ガード
 4. `T-P0-04` subscribe不確定失敗 `503 + operationId` とCLI復旧
 5. `T-P0-05` Google Form退会・冪等・不確定失敗復旧
-6. `T-P0-06` `canceled` / `paused` / `deleted` の即時剥奪
+6. `T-P0-06` `canceled`（`access_end_at` 到達後）/ `paused` / `deleted` の剥奪
 7. `T-P0-07` Webhook fail-close・冪等・古いイベント無視・ログ非保存
 
 ## 2.1 `deep-research-report.md` 由来の固定検証観点
@@ -35,7 +35,7 @@
 | Webhook中心 + 冪等 + 順不同耐性 | `T-P0-04`, `T-P0-07` | - |
 | 署名検証 + fail-close + 応答境界固定 | `T-P0-07` | - |
 | Discord API `429/5xx` 自己修復 | `T-P0-06` | - |
-| 課金停止状態（`paused/deleted/不明status`）の安全側剥奪 | `T-P0-06`, `T-P0-07` | - |
+| 課金停止状態（`paused/deleted/不明status`）の安全側剥奪、`canceled` の `access_end_at` 猶予 | `T-P0-06`, `T-P0-07` | - |
 | ベンダー未確定事項の解消（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順） | - | Go-Live前必須（実装着手ブロッカーではない。Day3まで一次回答収集、Day10前に採用判断固定） |
 
 ## 3. テストID詳細（Red/Green/Refactor固定）
@@ -226,8 +226,8 @@
   - 不確定失敗で `503 + operationId` が返らない
   - PAY.JP書き込み前の確定失敗で `inflight_operation_*` がクリアされない
   - PAY.JP書き込み後の確定失敗で整合未確認でも `inflight_operation_*` が誤ってクリアされる
-  - Discordロール剥奪失敗時に `role_state = unknown` が残らない
-  - Google送信後の即時退会で `access_end_at = now()` にならず、アプリ利用停止が遅延する
+  - 退会処理のDB確定失敗時に不整合が残る
+  - Google送信後の退会で `access_end_at` が `current_period_end` 相当に設定されず、利用終了日がずれる
   - PAY.JP書き込み実行時/不確定失敗時に `operationId` ログキーが欠落する
   - 解約APIログで raw header/body またはカード情報が保存される、あるいは固定キー機密マスクが行われない
   - `POST /v1/subscriptions/cancel/google-submit` 成功レスポンスの `cancelEffectiveAt` / `roleRemovalAt` が RFC 3339 UTC 文字列で固定されず、型揺れを許してしまう
@@ -244,22 +244,22 @@
   - `metadata.discord_user_id` 欠落時は、`status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）一致の場合に限りその1件を補正保存し、0件または複数件（または `members.next_billing_at IS NULL` / 不一致）はfail-closeで停止する
   - `members.payjp_customer_id` 欠落時は fail-close（cancel実行/`inflight_operation_*` 解除禁止）とし、`member_impact_logs` 記録とエスカレーションを行う
   - 候補が0件または複数件の場合は確定不能としてfail-closeで停止し、`inflight_operation_*` を解除せずcancelを実行しない
-  - 初回 `google-submit` のみPAY.JP cancel API実行、再送時はPAY.JP再呼び出しなしで冪等 `200`（必要ならロール剥奪のみ再試行）となる
+  - 初回 `google-submit` のみPAY.JP cancel API実行、再送時はPAY.JP再呼び出しなしで冪等 `200` となる
   - PAY.JP cancel APIは `members.payjp_subscription_id` 指定で実行する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId`（PAY.JP書き込み0回）
   - PAY.JP書き込み前の確定失敗では `inflight_operation_*` をクリアする
   - PAY.JP書き込み後の確定失敗では整合確認できた場合のみ `inflight_operation_*` をクリアする
   - CLI復旧で未cancel時のみcancel APIを1回実行し、cancel済みはAPI再実行なしで反映のみ行う
   - 不確定失敗時は `inflight_operation_*` 保持で `503`
-  - 成功時は `subscription_status='canceled'`, `access_end_at=now()`, `next_billing_at=current_period_end`, `role_state='revoked'` を満たす
-  - Discordロール剥奪失敗時は `503` と `role_state='unknown'` を返し、再同期または再送で回復できる
+  - 成功時は `subscription_status='canceled'`, `access_end_at=current_period_end`, `next_billing_at=current_period_end`, `role_state='granted'`（期間内）を満たす
+  - DB確定失敗時は `503` を返し、再同期で回復できる
   - CLI再同期で整合回復
   - 成功レスポンスは `{ ok: true, memberId: uuid文字列, cancelEffectiveAt: RFC3339 UTC文字列, roleRemovalAt: RFC3339 UTC文字列 }` を満たすことを検証する
   - PAY.JP書き込み実行時/不確定失敗時の `operationId` 必須ログを検証する
   - 解約APIログで raw header/body 非保存、カード情報非保存/非出力、固定キー機密マスクを検証
 - Refactor:
   - Google Formトークン生成/検証ロジックを純関数化
-  - cancel冪等判定と即時ロール剥奪の責務分離
+  - cancel冪等判定とロール維持（`access_end_at` まで）の責務分離
 - モック/注入要件:
   - Google Apps Script 相当のヘッダ/ボディ送信をスタブ化
   - **決定的503注入**: cancel API呼び出し後にtimeoutを発生
@@ -273,15 +273,15 @@
 ### T-P0-06（R7/R8）
 
 - Red:
-  - `canceled` でロール剥奪されない
-  - `paused/deleted` でロール剥奪されない
+  - `canceled` かつ `access_end_at > now` の間にロール剥奪される
+  - `paused/deleted` でロール剥奪されない（安全側剥奪が効かない）
   - ロール同期で Discord API `429/5xx` 発生時に短時間リトライ（最大3回）が走らない
   - 日次再同期でPAY.JP `subscription 404` を `deleted` 扱いできない
   - 手動CLIの `--discord-user-id` / `--all` 経路で再同期できない
   - 不整合解消時に同一 `member_id + issue_code` の `member_impact_logs` だけをクローズできない
   - `failed_count` が未出力、または `resolved_at IS NULL` 件数と一致しない
 - Green:
-  - Webhookまたは日次再同期で `canceled/paused/deleted` の剥奪条件を適用
+  - Webhookまたは日次再同期で `canceled`（`access_end_at` 到達後）/ `paused` / `deleted` の剥奪条件を適用
   - ロール同期は Discord API `429/5xx` に対して短時間リトライ最大3回（`0秒/1秒/2秒` 待機、各回timeout `1秒`、総処理 `6秒` 以内）を検証する
   - `subscription 404` を `deleted` 扱いで補正
   - `member_impact_logs` の未解決は同一 `member_id + issue_code` をキーに再同期で解消

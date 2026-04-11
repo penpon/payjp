@@ -14,7 +14,7 @@ import {
   maskSensitiveLogFields,
   resolveEffectiveSubscriptionStatus,
   resolveRoleIdForPlan,
-  shouldGrantRole,
+  shouldGrantPaidDiscordAccess,
   shouldSwapRole,
   shouldSyncRole,
   validateRequiredFields,
@@ -180,6 +180,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         planChanged: boolean;
         oldPlanId: string | null;
         newPlanId: string | null;
+        mergedAccessEndAt: Date | null;
       };
 
   let txResult: TxResult;
@@ -260,11 +261,17 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         updates.payjp_plan_id = event.data.plan.id;
       }
       if (event.data?.current_period_end) {
-        updates.next_billing_at = new Date(event.data.current_period_end * 1000);
-        if (newStatus === 'active' || newStatus === 'trial') {
-          updates.access_end_at = new Date(event.data.current_period_end * 1000);
+        const periodEnd = new Date(event.data.current_period_end * 1000);
+        updates.next_billing_at = periodEnd;
+        if (newStatus === 'active' || newStatus === 'trial' || newStatus === 'canceled') {
+          updates.access_end_at = periodEnd;
         }
       }
+
+      const mergedAccessEndAt =
+        (updates.access_end_at as Date | undefined) ?? (lockedMember.access_end_at as Date | null);
+      const now = new Date();
+      const entitled = shouldGrantPaidDiscordAccess(newStatus, mergedAccessEndAt, now);
 
       await updateMemberFromWebhook(txDb, lockedMember.id as string, updates);
       await insertPayjpEvent(txDb, {
@@ -280,10 +287,11 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         type: 'processed' as const,
         lockedMember,
         statusChanged,
-        action: statusChanged ? (shouldGrantRole(newStatus) ? ('grant' as const) : ('revoke' as const)) : undefined,
+        action: statusChanged ? (entitled ? ('grant' as const) : ('revoke' as const)) : undefined,
         planChanged,
         oldPlanId,
         newPlanId,
+        mergedAccessEndAt,
       };
     });
   } catch (err) {
@@ -326,7 +334,11 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
     } else if (
       !statusChanged &&
       planChanged &&
-      shouldGrantRole(txResult.lockedMember.subscription_status as string | null)
+      shouldGrantPaidDiscordAccess(
+        txResult.lockedMember.subscription_status as string | null,
+        txResult.mergedAccessEndAt,
+        new Date(),
+      )
     ) {
       // Status unchanged but plan changed while still grant-eligible → swap roles
       const oldRoleId = resolveRoleIdForPlan(oldPlanId, deps.planRoleMapping);

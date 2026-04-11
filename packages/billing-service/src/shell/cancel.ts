@@ -12,7 +12,6 @@ import {
   buildCancelResponse,
   buildGoogleFormPrefillUrl,
   createSignedCancelFormToken,
-  hasActiveSubscription,
   hasCancelableSubscription,
   hasInflightOperation,
   isSameOrigin,
@@ -32,8 +31,6 @@ import type {
   OperationError,
 } from './types.js';
 
-const ROLE_SYNC_RETRY_DELAYS_MS = [0, 1000, 2000] as const;
-
 function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
   console[level](JSON.stringify({ level, service: 'billing-cancel', message, ...ctx }));
 }
@@ -44,126 +41,8 @@ function secureCompare(a: string, b: string): boolean {
   return timingSafeEqual(left, right);
 }
 
-function uniqueRoleIds(roleMapping: Record<string, string>): string[] {
-  return [...new Set(Object.values(roleMapping).filter((roleId) => roleId.length > 0))];
-}
-
-function resolveRoleIdsForRevocation(member: Member, deps: BillingDeps): string[] {
-  if (member.payjp_plan_id) {
-    const mapped = deps.config.planRoleMapping[member.payjp_plan_id];
-    if (mapped) return [mapped];
-  }
-  return uniqueRoleIds(deps.config.planRoleMapping);
-}
-
 function cancelLockKey(member: Member, fallbackDiscordUserId?: string): string {
   return member.discord_user_id ?? fallbackDiscordUserId ?? member.id;
-}
-
-async function delay(ms: number): Promise<void> {
-  if (ms <= 0) return;
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function markRoleStateUnknown(deps: BillingDeps, memberId: string, ctx: Record<string, unknown>): Promise<void> {
-  try {
-    await deps.db.updateMemberRoleState(memberId, 'unknown');
-  } catch (dbErr) {
-    slog('error', 'Failed to persist unknown role state after revoke failure', {
-      ...ctx,
-      error: String(dbErr),
-    });
-  }
-}
-
-async function revokeDiscordRolesImmediately(
-  member: Member,
-  deps: BillingDeps,
-  ctx: { operationId?: string; flow: 'browser' | 'google-submit' },
-): Promise<OperationError | null> {
-  if (!member.discord_user_id) {
-    try {
-      await deps.db.updateMemberRoleState(member.id, 'revoked');
-      return null;
-    } catch (err) {
-      slog('error', 'Failed to persist revoked role state for unlinked member', {
-        memberId: member.id,
-        flow: ctx.flow,
-        operationId: ctx.operationId,
-        error: String(err),
-      });
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'DB_UPDATE_FAILED',
-        message: 'Failed to finalize cancel state',
-        operationId: ctx.operationId,
-      };
-    }
-  }
-
-  const roleIds = resolveRoleIdsForRevocation(member, deps);
-  for (const roleId of roleIds) {
-    let success = false;
-    for (const retryDelayMs of ROLE_SYNC_RETRY_DELAYS_MS) {
-      await delay(retryDelayMs);
-      try {
-        await deps.discord.removeRole(deps.config.discordGuildId, member.discord_user_id, roleId);
-        success = true;
-        break;
-      } catch (err) {
-        const isLastAttempt = retryDelayMs === ROLE_SYNC_RETRY_DELAYS_MS[ROLE_SYNC_RETRY_DELAYS_MS.length - 1];
-        if (isLastAttempt) {
-          slog('error', 'Discord role revoke failed after retries', {
-            memberId: member.id,
-            discordUserId: member.discord_user_id,
-            roleId,
-            flow: ctx.flow,
-            operationId: ctx.operationId,
-            error: String(err),
-          });
-        }
-      }
-    }
-
-    if (!success) {
-      await markRoleStateUnknown(deps, member.id, {
-        memberId: member.id,
-        discordUserId: member.discord_user_id,
-        roleId,
-        flow: ctx.flow,
-        operationId: ctx.operationId,
-      });
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'ROLE_REVOKE_FAILED',
-        message: 'Discord role removal failed',
-        operationId: ctx.operationId,
-      };
-    }
-  }
-
-  try {
-    await deps.db.updateMemberRoleState(member.id, 'revoked');
-  } catch (err) {
-    slog('error', 'Failed to persist revoked role state after successful revoke', {
-      memberId: member.id,
-      discordUserId: member.discord_user_id,
-      flow: ctx.flow,
-      operationId: ctx.operationId,
-      error: String(err),
-    });
-    return {
-      ok: false,
-      statusCode: 503,
-      errorCode: 'DB_UPDATE_FAILED',
-      message: 'Failed to finalize cancel state',
-      operationId: ctx.operationId,
-    };
-  }
-
-  return null;
 }
 
 async function applyImmediateCancelState(
@@ -186,32 +65,32 @@ async function applyImmediateCancelState(
   }
 
   if (member.cancel_requested_at !== null) {
-    if (member.subscription_status !== 'canceled' || member.access_end_at === null || member.access_end_at > now) {
-      try {
-        const normalizedMember = await deps.db.updateMemberAfterCancel(member.id, {
-          cancel_requested_at: member.cancel_requested_at,
-          subscription_status: 'canceled',
-          access_end_at: now,
-          next_billing_at: member.next_billing_at ?? member.access_end_at,
-          inflight_operation_id: null,
-          inflight_operation_type: null,
-          inflight_operation_started_at: null,
-        });
-        return { member: normalizedMember };
-      } catch (err) {
-        slog('error', 'Failed to normalize already-canceled member state', {
-          memberId: member.id,
-          error: String(err),
-        });
-        return {
-          ok: false,
-          statusCode: 503,
-          errorCode: 'DB_UPDATE_FAILED',
-          message: 'Failed to normalize cancel state',
-        };
-      }
+    if (member.subscription_status === 'canceled' && member.access_end_at !== null) {
+      return { member };
     }
-    return { member };
+    try {
+      const normalizedMember = await deps.db.updateMemberAfterCancel(member.id, {
+        cancel_requested_at: member.cancel_requested_at,
+        subscription_status: 'canceled',
+        access_end_at: member.next_billing_at ?? member.access_end_at ?? now,
+        next_billing_at: member.next_billing_at ?? member.access_end_at,
+        inflight_operation_id: null,
+        inflight_operation_type: null,
+        inflight_operation_started_at: null,
+      });
+      return { member: normalizedMember };
+    } catch (err) {
+      slog('error', 'Failed to normalize already-canceled member state', {
+        memberId: member.id,
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to normalize cancel state',
+      };
+    }
   }
 
   if (member.payjp_subscription_id === null) {
@@ -294,13 +173,14 @@ async function applyImmediateCancelState(
     canceledSubscription.current_period_end != null && canceledSubscription.current_period_end !== 0
       ? new Date(canceledSubscription.current_period_end * 1000)
       : member.next_billing_at;
+  const periodEnd = nextBillingAt ?? now;
 
   try {
     const updatedMember = await deps.db.updateMemberAfterCancel(member.id, {
       cancel_requested_at: now,
       subscription_status: 'canceled',
-      access_end_at: now,
-      next_billing_at: nextBillingAt,
+      access_end_at: periodEnd,
+      next_billing_at: periodEnd,
       inflight_operation_id: null,
       inflight_operation_type: null,
       inflight_operation_started_at: null,
@@ -325,20 +205,14 @@ async function applyImmediateCancelState(
 
 async function finalizeImmediateCancel(
   member: Member,
-  deps: BillingDeps,
+  _deps: BillingDeps,
   ctx: {
     flow: 'browser' | 'google-submit';
     operationId?: string;
     finalizeSuccess?: () => Promise<void>;
   },
 ): Promise<CancelResult> {
-  const roleSyncResult = await revokeDiscordRolesImmediately(member, deps, {
-    operationId: ctx.operationId,
-    flow: ctx.flow,
-  });
-  if (roleSyncResult) {
-    return roleSyncResult;
-  }
+  // Role removal is deferred until members.access_end_at (current period end); sync-service webhook/resync revokes after expiry.
 
   if (ctx.finalizeSuccess) {
     try {
@@ -387,7 +261,7 @@ export async function handleCreateCancelFormLink(
   }
 
   const member = await deps.db.findMemberById(session.member_id);
-  if (!member || !hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
+  if (!member || (member.subscription_status !== 'active' && member.subscription_status !== 'trial')) {
     return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
   }
   if (hasInflightOperation(member.inflight_operation_id)) {

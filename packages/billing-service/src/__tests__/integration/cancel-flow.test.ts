@@ -98,12 +98,12 @@ function makeUpdatedMemberAfterCancel(member: Member): Member {
     ...member,
     cancel_requested_at: NOW,
     subscription_status: 'canceled',
-    access_end_at: NOW,
+    access_end_at: ACCESS_END_AT,
     next_billing_at: ACCESS_END_AT,
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
-    role_state: 'revoked',
+    role_state: 'granted',
   };
 }
 
