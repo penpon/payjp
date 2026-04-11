@@ -1,6 +1,7 @@
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
-import type { LinkSessionRecord, Member } from '@hayane/shared';
+import type { CancelFormTokenRecord, LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
+import type { InjectOptions } from 'light-my-request';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
@@ -19,6 +20,7 @@ const PAYJP_CHARGE_ID = 'ch_test_001';
 const PAYJP_SUBSCRIPTION_ID = 'sub_test_001';
 const OPERATION_ID = 'op-test-001';
 const LINK_SESSION_TOKEN = 'link-session-token-abc';
+const MEMBER_SESSION_TOKEN = 'member-session-token-xyz';
 const EMAIL = 'test@example.com';
 
 const APP_CONFIG = {
@@ -66,6 +68,7 @@ function makeLinkSession(overrides: Partial<LinkSessionRecord> = {}): LinkSessio
     id: 'link-session-id-001',
     link_session_token_hash: 'dummy-hash',
     discord_user_id: DISCORD_USER_ID,
+    discord_access_token_encrypted: null,
     expires_at: new Date(NOW.getTime() + 3600 * 1000),
     used_at: null,
     created_at: NOW,
@@ -91,9 +94,38 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: FRONTEND_BASE_URL,
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    discordPaidRoleId: 'role-001',
+    planRoleMapping: { plan_test: 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
+    googleFormCancelEmailEntryId: '1111111111',
+    googleFormCancelTokenEntryId: '2222222222',
+    googleFormCancelSecret: 'google-shared-secret',
+    googleFormCancelTokenSecret: 'google-token-secret',
+    googleFormCancelTokenTtlSeconds: 900,
+  };
+}
+
+function makeMemberSession(overrides: Partial<MemberSessionRecord> = {}): MemberSessionRecord {
+  return {
+    id: 'member-session-id-001',
+    member_session_token_hash: 'member-session-hash',
+    member_id: MEMBER_ID,
+    expires_at: new Date(NOW.getTime() + 3600 * 1000),
+    created_at: NOW,
+    ...overrides,
+  };
+}
+
+function makeCancelFormToken(overrides: Partial<CancelFormTokenRecord> = {}): CancelFormTokenRecord {
+  return {
+    id: '00000000-0000-0000-0000-000000000999',
+    member_id: MEMBER_ID,
+    email: EMAIL,
+    expires_at: new Date(NOW.getTime() + 3600 * 1000),
+    used_at: null,
+    created_at: NOW,
+    ...overrides,
   };
 }
 
@@ -109,7 +141,7 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     first_trial_granted_at: NOW,
     access_end_at: new Date(periodEndMs),
     next_billing_at: new Date(periodEndMs),
-    role_state: 'granted',
+    role_state: 'unknown',
     // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、setInflightOperation の値がそのまま残る
     inflight_operation_id: OPERATION_ID,
     inflight_operation_type: 'subscribe',
@@ -130,8 +162,21 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
     findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
+    upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
+    updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
+    findCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
+    consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
+    insertMemberSession: vi.fn().mockResolvedValue({
+      id: 'ms-1',
+      member_session_token_hash: 'h',
+      member_id: member.id,
+      expires_at: new Date(),
+      created_at: new Date(),
+    }),
+    findMemberSession: vi.fn().mockResolvedValue(makeMemberSession()),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -139,6 +184,7 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     updateMemberAfterSubscribe: vi.fn().mockResolvedValue(updatedMember),
     updateMemberAfterCancel: vi.fn().mockResolvedValue(undefined as never),
     updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
+    clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
@@ -163,6 +209,9 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -192,20 +241,44 @@ function cancelPayload() {
   return {};
 }
 
-/** Common inject options for billing endpoints */
-function injectOpts(
-  url: string,
-  payload: Record<string, unknown>,
-  overrides: { origin?: string; withCookie?: boolean } = {},
-) {
-  const { origin = FRONTEND_BASE_URL, withCookie = true } = overrides;
+/** Common inject options for subscribe endpoint (no link_session needed) */
+function subscribeInjectOpts(url: string, payload: Record<string, unknown>, overrides: { origin?: string } = {}) {
+  const { origin = FRONTEND_BASE_URL } = overrides;
   return {
     method: 'POST' as const,
     url,
     headers: { origin, 'content-type': 'application/json' },
-    ...(withCookie && { cookies: { '__Host-link_session': LINK_SESSION_TOKEN } }),
     payload,
   };
+}
+
+/** Common inject options for cancel / other billing endpoints that need link_session */
+function injectOpts(
+  url: string,
+  payload: Record<string, unknown>,
+  overrides: { origin?: string; withCookie?: boolean; withMemberCookie?: boolean } = {},
+): InjectOptions {
+  const { origin = FRONTEND_BASE_URL, withCookie = true, withMemberCookie = false } = overrides;
+  const cookies: Record<string, string> = {};
+  if (withCookie) {
+    cookies['__Host-link_session'] = LINK_SESSION_TOKEN;
+  }
+  if (withMemberCookie) {
+    cookies['__Host-member_session'] = MEMBER_SESSION_TOKEN;
+  }
+
+  const injectOptions: InjectOptions = {
+    method: 'POST' as const,
+    url,
+    headers: { origin, 'content-type': 'application/json' },
+    payload,
+  };
+
+  if (Object.keys(cookies).length > 0) {
+    injectOptions.cookies = cookies;
+  }
+
+  return injectOptions;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,7 +290,7 @@ describe('POST /v1/subscriptions', () => {
 
   it('returns 200 with SubscriptionResponse on success', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -227,28 +300,29 @@ describe('POST /v1/subscriptions', () => {
     expect(body.planId).toBe(PLAN_ID);
   });
 
+  it('sets __Host-member_session cookie on success', async () => {
+    const app = createApp();
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
+
+    expect(res.statusCode).toBe(200);
+    const setCookie = res.headers['set-cookie'];
+    expect(setCookie).toBeDefined();
+    expect(String(setCookie)).toContain('__Host-member_session=');
+  });
+
   it('returns 403 for invalid origin', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }));
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }),
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
   });
 
-  it('returns 401 without link_session cookie', async () => {
-    const deps = makeMockDeps();
-    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    const app = createApp(deps);
-
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { withCookie: false }));
-
-    expect(res.statusCode).toBe(401);
-    expect(res.json().errorCode).toBe('INVALID_LINK_SESSION');
-  });
-
   it('returns 422 for invalid planId', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), planId: 'invalid-plan' }));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, { ...subscribePayload(), planId: 'invalid-plan' }));
 
     expect(res.statusCode).toBe(422);
     expect(res.json().errorCode).toBe('INVALID_PLAN_ID');
@@ -256,7 +330,9 @@ describe('POST /v1/subscriptions', () => {
 
   it('returns 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, { ...subscribePayload(), privacyConsented: false }));
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, { ...subscribePayload(), privacyConsented: false }),
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().errorCode).toBe('CONSENT_REQUIRED');
@@ -272,7 +348,7 @@ describe('POST /v1/subscriptions', () => {
     });
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(422);
     expect(res.json().errorCode).toBe('THREE_D_SECURE_REQUIRED');
@@ -282,7 +358,7 @@ describe('POST /v1/subscriptions', () => {
     const deps = makeMockDeps({ inflight_operation_id: 'existing-op-id' });
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
@@ -290,17 +366,11 @@ describe('POST /v1/subscriptions', () => {
     expect(body.operationId).toBe('existing-op-id');
   });
 
-  it('does not clear __Host-link_session cookie on success (cookie expires naturally)', async () => {
+  it('does not set cookie on subscribe error', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
-
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['set-cookie']).toBeUndefined();
-  });
-
-  it('does not clear __Host-link_session cookie on subscribe error', async () => {
-    const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }));
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }),
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.headers['set-cookie']).toBeUndefined();
@@ -308,7 +378,7 @@ describe('POST /v1/subscriptions', () => {
 
   it('includes security headers', async () => {
     const app = createApp();
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers['referrer-policy']).toBe('no-referrer');
@@ -321,26 +391,12 @@ describe('POST /v1/subscriptions', () => {
     (deps.payjp.createCustomer as ReturnType<typeof vi.fn>).mockRejectedValue(err);
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
     expect(body.errorCode).toBe('PAYJP_UNCERTAIN');
     expect(body.operationId).toBe(OPERATION_ID);
-  });
-
-  it('returns 409 when Discord membership check fails', async () => {
-    const deps = makeMockDeps();
-    (deps.discord.checkMembership as ReturnType<typeof vi.fn>).mockResolvedValue({
-      isMember: false,
-      canAssignRole: true,
-    });
-    const app = createApp(deps);
-
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
-
-    expect(res.statusCode).toBe(409);
-    expect(res.json().errorCode).toBe('DISCORD_NOT_MEMBER');
   });
 
   it('returns 200 with existing subscription when already active', async () => {
@@ -352,7 +408,7 @@ describe('POST /v1/subscriptions', () => {
     });
     const app = createApp(deps);
 
-    const res = await app.inject(injectOpts(SUBSCRIBE_URL, subscribePayload()));
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
 
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
@@ -506,6 +562,74 @@ describe('GET /v1/subscriptions/status', () => {
     });
     expect(body.subscription.accessEndAt).toMatch(/2025-06-01/);
   });
+
+  it('returns 200 subscription null when member_session and canceled with access_end_at in the past', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'canceled',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-03-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
+
+  it('returns 200 with canceled subscription when member_session and canceled with access_end_at in the future', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'canceled',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-05-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { subscription: { status: string; planId: string; accessEndAt: string } };
+    expect(body.subscription).toMatchObject({
+      status: 'canceled',
+      planId: PLAN_ID,
+    });
+    expect(body.subscription.accessEndAt).toMatch(/2025-05-01/);
+  });
+
+  it('returns 200 subscription null when link_session and canceled with access_end_at in the past', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'canceled',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-03-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -516,21 +640,26 @@ describe('POST /v1/subscriptions/cancel', () => {
   const CANCEL_URL = '/v1/subscriptions/cancel';
 
   function makeCancelDeps() {
-    const accessEndAt = new Date('2025-05-01T00:00:00Z');
     const cancelSub = makePayjpSubscription({ status: 'canceled' });
     const member = makeMember({
       subscription_status: 'active',
-      access_end_at: accessEndAt,
+      access_end_at: new Date('2025-05-01T00:00:00Z'),
       payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
       payjp_customer_id: PAYJP_CUSTOMER_ID,
+      payjp_plan_id: PLAN_ID,
+      role_state: 'granted',
     });
+    const periodEnd = new Date('2025-05-01T00:00:00Z');
     const updatedMember = {
       ...member,
       cancel_requested_at: NOW,
       subscription_status: 'canceled' as const,
+      access_end_at: periodEnd,
+      next_billing_at: periodEnd,
       inflight_operation_id: null,
       inflight_operation_type: null,
       inflight_operation_started_at: null,
+      role_state: 'granted' as const,
     };
 
     const deps = makeMockDeps();
@@ -576,10 +705,12 @@ describe('POST /v1/subscriptions/cancel', () => {
     const deps = makeCancelDeps();
     const member = makeMember({
       subscription_status: 'canceled',
-      access_end_at: new Date('2025-05-01T00:00:00Z'),
+      access_end_at: NOW,
+      next_billing_at: new Date('2025-05-01T00:00:00Z'),
       payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
       payjp_customer_id: PAYJP_CUSTOMER_ID,
       cancel_requested_at: new Date('2025-03-30T00:00:00Z'),
+      role_state: 'granted',
     });
     (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValue(member);
     const app = createApp(deps);
@@ -588,6 +719,8 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
+    expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
+    expect(deps.discord.removeRole).not.toHaveBeenCalled();
   });
 
   it('does not clear __Host-link_session cookie on cancel success (cookie expires naturally)', async () => {
@@ -651,5 +784,173 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().errorCode).toBe('EXPIRED_LINK_SESSION');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/subscriptions/cancel/google-form-link
+// ---------------------------------------------------------------------------
+
+describe('POST /v1/subscriptions/cancel/google-form-link', () => {
+  const URL = '/v1/subscriptions/cancel/google-form-link';
+
+  it('returns a prefilled Google Form URL when member session is valid', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-05-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject(injectOpts(URL, {}, { withCookie: false, withMemberCookie: true }));
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { ok: true; formUrl: string; expiresAt: string };
+    expect(body.ok).toBe(true);
+    expect(body.formUrl).toContain('https://docs.google.com/forms/d/e/test-form/viewform');
+    expect(body.formUrl).toContain('entry.1111111111=');
+    expect(body.formUrl).toContain('entry.2222222222=');
+    expect(body.expiresAt).toMatch(/Z$/);
+    expect(deps.db.insertCancelFormToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 401 when member session cookie is missing', async () => {
+    const app = createApp(makeMockDeps());
+    const res = await app.inject(injectOpts(URL, {}, { withCookie: false, withMemberCookie: false }));
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().errorCode).toBe('INVALID_MEMBER_SESSION');
+  });
+
+  it('returns 403 for invalid origin', async () => {
+    const app = createApp(makeMockDeps());
+    const res = await app.inject(
+      injectOpts(URL, {}, { origin: 'https://evil.com', withCookie: false, withMemberCookie: true }),
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/subscriptions/cancel/google-submit
+// ---------------------------------------------------------------------------
+
+describe('POST /v1/subscriptions/cancel/google-submit', () => {
+  const URL = '/v1/subscriptions/cancel/google-submit';
+
+  function createGoogleSubmitDeps() {
+    const activeMember = makeMember({
+      subscription_status: 'active',
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-05-01T00:00:00Z'),
+      role_state: 'granted',
+    });
+    const deps = makeMockDeps(activeMember);
+    const periodEnd = new Date('2025-05-01T00:00:00Z');
+    const updatedMember = makeMember({
+      subscription_status: 'canceled',
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+      payjp_plan_id: PLAN_ID,
+      cancel_requested_at: NOW,
+      access_end_at: periodEnd,
+      next_billing_at: periodEnd,
+      role_state: 'granted',
+    });
+    (deps.db.findMemberById as ReturnType<typeof vi.fn>).mockResolvedValue(activeMember);
+    (deps.db.updateMemberAfterCancel as ReturnType<typeof vi.fn>).mockResolvedValue(updatedMember);
+    (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makePayjpSubscription({ status: 'canceled' }),
+    );
+    return deps;
+  }
+
+  it('returns 200 on valid secret and token', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const linkRes = await app.inject(
+      injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
+    );
+    const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
+    const token = formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1];
+    expect(token).toBeTruthy();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'google-shared-secret',
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: decodeURIComponent(token ?? ''),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+    expect(deps.discord.removeRole).not.toHaveBeenCalled();
+    expect(deps.db.consumeCancelFormToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts legacy X-Google-Cancel-Secret when X-Cancel-Secret is absent', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const linkRes = await app.inject(
+      injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
+    );
+    const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
+    const token = formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1];
+    expect(token).toBeTruthy();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-google-cancel-secret': 'google-shared-secret',
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: decodeURIComponent(token ?? ''),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+  });
+
+  it('returns 401 when shared secret is invalid', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'wrong-secret',
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: 'not-a-valid-token',
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().errorCode).toBe('INVALID_GOOGLE_SECRET');
   });
 });

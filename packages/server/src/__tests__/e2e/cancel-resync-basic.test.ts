@@ -74,6 +74,14 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
 
       const payjpMock = makeMockPayjpClient();
+      vi.mocked(payjpMock.cancelSubscription).mockResolvedValue({
+        id: 'sub_test_e2e',
+        status: 'canceled',
+        current_period_end: Math.floor(accessEndAt.getTime() / 1000),
+        trial_end: null,
+        plan: { id: E2E_BILLING_CONFIG.allowedPlanIds[0], interval: 'month' },
+        metadata: {},
+      });
       const discordMock = makeMockDiscordClient();
       // clock を現在時刻に固定（access_end_at まで 15 日 = 1 ヶ月以内 → 受付期間内）
       const fixedNow = new Date();

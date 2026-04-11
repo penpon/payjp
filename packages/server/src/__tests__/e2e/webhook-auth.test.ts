@@ -23,6 +23,7 @@ import {
   buildSyncDepsForE2E,
   closePool,
   createTestDb,
+  E2E_PLAN_ROLE_MAPPING,
   E2E_WEBHOOK_TOKEN,
   makeWebhookEvent,
   type PgDbClient,
@@ -357,7 +358,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
       expect(rows.rows).toHaveLength(1);
       expect(rows.rows[0].processing_result).toBe('failed');
 
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      for (const roleId of Object.values(E2E_PLAN_ROLE_MAPPING)) {
+        expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', roleId);
+      }
     });
   });
 

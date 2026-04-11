@@ -10,6 +10,7 @@ import { formatDate } from './format.js';
 import type {
   BillingError,
   BillingFormState,
+  MemberRoleState,
   PayjpAdapter,
   PayjpCardElement,
   PlanDef,
@@ -88,26 +89,67 @@ export function renderSubscribed(
   subscription: SubscriptionInfo,
   plans: PlanDef[],
   onStartCancel?: () => void,
+  memberRoleState?: MemberRoleState | null,
 ): void {
   const plan = plans.find((p) => p.id === subscription.planId);
   const planName = plan?.name ?? subscription.planId ?? '不明';
 
-  const STATUS_LABELS: Record<string, string> = { active: '有効', trial: 'トライアル', canceled: '解約予定' };
+  const STATUS_LABELS: Record<string, string> = {
+    active: '有効',
+    trial: 'トライアル',
+    canceled: '退会済み',
+  };
   const statusLabel = STATUS_LABELS[subscription.status] ?? subscription.status;
+  const isWithdrawn = subscription.status === 'canceled';
+  const needsDiscordRoleConfirmation = isWithdrawn && (memberRoleState === 'unknown' || memberRoleState === 'granted');
+
+  const statusRowChildren: (Node | string)[] = [
+    el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
+    el('p', { class: 'subscribed-plan-name' }, [planName]),
+    el('div', { class: 'status-badge', role: 'status' }, [statusLabel]),
+  ];
 
   const cardChildren: (Node | string)[] = [
     el('h1', { class: 'heading' }, ['購読状況']),
-    el('div', { class: 'subscribed-status' }, [
-      el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
-      el('p', { class: 'subscribed-plan-name' }, [planName]),
-      el('div', { class: 'status-badge', role: 'status' }, [statusLabel]),
-    ]),
+    ...(needsDiscordRoleConfirmation
+      ? [
+          renderWarningBanner(
+            '課金停止は反映済みです。Discordロールの削除を確認中です。しばらくしてからページを再読み込みしてください。',
+          ),
+        ]
+      : []),
+    el(
+      'div',
+      {
+        class: `subscribed-status${needsDiscordRoleConfirmation ? ' subscribed-status--pending-discord' : ''}`,
+      },
+      statusRowChildren,
+    ),
     ...(subscription.accessEndAt
-      ? [el('p', { class: 'subscribed-detail' }, [`次回更新日: ${formatDate(subscription.accessEndAt)}`])]
+      ? [
+          el('p', { class: 'subscribed-detail' }, [
+            isWithdrawn
+              ? `ご利用終了日: ${formatDate(subscription.accessEndAt)}`
+              : `次回更新日: ${formatDate(subscription.accessEndAt)}`,
+          ]),
+        ]
       : []),
   ];
 
-  if (onStartCancel && subscription.status !== 'canceled') {
+  cardChildren.push(el('p', { class: 'subscribed-detail discord-linked-badge' }, ['Discord: 連携済み ✓']));
+
+  if (isWithdrawn) {
+    cardChildren.push(
+      el('hr', { class: 'cancel-separator' }),
+      el('div', { class: 'cancel-section' }, [
+        el('h2', { class: 'cancel-section-title' }, ['退会']),
+        el('p', { class: 'cancel-section-desc' }, [
+          '退会手続きが完了しています。現在の期間終了日までサービスをご利用いただけます。',
+        ]),
+        el('p', { class: 'cancel-section-withdrawn', role: 'status' }, ['退会済み']),
+      ]),
+    );
+  } else if (onStartCancel) {
     const cancelBtn = el('button', { type: 'button', class: 'cancel-button' }, ['退会する']);
     cancelBtn.addEventListener('click', onStartCancel);
 
@@ -116,7 +158,7 @@ export function renderSubscribed(
       el('div', { class: 'cancel-section' }, [
         el('h2', { class: 'cancel-section-title' }, ['退会']),
         el('p', { class: 'cancel-section-desc' }, [
-          '退会後も現在の期間終了日までサービスをご利用いただけます。退会申請はDiscordでの認証が必要です。',
+          '退会後も現在の期間終了日までサービスをご利用いただけます。Google Formにて退会理由を送信すると、送信後に課金停止とDiscordロールの反映が行われます。',
         ]),
         cancelBtn,
       ]),
@@ -139,7 +181,9 @@ function renderBillingForm(
   let email = state.email;
   let cardholderName = state.cardholderName;
   let consented = state.privacyConsented;
-  let cardComplete = false;
+  let cardNumberComplete = false;
+  let cardExpiryComplete = false;
+  let cardCvcComplete = false;
 
   // Plan selection
   const planContainer = el('div', { class: 'plan-grid', role: 'radiogroup', 'aria-label': 'プラン選択' });
@@ -218,8 +262,10 @@ function renderBillingForm(
     updateSubmitState();
   });
 
-  // PAY.JP card element mount point
-  const cardMountPoint = el('div', { id: 'payjp-card-element', class: 'payjp-mount' });
+  // PAY.JP card element mount points
+  const cardNumberMount = el('div', { id: 'payjp-card-number', class: 'payjp-mount' });
+  const cardExpiryMount = el('div', { id: 'payjp-card-expiry', class: 'payjp-mount' });
+  const cardCvcMount = el('div', { id: 'payjp-card-cvc', class: 'payjp-mount' });
 
   // Consent checkbox
   const checkbox = el('input', {
@@ -245,6 +291,7 @@ function renderBillingForm(
   );
 
   function updateSubmitState(): void {
+    const cardComplete = cardNumberComplete && cardExpiryComplete && cardCvcComplete;
     const valid =
       selectedPlanId !== '' && email.trim() !== '' && cardholderName.trim() !== '' && consented && cardComplete;
     if (valid) {
@@ -280,14 +327,36 @@ function renderBillingForm(
     el('div', { class: 'form-section' }, [
       el('h2', { class: 'form-section-title' }, ['お支払い情報']),
       el('div', { class: 'form-group' }, [
-        el('label', { class: 'form-label', for: 'billing-email' }, ['メールアドレス']),
+        el('label', { class: 'form-label', for: 'billing-email' }, [
+          'メールアドレス',
+          el('span', { class: 'required-badge' }, ['必須']),
+        ]),
         emailInput,
       ]),
       el('div', { class: 'form-group' }, [
-        el('label', { class: 'form-label', for: 'billing-name' }, ['カード名義（半角英字）']),
+        el('label', { class: 'form-label', for: 'billing-name' }, [
+          'カード名義（半角英字）',
+          el('span', { class: 'required-badge' }, ['必須']),
+        ]),
         nameInput,
       ]),
-      el('div', { class: 'form-group' }, [el('label', { class: 'form-label' }, ['カード情報']), cardMountPoint]),
+      el('div', { class: 'form-group' }, [
+        el('label', { class: 'form-label' }, ['カード番号', el('span', { class: 'required-badge' }, ['必須'])]),
+        cardNumberMount,
+      ]),
+      el('div', { class: 'card-row' }, [
+        el('div', { class: 'card-row-field' }, [
+          el('label', { class: 'form-label' }, ['有効期限', el('span', { class: 'required-badge' }, ['必須'])]),
+          cardExpiryMount,
+        ]),
+        el('div', { class: 'card-row-field' }, [
+          el('label', { class: 'form-label' }, [
+            'セキュリティコード',
+            el('span', { class: 'required-badge' }, ['必須']),
+          ]),
+          cardCvcMount,
+        ]),
+      ]),
     ]),
     el('div', { class: 'consent-row' }, [
       checkbox,
@@ -303,41 +372,65 @@ function renderBillingForm(
 
   container.appendChild(form);
 
-  // Mount PAY.JP card element after DOM insertion
+  // Mount PAY.JP card elements after DOM insertion
   if (payjpAdapter) {
     queueMicrotask(() => {
-      if (!container.querySelector('#payjp-card-element')) {
-        console.error('[billing] Card mount point #payjp-card-element not found in DOM');
-        cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
+      if (
+        !container.querySelector('#payjp-card-number') ||
+        !container.querySelector('#payjp-card-expiry') ||
+        !container.querySelector('#payjp-card-cvc')
+      ) {
+        console.error('[billing] Card mount points not found in DOM');
+        cardNumberMount.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
         return;
       }
       try {
-        const cardElement = payjpAdapter.createCardElement('#payjp-card-element');
-        callbacks.onCardElementReady?.(cardElement);
-        cardElement.on('change', (e) => {
-          cardComplete = e.complete;
-          updateSubmitState();
+        const cardElements = payjpAdapter.createCardElements({
+          cardNumber: '#payjp-card-number',
+          cardExpiry: '#payjp-card-expiry',
+          cardCvc: '#payjp-card-cvc',
+        });
+        callbacks.onCardElementReady?.(cardElements.cardNumber);
 
-          // Show/clear inline error
-          const existing = container.querySelector('.card-error');
-          if (e.error) {
-            if (existing) {
-              existing.textContent = e.error.message;
-            } else {
-              const errEl = el('div', { class: 'card-error', role: 'alert' }, [e.error.message]);
-              cardMountPoint.after(errEl);
+        const wireChange = (
+          element: import('./types.js').PayjpCardElement,
+          mountPoint: HTMLElement,
+          setComplete: (v: boolean) => void,
+        ): void => {
+          element.on('change', (e) => {
+            setComplete(e.complete);
+            updateSubmitState();
+
+            const existing = mountPoint.nextElementSibling;
+            if (e.error) {
+              if (existing?.classList.contains('card-error')) {
+                existing.textContent = e.error.message;
+              } else {
+                const errEl = el('div', { class: 'card-error', role: 'alert' }, [e.error.message]);
+                mountPoint.after(errEl);
+              }
+            } else if (existing?.classList.contains('card-error')) {
+              existing.remove();
             }
-          } else if (existing) {
-            existing.remove();
-          }
+          });
+        };
+
+        wireChange(cardElements.cardNumber, cardNumberMount, (v) => {
+          cardNumberComplete = v;
+        });
+        wireChange(cardElements.cardExpiry, cardExpiryMount, (v) => {
+          cardExpiryComplete = v;
+        });
+        wireChange(cardElements.cardCvc, cardCvcMount, (v) => {
+          cardCvcComplete = v;
         });
       } catch (err) {
         console.error('[billing] PAY.JP card element creation failed:', err);
-        cardMountPoint.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
+        cardNumberMount.textContent = 'カード入力欄の初期化に失敗しました。ページを再読み込みしてください。';
       }
     });
   } else {
-    cardMountPoint.textContent = 'カード入力欄を読み込めませんでした。ページを再読み込みしてください。';
+    cardNumberMount.textContent = 'カード入力欄を読み込めませんでした。ページを再読み込みしてください。';
   }
 }
 
@@ -355,16 +448,19 @@ function renderSubmitting(): HTMLDivElement {
 
 // --- Success step ---
 
-export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBackToTop: () => void): HTMLDivElement {
-  const plan = plans.find((p) => p.id === result.planId);
-  const planName = plan?.name ?? result.planId;
+function safeTrim(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBackToTop?: () => void): HTMLDivElement {
+  const planIdNorm = safeTrim(result.planId);
+  const plan = planIdNorm ? plans.find((p) => p.id === planIdNorm) : undefined;
+  const planName = plan?.name ?? (planIdNorm ? planIdNorm : 'プラン（参照できません）');
+  const accessEndNorm = safeTrim(result.accessEndAt);
 
   const statusLabel = result.trialApplied ? 'トライアル' : '有効';
 
-  const backBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
-  backBtn.addEventListener('click', onBackToTop);
-
-  return el('div', { class: 'card' }, [
+  const children: (Node | string)[] = [
     el('div', { class: 'success-container' }, [
       el('div', { class: 'success-icon-large', 'aria-hidden': 'true' }, ['\u2713']),
       el('h1', { class: 'success-heading' }, ['登録が完了しました']),
@@ -382,18 +478,25 @@ export function renderSuccess(result: SubscribeResponse, plans: PlanDef[], onBac
         ? [
             el('div', { class: 'result-row' }, [
               el('span', { class: 'result-label' }, ['トライアル期間']),
-              el('span', { class: 'result-value' }, [`${formatDate(result.accessEndAt)} まで`]),
+              el('span', { class: 'result-value' }, [accessEndNorm ? `${formatDate(accessEndNorm)} まで` : '—']),
             ]),
           ]
         : [
             el('div', { class: 'result-row' }, [
               el('span', { class: 'result-label' }, ['次回更新日']),
-              el('span', { class: 'result-value' }, [formatDate(result.accessEndAt)]),
+              el('span', { class: 'result-value' }, [accessEndNorm ? formatDate(accessEndNorm) : '—']),
             ]),
           ]),
     ]),
-    backBtn,
-  ]);
+  ];
+
+  if (onBackToTop) {
+    const backBtn = el('button', { type: 'button', class: 'secondary-button' }, ['トップに戻る']);
+    backBtn.addEventListener('click', onBackToTop);
+    children.push(backBtn);
+  }
+
+  return el('div', { class: 'card' }, children);
 }
 
 // --- Error step ---

@@ -18,9 +18,14 @@ export function mapCancelError(err: unknown): CancelUIError {
     return { kind: 'server_error', message: '予期しないエラーが発生しました。' };
   }
   switch (err.errorCode) {
+    case 'INVALID_MEMBER_SESSION':
+    case 'EXPIRED_MEMBER_SESSION':
     case 'INVALID_LINK_SESSION':
     case 'EXPIRED_LINK_SESSION':
     case 'CONSUMED_LINK_SESSION':
+    case 'INVALID_CANCEL_FORM_TOKEN':
+    case 'EXPIRED_CANCEL_FORM_TOKEN':
+    case 'CONSUMED_CANCEL_FORM_TOKEN':
       return { kind: 'session_expired', message: 'セッションが無効です。再度Discordでログインしてください。' };
     case 'NO_SUBSCRIPTION':
     case 'NO_PAYJP_SUBSCRIPTION':
@@ -55,6 +60,14 @@ export function mapCancelError(err: unknown): CancelUIError {
       return {
         kind: 'server_error',
         message: '決済サービスで退会を完了できませんでした。サポートまでお問い合わせください。',
+      };
+    case 'ROLE_REVOKE_FAILED':
+      return {
+        kind: 'inflight',
+        message: err.operationId
+          ? '退会処理は進みましたが、Discordロール削除の確認が必要です。以下のIDをサポートにお知らせください。'
+          : '退会処理は進みましたが、Discordロール削除の確認が必要です。サポートまでお問い合わせください。',
+        operationId: err.operationId,
       };
     default:
       if (err.operationId) {

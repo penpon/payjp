@@ -4,6 +4,7 @@
 Thumbs.db
 awesome-design-md/
 *.pdf
+.cursor/
 
 # Editor
 .vscode/settings.json
@@ -35,6 +36,9 @@ logs/
 # Test
 coverage/
 .nyc_output/
+playwright-report/
+test-results/
+blob-report/
 
 # Temp
 *.tmp

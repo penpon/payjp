@@ -4,7 +4,7 @@
  * PROP-BILL-042 〜 PROP-BILL-050, PROP-BILL-059〜061, PROP-BILL-063
  */
 
-import type { LinkSessionRecord, Member } from '@hayane/shared';
+import type { CancelFormTokenRecord, LinkSessionRecord, Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { handleCancel } from '../../shell/cancel.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
@@ -57,6 +57,7 @@ function makeLinkSession(overrides: Partial<LinkSessionRecord> = {}): LinkSessio
     id: 'link-session-cancel-id-001',
     link_session_token_hash: 'dummy-hash',
     discord_user_id: DISCORD_USER_ID,
+    discord_access_token_encrypted: null,
     expires_at: new Date(NOW.getTime() + 3600 * 1000),
     used_at: null,
     created_at: NOW,
@@ -80,9 +81,15 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: 'https://frontend.example.com',
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    discordPaidRoleId: 'role-001',
+    planRoleMapping: { plan_test: 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
+    googleFormCancelEmailEntryId: '1111111111',
+    googleFormCancelTokenEntryId: '2222222222',
+    googleFormCancelSecret: 'google-shared-secret',
+    googleFormCancelTokenSecret: 'google-token-secret',
+    googleFormCancelTokenTtlSeconds: 900,
   };
 }
 
@@ -92,9 +99,23 @@ function makeUpdatedMemberAfterCancel(member: Member): Member {
     cancel_requested_at: NOW,
     subscription_status: 'canceled',
     access_end_at: ACCESS_END_AT,
+    next_billing_at: ACCESS_END_AT,
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
+    role_state: 'granted',
+  };
+}
+
+function makeCancelFormToken(overrides: Partial<CancelFormTokenRecord> = {}): CancelFormTokenRecord {
+  return {
+    id: '00000000-0000-0000-0000-000000000555',
+    member_id: MEMBER_ID,
+    email: 'test@example.com',
+    expires_at: new Date(NOW.getTime() + 3600 * 1000),
+    used_at: null,
+    created_at: NOW,
+    ...overrides,
   };
 }
 
@@ -106,8 +127,21 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
     findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
+    upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
+    updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
+    findCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
+    consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
+    insertMemberSession: vi.fn().mockResolvedValue({
+      id: 'ms-1',
+      member_session_token_hash: 'h',
+      member_id: member.id,
+      expires_at: new Date(),
+      created_at: new Date(),
+    }),
+    findMemberSession: vi.fn().mockResolvedValue(null),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -115,6 +149,7 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     updateMemberAfterSubscribe: vi.fn().mockResolvedValue(undefined as never),
     updateMemberAfterCancel: vi.fn().mockResolvedValue(updatedMember),
     updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
+    clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
@@ -134,6 +169,9 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -220,24 +258,6 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.statusCode).toBe(409);
-      }
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // PROP-BILL-043: access_end_at required
-  // -------------------------------------------------------------------------
-  describe('PROP-BILL-043: access_end_at required', () => {
-    it('returns 409 when access_end_at IS NULL', async () => {
-      const deps = makeSuccessfulDeps({
-        subscription_status: 'active',
-        access_end_at: null,
-      });
-      const result = await handleCancel(makeCancelRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(409);
-        expect(result.errorCode).toBe('ACCESS_END_AT_NULL');
       }
     });
   });
@@ -391,7 +411,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
   // PROP-BILL-061: Cancel inflight guard
   // -------------------------------------------------------------------------
   describe('PROP-BILL-061: Cancel inflight guard', () => {
-    it('503 + existing operationId, link session NOT consumed', async () => {
+    it('503 + existing operationId after link session consumption', async () => {
       const existingOpId = 'existing-cancel-op-456';
       const deps = makeSuccessfulDeps({
         inflight_operation_id: existingOpId,
@@ -403,7 +423,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
         expect(result.statusCode).toBe(503);
         expect(result.operationId).toBe(existingOpId);
       }
-      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
+      expect(deps.db.consumeLinkSession).toHaveBeenCalled();
     });
   });
 
@@ -454,10 +474,10 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const idxCancel = callOrder.indexOf('cancelSubscription');
       const idxUpdateMember = callOrder.indexOf('updateMemberAfterCancel');
 
-      // findSession (early validation, step 1b) → Lock → findMember → consumeSession → setInflight → cancelSubscription → updateMember
+      // findSession → findMember(initial) → Lock → findMember(locked) → consumeSession → setInflight → cancelSubscription → updateMember
       expect(idxFindSession).toBeLessThan(idxLock);
-      expect(idxLock).toBeLessThan(idxFindMember);
-      expect(idxFindMember).toBeLessThan(idxConsumeSession);
+      expect(idxFindMember).toBeLessThan(idxLock);
+      expect(idxLock).toBeLessThan(idxConsumeSession);
       expect(idxConsumeSession).toBeLessThan(idxInflight);
       expect(idxInflight).toBeLessThan(idxCancel);
       expect(idxCancel).toBeLessThan(idxUpdateMember);

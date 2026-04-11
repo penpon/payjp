@@ -22,7 +22,10 @@ import {
   mapSubscriptionStatus,
   maskSensitiveLogFields,
   resolveEffectiveSubscriptionStatus,
+  resolveRoleIdForPlan,
+  shouldGrantPaidDiscordAccess,
   shouldGrantRole,
+  shouldSwapRole,
   shouldSyncRole,
   validateCliArgs,
   validateRequiredFields,
@@ -148,13 +151,13 @@ describe('PROP-SYNC-004: mapSubscriptionStatus', () => {
 
 // PROP-SYNC-005: shouldGrantRole
 describe('PROP-SYNC-005: shouldGrantRole', () => {
-  it('active/trial/canceled → true', () => {
+  it('active/trial → true', () => {
     expect(shouldGrantRole('active')).toBe(true);
     expect(shouldGrantRole('trial')).toBe(true);
-    expect(shouldGrantRole('canceled')).toBe(true);
   });
 
-  it('paused/deleted/null → false', () => {
+  it('canceled/paused/deleted/null → false', () => {
+    expect(shouldGrantRole('canceled')).toBe(false);
     expect(shouldGrantRole('paused')).toBe(false);
     expect(shouldGrantRole('deleted')).toBe(false);
     expect(shouldGrantRole(null)).toBe(false);
@@ -163,10 +166,34 @@ describe('PROP-SYNC-005: shouldGrantRole', () => {
   it('arbitrary other strings → false', () => {
     fc.assert(
       fc.property(fc.string(), (s) => {
-        fc.pre(!['active', 'trial', 'canceled'].includes(s));
+        fc.pre(!['active', 'trial'].includes(s));
         expect(shouldGrantRole(s)).toBe(false);
       }),
     );
+  });
+});
+
+describe('shouldGrantPaidDiscordAccess', () => {
+  const now = new Date('2026-04-06T12:00:00Z');
+  const future = new Date('2026-05-01T00:00:00Z');
+  const past = new Date('2026-03-01T00:00:00Z');
+
+  it('active/trial → true', () => {
+    expect(shouldGrantPaidDiscordAccess('active', past, now)).toBe(true);
+    expect(shouldGrantPaidDiscordAccess('trial', null, now)).toBe(true);
+  });
+
+  it('canceled with future access_end → true', () => {
+    expect(shouldGrantPaidDiscordAccess('canceled', future, now)).toBe(true);
+  });
+
+  it('canceled with future access_end as ISO string (timestamptz text) → true', () => {
+    expect(shouldGrantPaidDiscordAccess('canceled', '2026-05-01T00:00:00.000Z', now)).toBe(true);
+  });
+
+  it('canceled with past or null access_end → false', () => {
+    expect(shouldGrantPaidDiscordAccess('canceled', past, now)).toBe(false);
+    expect(shouldGrantPaidDiscordAccess('canceled', null, now)).toBe(false);
   });
 });
 
@@ -556,6 +583,11 @@ describe('PROP-SYNC-019: evaluateSubscriptionSearchResult', () => {
     const candidates = [{ id: 'sub_1', status: 'active' }];
     expect(evaluateSubscriptionSearchResult(candidates, 'user_1', null)).toBe('fail-close');
   });
+
+  it('1 candidate with member_id metadata match (no discord) → single-match', () => {
+    const candidates = [{ id: 'sub_1', status: 'active', metadata: { member_id: 'mem-a', operation_id: 'op1' } }];
+    expect(evaluateSubscriptionSearchResult(candidates, '', null, 'mem-a')).toBe('single-match');
+  });
 });
 
 // PROP-SYNC-020: isInflightOperationStale
@@ -574,5 +606,51 @@ describe('PROP-SYNC-020: isInflightOperationStale', () => {
     const now = new Date('2026-04-06T12:31:00Z');
     const started = new Date('2026-04-06T12:00:00Z'); // 31 min ago
     expect(isInflightOperationStale(started, now, 30)).toBe(true);
+  });
+});
+
+// resolveRoleIdForPlan
+describe('resolveRoleIdForPlan', () => {
+  const mapping = { plan_starter: 'role_s', plan_business: 'role_b', plan_enterprise: 'role_e' };
+
+  it('known planId → mapped roleId', () => {
+    expect(resolveRoleIdForPlan('plan_starter', mapping)).toBe('role_s');
+    expect(resolveRoleIdForPlan('plan_business', mapping)).toBe('role_b');
+    expect(resolveRoleIdForPlan('plan_enterprise', mapping)).toBe('role_e');
+  });
+
+  it('unknown planId → null', () => {
+    expect(resolveRoleIdForPlan('plan_unknown', mapping)).toBeNull();
+  });
+
+  it('null planId → null', () => {
+    expect(resolveRoleIdForPlan(null, mapping)).toBeNull();
+  });
+
+  it('empty mapping → null for any planId', () => {
+    expect(resolveRoleIdForPlan('plan_starter', {})).toBeNull();
+  });
+});
+
+// shouldSwapRole
+describe('shouldSwapRole', () => {
+  it('same planId → false', () => {
+    expect(shouldSwapRole('plan_a', 'plan_a')).toBe(false);
+  });
+
+  it('different planIds → true', () => {
+    expect(shouldSwapRole('plan_a', 'plan_b')).toBe(true);
+  });
+
+  it('null oldPlanId → false', () => {
+    expect(shouldSwapRole(null, 'plan_b')).toBe(false);
+  });
+
+  it('null newPlanId → false', () => {
+    expect(shouldSwapRole('plan_a', null)).toBe(false);
+  });
+
+  it('both null → false', () => {
+    expect(shouldSwapRole(null, null)).toBe(false);
   });
 });

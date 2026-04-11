@@ -12,7 +12,7 @@
 | R2 | 3プラン購読開始 | `T-P0-02`, `T-P0-03` |
 | R3 | 初回1か月課金 + 2か月目/3か月目無料 | `T-P0-02` |
 | R4 | 4か月目以降月次課金 | `T-P0-02` |
-| R5 | cancel受付境界・終了日維持 | `T-P0-05` |
+| R5 | Google Form退会受付 + 即時退会完了 | `T-P0-05` |
 | R6 | PAY.JP Webhook反映 | `T-P0-07` |
 | R7 | ロール付与/剥奪 | `T-P0-02`, `T-P0-06`, `T-P0-07` |
 | R8 | 日次再同期・手動再同期CLI | `T-P0-04`, `T-P0-06` |
@@ -24,8 +24,8 @@
 2. `T-P0-02` 購読作成（3プラン・3DS・Origin・事前検証）
 3. `T-P0-03` 並列登録と既存契約ガード
 4. `T-P0-04` subscribe不確定失敗 `503 + operationId` とCLI復旧
-5. `T-P0-05` cancel境界・冪等・不確定失敗復旧
-6. `T-P0-06` `access_end_at` / `paused` / `deleted` の剥奪
+5. `T-P0-05` Google Form退会・冪等・不確定失敗復旧
+6. `T-P0-06` `canceled`（`access_end_at` 到達後）/ `paused` / `deleted` の剥奪
 7. `T-P0-07` Webhook fail-close・冪等・古いイベント無視・ログ非保存
 
 ## 2.1 `deep-research-report.md` 由来の固定検証観点
@@ -35,7 +35,7 @@
 | Webhook中心 + 冪等 + 順不同耐性 | `T-P0-04`, `T-P0-07` | - |
 | 署名検証 + fail-close + 応答境界固定 | `T-P0-07` | - |
 | Discord API `429/5xx` 自己修復 | `T-P0-06` | - |
-| 課金停止状態（`paused/deleted/不明status`）の安全側剥奪 | `T-P0-06`, `T-P0-07` | - |
+| 課金停止状態（`paused/deleted/不明status`）の安全側剥奪、`canceled` の `access_end_at` 猶予 | `T-P0-06`, `T-P0-07` | - |
 | ベンダー未確定事項の解消（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順） | - | Go-Live前必須（実装着手ブロッカーではない。Day3まで一次回答収集、Day10前に採用判断固定） |
 
 ## 3. テストID詳細（Red/Green/Refactor固定）
@@ -207,60 +207,63 @@
 ### T-P0-05（R5）
 
 - Red:
-  - 受付開始日前に `409` にならない
+  - `POST /v1/subscriptions/cancel/google-form-link` が `__Host-member_session` なしでもURLを返してしまう
   - `Origin` 欠落/`Origin: null` で `403` にならない
-  - `Origin` 正規化比較が崩れ、port違いを誤って通す
-  - 消費済み `__Host-link_session` 再送で `401` にならない
-  - 並列 `cancel` でロックが効かず、PAY.JP cancel API が重複実行される
+  - Google Form用トークンにTTL・一回性・改ざん検知が無い
+  - Google Form URLにメールまたはトークンが事前入力されない
+  - `POST /v1/subscriptions/cancel/google-submit` が共有シークレット不一致でも受理される
+  - Google送信メールとトークン内メールが不一致でも受理される
+  - 並列 `google-submit` でロックが効かず、PAY.JP cancel API が重複実行される
   - `active/trial/canceled` 既存購読が無いケースで `409` にならない
   - `payjp_subscription_id` 未設定で `409` にならず、cancel APIが実行される
   - `payjp_subscription_id` 欠落時の再構築で `GET /v1/customers/:id/subscriptions` を使わず、手動判断に依存して誤ったsubscriptionを採用する
   - `GET /v1/customers/:id/subscriptions` のページングを先頭1ページで打ち切る、または `offset<=900` 上限到達時の `has_more=true` を未定義のまま走査して誤判定/無限走査になる
-  - `metadata.discord_user_id` 欠落かつ `status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.access_end_at))`（UTC・整数秒）一致のケースで補正保存できず、退会不能になる
-  - `metadata.discord_user_id` 欠落時に `current_period_end != floor(extract(epoch from members.access_end_at))`（UTC・整数秒）または `members.access_end_at IS NULL` でも誤って補正採用してしまう
+  - `metadata.discord_user_id` 欠落かつ `status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）一致のケースで補正保存できず、退会不能になる
+  - `metadata.discord_user_id` 欠落時に `current_period_end != floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）または `members.next_billing_at IS NULL` でも誤って補正採用してしまう
   - `payjp_subscription_id` 再構築候補が0件/複数件でもfail-closeで停止せず、cancelが実行される
   - `cancel_requested_at` 既存時にPAY.JP cancel APIが再実行される
   - `inflight_operation_id` 既存時に即 `503 + 既存operationId` にならない
-  - `inflight_operation_id` 既存時の `503` 応答で `__Host-link_session` が誤って消費される
-  - `access_end_at` 未設定で `409` にならない
-  - 月末繰上げ境界（例: `3/31`）が不正
   - 不確定失敗で `503 + operationId` が返らない
   - PAY.JP書き込み前の確定失敗で `inflight_operation_*` がクリアされない
   - PAY.JP書き込み後の確定失敗で整合未確認でも `inflight_operation_*` が誤ってクリアされる
-  - CLI復旧で未cancel時/済み時の分岐が無く、cancel API再実行回数が保証されない
+  - 退会処理のDB確定失敗時に不整合が残る
+  - Google送信後の退会で `access_end_at` が `current_period_end` 相当に設定されず、利用終了日がずれる
   - PAY.JP書き込み実行時/不確定失敗時に `operationId` ログキーが欠落する
   - 解約APIログで raw header/body またはカード情報が保存される、あるいは固定キー機密マスクが行われない
-  - `POST /v1/subscriptions/cancel` 成功レスポンスの `cancelEffectiveAt` / `roleRemovalAt` が RFC 3339 UTC 文字列で固定されず、型揺れを許してしまう
+  - `POST /v1/subscriptions/cancel/google-submit` 成功レスポンスの `cancelEffectiveAt` / `roleRemovalAt` が RFC 3339 UTC 文字列で固定されず、型揺れを許してしまう
 - Green:
-  - JST 1か月前同日00:00境界判定（存在しない日は月末繰上げ）
+  - `POST /v1/subscriptions/cancel/google-form-link` は `__Host-member_session` と `Origin` を検証し、署名付きワンタイムトークン入りのGoogle Form URLを返す
   - `Origin` 欠落/不一致/`Origin: null` は `403` を返す
   - `Origin` は `scheme+host+port` 正規化比較で厳密検証
-  - `pg_advisory_lock(discord_user_id::bigint)` により並列 `cancel` を排他する
+  - Google Formトークンは TTL・一回性・改ざん検知を持ち、同一トークンの再送は冪等成功または明示失敗に収束する
+  - `X-Cancel-Secret`（または移行期間の旧 `X-Google-Cancel-Secret`）不一致は `401` を返す
+  - `pg_advisory_lock(member_id)` 相当の排他により並列 `google-submit` を排他する
   - `active/trial/canceled` 既存購読が無い場合は `409`
   - `payjp_subscription_id` 未設定は `409` を返し、再同期後の再実行を要求する
   - `payjp_subscription_id` 欠落時は `GET /v1/customers/:id/subscriptions` を `limit=100`・`offset=0,100,200,...` で `has_more=false` まで走査し、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id == discord_user_id` が1件のみの場合に補正保存する。`offset<=900` 上限到達時に `has_more=true` の場合は一致件数に関わらず fail-close で停止する（cancel API実行禁止、`inflight_operation_*` 解除禁止）
-  - `metadata.discord_user_id` 欠落時は、`status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.access_end_at))`（UTC・整数秒）一致の場合に限りその1件を補正保存し、0件または複数件（または `members.access_end_at IS NULL` / 不一致）はfail-closeで停止する
+  - `metadata.discord_user_id` 欠落時は、`status in (active,trial,canceled,paused)` の候補が1件のみかつ `current_period_end == floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）一致の場合に限りその1件を補正保存し、0件または複数件（または `members.next_billing_at IS NULL` / 不一致）はfail-closeで停止する
   - `members.payjp_customer_id` 欠落時は fail-close（cancel実行/`inflight_operation_*` 解除禁止）とし、`member_impact_logs` 記録とエスカレーションを行う
   - 候補が0件または複数件の場合は確定不能としてfail-closeで停止し、`inflight_operation_*` を解除せずcancelを実行しない
-  - 初回cancelのみPAY.JP cancel API実行、消費済みCookie再送は `401`、再OAuth後再実行は冪等 `200`（PAY.JP再呼び出しなし）
+  - 初回 `google-submit` のみPAY.JP cancel API実行、再送時はPAY.JP再呼び出しなしで冪等 `200` となる
   - PAY.JP cancel APIは `members.payjp_subscription_id` 指定で実行する
   - `inflight_operation_id` 既存時は即 `503 + 既存operationId`（PAY.JP書き込み0回）
-  - `inflight_operation_id` 既存時は `__Host-link_session` 未消費で返し、再OAuthなしで同一Cookie再送しても再度 `503` を返す
   - PAY.JP書き込み前の確定失敗では `inflight_operation_*` をクリアする
   - PAY.JP書き込み後の確定失敗では整合確認できた場合のみ `inflight_operation_*` をクリアする
   - CLI復旧で未cancel時のみcancel APIを1回実行し、cancel済みはAPI再実行なしで反映のみ行う
   - 不確定失敗時は `inflight_operation_*` 保持で `503`
+  - 成功時は `subscription_status='canceled'`, `access_end_at=current_period_end`, `next_billing_at=current_period_end`, `role_state='granted'`（期間内）を満たす
+  - DB確定失敗時は `503` を返し、再同期で回復できる
   - CLI再同期で整合回復
   - 成功レスポンスは `{ ok: true, memberId: uuid文字列, cancelEffectiveAt: RFC3339 UTC文字列, roleRemovalAt: RFC3339 UTC文字列 }` を満たすことを検証する
   - PAY.JP書き込み実行時/不確定失敗時の `operationId` 必須ログを検証する
   - 解約APIログで raw header/body 非保存、カード情報非保存/非出力、固定キー機密マスクを検証
 - Refactor:
-  - 日付境界計算ロジックを純関数化
-  - cancel冪等判定とoperation管理の責務分離
+  - Google Formトークン生成/検証ロジックを純関数化
+  - cancel冪等判定とロール維持（`access_end_at` まで）の責務分離
 - モック/注入要件:
-  - JST固定クロック注入
+  - Google Apps Script 相当のヘッダ/ボディ送信をスタブ化
   - **決定的503注入**: cancel API呼び出し後にtimeoutを発生
-  - A/Bテストユーザー切替をテストデータで固定
+  - Discordロール剥奪失敗を注入可能にする
 - 受け入れ証跡:
   - 実施日時:
   - コマンドorテストID: `T-P0-05`
@@ -270,15 +273,15 @@
 ### T-P0-06（R7/R8）
 
 - Red:
-  - `access_end_at` 到達後にロールが残る
-  - `paused/deleted` でロール剥奪されない
+  - `canceled` かつ `access_end_at > now` の間にロール剥奪される
+  - `paused/deleted` でロール剥奪されない（安全側剥奪が効かない）
   - ロール同期で Discord API `429/5xx` 発生時に短時間リトライ（最大3回）が走らない
   - 日次再同期でPAY.JP `subscription 404` を `deleted` 扱いできない
   - 手動CLIの `--discord-user-id` / `--all` 経路で再同期できない
   - 不整合解消時に同一 `member_id + issue_code` の `member_impact_logs` だけをクローズできない
   - `failed_count` が未出力、または `resolved_at IS NULL` 件数と一致しない
 - Green:
-  - Webhookまたは日次再同期で剥奪条件を適用
+  - Webhookまたは日次再同期で `canceled`（`access_end_at` 到達後）/ `paused` / `deleted` の剥奪条件を適用
   - ロール同期は Discord API `429/5xx` に対して短時間リトライ最大3回（`0秒/1秒/2秒` 待機、各回timeout `1秒`、総処理 `6秒` 以内）を検証する
   - `subscription 404` を `deleted` 扱いで補正
   - `member_impact_logs` の未解決は同一 `member_id + issue_code` をキーに再同期で解消
@@ -380,3 +383,14 @@
 - `failed_count > 0` 時の同日中復旧継続の実施記録（再同期再実行時刻、担当者、結果）
 - 6時間超確定不能時のエスカレーション記録（解除可否/担当者/実施時刻、該当時のみ）:
 - `deep-research-report.md` 未確定事項3件（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順）のベンダー回答ソースと採用判断:
+
+## 6. Post-MVP 拡張（CR-005 / CR-006 管理画面）
+
+- **管理画面（運用UI）は MVP の R1–R9 / `T-P0-01`〜`T-P0-07` の対象外**である。Go-Live 判定に新規テストIDは不要。
+- 実装時は別Issueで **受け入れテストIDを新設**し、本マトリクスへ追記する。境界・認証・段階導入の正本は `docs/admin-console-boundary.md` と `2weeks-spec.md` の **CR-005 / CR-006** を参照する。
+- 追加候補の検証観点は以下とする。
+  - `T-ADM-01`: `admin.and--line.com` が Cloudflare Access 未通過では origin に到達できない
+  - `T-ADM-02`: 許可対象外ユーザが `admin.and--line.com` にログインできない
+  - `T-ADM-03`: Phase A が read-only で、副作用操作を持たない
+  - `T-ADM-04`: Phase B の緊急操作で理由入力と監査ログが必須
+  - `T-ADM-05`: 緊急操作が `inflight_operation_*` / fail-close ルールを破らない

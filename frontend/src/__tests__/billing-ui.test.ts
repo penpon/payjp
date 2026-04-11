@@ -18,15 +18,17 @@ function createMockCallbacks(): BillingCallbacks {
   };
 }
 
+function createMockElement() {
+  return { mount: vi.fn(), unmount: vi.fn(), clear: vi.fn(), on: vi.fn() };
+}
+
 function createMockPayjpAdapter(): PayjpAdapter {
-  const mockElement = {
-    mount: vi.fn(),
-    unmount: vi.fn(),
-    clear: vi.fn(),
-    on: vi.fn(),
-  };
   return {
-    createCardElement: vi.fn().mockReturnValue(mockElement),
+    createCardElements: vi.fn().mockReturnValue({
+      cardNumber: createMockElement(),
+      cardExpiry: createMockElement(),
+      cardCvc: createMockElement(),
+    }),
     createToken: vi.fn().mockResolvedValue({ tokenId: 'tok_test' }),
   };
 }
@@ -74,10 +76,19 @@ describe('billing-ui', () => {
       expect(container.querySelector('#billing-name')).not.toBeNull();
     });
 
-    it('should render PAY.JP card mount point', () => {
+    it('should render PAY.JP card mount points', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 
-      expect(container.querySelector('#payjp-card-element')).not.toBeNull();
+      expect(container.querySelector('#payjp-card-number')).not.toBeNull();
+      expect(container.querySelector('#payjp-card-expiry')).not.toBeNull();
+      expect(container.querySelector('#payjp-card-cvc')).not.toBeNull();
+    });
+
+    it('should render required badges on all form labels', () => {
+      renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
+
+      const badges = container.querySelectorAll('.required-badge');
+      expect(badges.length).toBe(5);
     });
 
     it('should render consent checkbox and privacy link', () => {
@@ -165,14 +176,23 @@ describe('billing-ui', () => {
 
       await Promise.resolve();
 
-      const mockElement = vi.mocked(payjp.createCardElement).mock.results[0]?.value as {
-        on: (ev: string, cb: (e: { complete: boolean }) => void) => void;
-      };
-      const changeCb = vi.mocked(mockElement.on).mock.calls.find((c) => c[0] === 'change')?.[1] as (e: {
-        complete: boolean;
-      }) => void;
-      expect(changeCb).toBeDefined();
-      changeCb({ complete: true });
+      type MockEl = ReturnType<typeof createMockElement>;
+      type MockCardElements = { cardNumber: MockEl; cardExpiry: MockEl; cardCvc: MockEl };
+      const cardElements = vi.mocked(payjp.createCardElements).mock.results[0]?.value as MockCardElements;
+      const getChangeCb = (mockEl: MockEl) =>
+        vi.mocked(mockEl.on).mock.calls.find((c) => c[0] === 'change')?.[1] as
+          | ((e: { complete: boolean }) => void)
+          | undefined;
+
+      const numberCb = getChangeCb(cardElements.cardNumber);
+      const expiryCb = getChangeCb(cardElements.cardExpiry);
+      const cvcCb = getChangeCb(cardElements.cardCvc);
+      expect(numberCb).toBeDefined();
+      expect(expiryCb).toBeDefined();
+      expect(cvcCb).toBeDefined();
+      numberCb?.({ complete: true });
+      expiryCb?.({ complete: true });
+      cvcCb?.({ complete: true });
 
       const btn = container.querySelector('.submit-button') as HTMLButtonElement;
       expect(btn.hasAttribute('disabled')).toBe(true);
@@ -512,6 +532,64 @@ describe('billing-ui', () => {
       );
 
       expect(container.querySelector('.cancel-button')).toBeNull();
+    });
+
+    it('should show plan name, canceled badge, and withdrawn cancel section when status is canceled', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+      );
+
+      expect(container.querySelector('.subscribed-plan-name')?.textContent).toBe('ビジネスプラン');
+      expect(container.querySelector('.status-badge')?.textContent).toBe('退会済み');
+      expect(container.textContent).toContain('ご利用終了日');
+      expect(container.textContent).not.toContain('次回更新日');
+      expect(container.textContent).toContain('2026/05/07');
+      expect(container.querySelector('.cancel-section')).not.toBeNull();
+      expect(container.querySelector('.cancel-section-withdrawn')?.textContent).toBe('退会済み');
+      expect(container.querySelector('.cancel-section-desc')?.textContent).toContain('退会手続きが完了しています');
+      expect(container.querySelector('.cancel-button')).toBeNull();
+    });
+
+    it('should show warning when canceled but Discord role state is unknown', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        undefined,
+        'unknown',
+      );
+
+      expect(container.querySelector('.warning-banner')).not.toBeNull();
+      expect(container.textContent).toContain('Discordロールの削除を確認中');
+      expect(
+        container.querySelector('.subscribed-status')?.classList.contains('subscribed-status--pending-discord'),
+      ).toBe(true);
+    });
+
+    it('should not show Discord pending warning when canceled and role revoked', () => {
+      renderSubscribed(
+        container,
+        { status: 'canceled', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        undefined,
+        'revoked',
+      );
+
+      expect(container.querySelector('.warning-banner')).toBeNull();
+    });
+
+    it('should describe Google Form cancel flow in cancel section for active users', () => {
+      renderSubscribed(
+        container,
+        { status: 'active', planId: 'plan_business', accessEndAt: '2026-05-07T00:00:00Z' },
+        PLANS,
+        vi.fn(),
+      );
+
+      expect(container.querySelector('.cancel-section-desc')?.textContent).toContain('Google Form');
+      expect(container.querySelector('.cancel-section-desc')?.textContent).not.toContain('Discordでの認証');
     });
 
     it('should show subscription status for active user', () => {

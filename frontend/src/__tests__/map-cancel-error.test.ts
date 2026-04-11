@@ -20,6 +20,11 @@ describe('mapCancelError', () => {
     });
   });
 
+  it('maps INVALID_MEMBER_SESSION to session_expired', () => {
+    const err = new CancelError(401, 'INVALID_MEMBER_SESSION', undefined, 'Not found');
+    expect(mapCancelError(err).kind).toBe('session_expired');
+  });
+
   it('maps EXPIRED_LINK_SESSION to session_expired', () => {
     const err = new CancelError(401, 'EXPIRED_LINK_SESSION', undefined, 'Expired');
     expect(mapCancelError(err).kind).toBe('session_expired');
@@ -45,6 +50,15 @@ describe('mapCancelError', () => {
     expect(mapCancelError(err)).toEqual({
       kind: 'server_error',
       message: '決済サービスで退会を完了できませんでした。サポートまでお問い合わせください。',
+    });
+  });
+
+  it('maps ROLE_REVOKE_FAILED to inflight with support message', () => {
+    const err = new CancelError(503, 'ROLE_REVOKE_FAILED', 'op-789', 'Role revoke failed');
+    expect(mapCancelError(err)).toEqual({
+      kind: 'inflight',
+      message: '退会処理は進みましたが、Discordロール削除の確認が必要です。以下のIDをサポートにお知らせください。',
+      operationId: 'op-789',
     });
   });
 

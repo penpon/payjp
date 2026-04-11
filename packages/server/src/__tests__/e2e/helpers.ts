@@ -7,13 +7,29 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import type { BillingConfig, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
+import type { AuthConfig } from '@hayane/auth-service';
+import type { BillingConfig, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
 import type { CliDeps, WebhookHandlerDeps } from '@hayane/sync-service';
 import type pg from 'pg';
 import { vi } from 'vitest';
-import { buildApp } from '../../app.js';
+import type { buildApp } from '../../app.js';
+import {
+  buildE2EAppPlain,
+  E2E_BILLING_CONFIG,
+  E2E_PLAN_ROLE_MAPPING,
+  E2E_WEBHOOK_TOKEN,
+  makePlainDiscordClient,
+  makePlainPayjpClient,
+} from '../../e2e/e2e-mocks.js';
 import type { SyncDeps } from '../../routes/sync.routes.js';
+
+export {
+  E2E_AUTH_CONFIG,
+  E2E_BILLING_CONFIG,
+  E2E_PLAN_ROLE_MAPPING,
+  E2E_WEBHOOK_TOKEN,
+} from '../../e2e/e2e-mocks.js';
 
 // ---------------------------------------------------------------------------
 // DB セットアップ
@@ -23,7 +39,7 @@ export const TEST_DB_URL = process.env.DATABASE_URL_TEST ?? process.env.DATABASE
 
 /** TRUNCATE 順: FK 依存順（member_impact_logs は members を参照するため先に消す） */
 const TRUNCATE_SQL = `
-  TRUNCATE member_impact_logs, payjp_events, discord_link_sessions, oauth_states, members
+  TRUNCATE member_impact_logs, cancel_form_tokens, member_sessions, payjp_events, discord_link_sessions, oauth_states, members
   CASCADE
 `;
 
@@ -40,74 +56,31 @@ export async function truncateAll(pool: pg.Pool): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Mock ファクトリ
+// Mock ファクトリ（Vitest spy でラップ — e2e-mocks の素実装を再利用）
 // ---------------------------------------------------------------------------
 
-/** PAY.JP のトークンIDは `tok_` で始まる。不正な文字列は拒否し、本番に近い経路（422）を E2E で再現する。 */
-const PAYJP_TOKEN_ID_PATTERN = /^tok_[0-9a-zA-Z_]+$/;
-
 export function makeMockPayjpClient(): PayjpClient {
-  const trialEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
+  const p = makePlainPayjpClient();
   return {
-    fetchToken: vi.fn().mockImplementation(async (tokenId: string) => {
-      if (!PAYJP_TOKEN_ID_PATTERN.test(tokenId)) {
-        throw new Error('No such token');
-      }
-      return {
-        id: 'tok_test_e2e',
-        used: false,
-        three_d_secure_status: 'verified',
-        card: { id: 'car_test_e2e' },
-      };
-    }),
-    createCustomer: vi.fn().mockResolvedValue({
-      id: 'cus_test_e2e',
-      metadata: {},
-    }),
-    createCharge: vi.fn().mockResolvedValue({
-      id: 'ch_test_e2e',
-      amount: 1000,
-      paid: true,
-      metadata: {},
-    }),
-    createSubscription: vi.fn().mockResolvedValue({
-      id: 'sub_test_e2e',
-      status: 'trial',
-      current_period_end: trialEnd,
-      trial_end: trialEnd,
-      plan: { id: 'plan_e2e', interval: 'month' },
-      metadata: {},
-    }),
-    cancelSubscription: vi.fn().mockResolvedValue({
-      id: 'sub_test_e2e',
-      status: 'canceled',
-      current_period_end: Math.floor(Date.now() / 1000),
-      trial_end: null,
-      plan: { id: 'plan_e2e', interval: 'month' },
-      metadata: {},
-    }),
-    fetchCustomer: vi.fn().mockResolvedValue({ id: 'cus_test_e2e', metadata: {} }),
-    fetchCharge: vi.fn().mockResolvedValue({
-      id: 'ch_test_e2e',
-      amount: 1000,
-      paid: true,
-      metadata: {},
-    }),
-    fetchSubscription: vi.fn().mockResolvedValue({
-      id: 'sub_test_e2e',
-      status: 'trial',
-      current_period_end: trialEnd,
-      trial_end: trialEnd,
-      plan: { id: 'plan_e2e', interval: 'month' },
-      metadata: {},
-    }),
+    fetchToken: vi.fn().mockImplementation((tokenId: string) => p.fetchToken(tokenId)),
+    createCustomer: vi.fn().mockImplementation((params) => p.createCustomer(params)),
+    createCharge: vi.fn().mockImplementation((params) => p.createCharge(params)),
+    createSubscription: vi.fn().mockImplementation((params) => p.createSubscription(params)),
+    cancelSubscription: vi.fn().mockImplementation((id) => p.cancelSubscription(id)),
+    fetchCustomer: vi.fn().mockImplementation((id) => p.fetchCustomer(id)),
+    fetchCharge: vi.fn().mockImplementation((id) => p.fetchCharge(id)),
+    fetchSubscription: vi.fn().mockImplementation((id) => p.fetchSubscription(id)),
   };
 }
 
 export function makeMockDiscordClient(): DiscordClient {
+  const p = makePlainDiscordClient();
   return {
-    checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
-    assignRole: vi.fn().mockResolvedValue(undefined),
+    checkMembership: vi.fn().mockImplementation((a, b, c) => p.checkMembership(a, b, c)),
+    assignRole: vi.fn().mockImplementation((a, b, c) => p.assignRole(a, b, c)),
+    removeRole: vi.fn().mockImplementation((a, b, c) => p.removeRole(a, b, c)),
+    addMemberToGuild: vi.fn().mockImplementation((a, b, c, d) => p.addMemberToGuild(a, b, c, d)),
+    revokeToken: vi.fn().mockImplementation((t) => p.revokeToken(t)),
   };
 }
 
@@ -115,39 +88,23 @@ export function makeMockDiscordClient(): DiscordClient {
 // アプリビルダー
 // ---------------------------------------------------------------------------
 
-export const E2E_BILLING_CONFIG: BillingConfig = {
-  frontendBaseUrl: 'https://example.com',
-  allowedPlanIds: ['plan_e2e', 'plan_e2e_standard', 'plan_e2e_premium'],
-  discordGuildId: 'guild-e2e-test',
-  discordPaidRoleId: 'role-e2e-test',
-  initialChargeAmount: 1000,
-  initialChargeAmountCurrency: 'jpy',
-};
-
-export const E2E_WEBHOOK_TOKEN = 'whsec_e2e_test_token';
-
 export function buildSyncDepsForE2E(
   pool: pg.Pool,
-  syncRole: (userId: string, action: 'grant' | 'revoke') => Promise<void> = vi.fn().mockResolvedValue(undefined),
+  syncRole: (userId: string, action: 'grant' | 'revoke', roleId: string) => Promise<void> = vi
+    .fn()
+    .mockResolvedValue(undefined),
 ): SyncDeps {
   const webhookDeps: WebhookHandlerDeps = {
     db: createPgPool(pool),
     payjpWebhookToken: E2E_WEBHOOK_TOKEN,
     expectedLivemode: false,
     discordGuildId: E2E_BILLING_CONFIG.discordGuildId,
-    discordRoleId: E2E_BILLING_CONFIG.discordPaidRoleId,
+    planRoleMapping: E2E_PLAN_ROLE_MAPPING,
     syncRole,
     log: vi.fn(),
   };
   return { webhookDeps };
 }
-
-export const E2E_AUTH_CONFIG = {
-  frontendBaseUrl: 'https://example.com',
-  discordClientId: 'test-client-id',
-  discordClientSecret: 'test-client-secret',
-  discordRedirectUri: 'https://api.example.com/v1/auth/discord/callback',
-};
 
 export interface E2EAppOverrides {
   payjp?: PayjpClient;
@@ -156,20 +113,16 @@ export interface E2EAppOverrides {
   clock?: () => Date;
   generateOperationId?: () => string;
   billingConfig?: Partial<BillingConfig>;
+  /** Merge into E2E auth config (e.g. local browser E2E origin + redirect URI). `db` is always `pgDb`. */
+  authConfig?: Partial<Omit<AuthConfig, 'db'>>;
 }
 
 export function buildE2EApp(pgDb: PgDbClient, overrides: E2EAppOverrides = {}) {
-  const config = { ...E2E_BILLING_CONFIG, ...overrides.billingConfig };
-  const billingDeps: BillingDeps = {
-    db: pgDb,
+  return buildE2EAppPlain(pgDb, {
+    ...overrides,
     payjp: overrides.payjp ?? makeMockPayjpClient(),
     discord: overrides.discord ?? makeMockDiscordClient(),
-    config,
-    clock: overrides.clock ?? (() => new Date()),
-    generateOperationId: overrides.generateOperationId ?? (() => randomUUID()),
-  };
-
-  return buildApp({ ...E2E_AUTH_CONFIG, db: pgDb }, billingDeps, overrides.syncDeps);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -228,27 +181,24 @@ export async function completeOAuthFlow(
 }
 
 /**
- * 購読完了状態の member を作成して返す（link_session は `insertLinkedSession` で再現）。
- * PAY.JP / Discord のモックを差し替える場合は、この関数に渡す前に
- * `buildE2EApp(pgDb, { payjp, discord })` でアプリを組み立てること。
+ * 購読完了状態の member を作成して返す（課金先行: link_session 不要）。
  */
 export async function subscribeUser(
   app: ReturnType<typeof buildApp>,
   pgDb: PgDbClient,
   discordUserId: string,
   overrides: { planId?: string } = {},
-): Promise<{ memberId: string; linkSessionToken: string }> {
-  const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+): Promise<{ memberId: string }> {
   const planId = overrides.planId ?? E2E_BILLING_CONFIG.allowedPlanIds[0];
+  const email = `${discordUserId}@e2e-test.example.com`;
 
   const res = await app.inject({
     method: 'POST',
     url: '/v1/subscriptions',
     headers: { 'content-type': 'application/json', origin: 'https://example.com' },
-    cookies: { '__Host-link_session': rawToken },
     body: JSON.stringify({
       planId,
-      email: `${discordUserId}@e2e-test.example.com`,
+      email,
       payjpToken: 'tok_test_e2e',
       privacyConsented: true,
     }),
@@ -258,8 +208,12 @@ export async function subscribeUser(
     throw new Error(`subscribeUser failed: ${res.statusCode} ${res.body}`);
   }
 
-  const member = await pgDb.findMemberByDiscordUserId(discordUserId);
-  return { memberId: member!.id, linkSessionToken: rawToken };
+  const body = res.json() as { memberId?: string };
+  if (!body.memberId) {
+    throw new Error('subscribeUser: response missing memberId');
+  }
+  const member = await pgDb.findMemberById(body.memberId);
+  return { memberId: member!.id };
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +290,7 @@ export function makeCliDeps(pool: pg.Pool, overrides: Partial<CliDeps> = {}): Cl
     createPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_e2e', status: 'active' }),
     cancelPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_e2e', status: 'canceled' }),
     syncRole: vi.fn().mockResolvedValue(undefined),
+    planRoleMapping: E2E_PLAN_ROLE_MAPPING,
     log: vi.fn(),
     now: () => new Date(),
     ...overrides,

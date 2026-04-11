@@ -57,8 +57,8 @@ export interface WebhookHandlerDeps {
   payjpWebhookToken: string;
   expectedLivemode: boolean;
   discordGuildId: string;
-  discordRoleId: string;
-  syncRole: (userId: string, action: 'grant' | 'revoke') => Promise<void>;
+  planRoleMapping: Record<string, string>;
+  syncRole: (userId: string, action: 'grant' | 'revoke', roleId: string) => Promise<void>;
   log: (entry: LogEntry) => void;
 }
 

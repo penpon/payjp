@@ -37,6 +37,7 @@ export function createInMemoryAuthDb(): AuthDb {
         id: crypto.randomUUID(),
         link_session_token_hash: record.linkSessionTokenHash,
         discord_user_id: record.discordUserId,
+        discord_access_token_encrypted: record.discordAccessTokenEncrypted ?? null,
         expires_at: record.expiresAt,
         used_at: null,
         created_at: new Date(),

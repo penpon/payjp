@@ -1,8 +1,11 @@
 import {
-  cancelSubscription,
   checkSession,
+  createCancelFormLink,
   createSubscription,
   fetchSubscriptionStatus,
+  getMember,
+  linkDiscord,
+  MemberFetchError,
   SessionCheckError,
   SubscriptionStatusError,
   startOAuth,
@@ -11,29 +14,43 @@ import type { BillingCallbacks } from './billing-ui.js';
 import { showCancelConfirmModal } from './cancel-ui.js';
 import { mapCancelError } from './map-cancel-error.js';
 import { mapSubscribeError } from './map-subscribe-error.js';
-import type { BillingFormState, PayjpAdapter, PlanDef } from './types.js';
+import { buildSubscriptionForUi } from './member-entitlement.js';
+import type { BillingFormState, PayjpAdapter, PlanDef, SubscriptionInfo } from './types.js';
 import { renderState } from './ui.js';
 
-const CANCEL_PENDING_KEY = 'cancelPending';
-/** Max age for cancelPending flag: 10 minutes. Prevents stale intent from firing on later page visits. */
-const CANCEL_PENDING_TTL_MS = 10 * 60 * 1000;
+const CANCEL_POLL_MAX_MS = 30_000;
+const CANCEL_POLL_INTERVAL_MS = 1_500;
 
-/** Set cancelPending with a timestamp so it expires after CANCEL_PENDING_TTL_MS. */
-function setCancelPending(): void {
-  sessionStorage.setItem(CANCEL_PENDING_KEY, String(Date.now()));
+function consumeCancelSubmittedQuery(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('cancel') !== 'submitted') return false;
+  params.delete('cancel');
+  const qs = params.toString();
+  const path = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+  window.history.replaceState({}, '', path);
+  return true;
 }
 
-/** Returns true only if cancelPending is set and has not expired. */
-function isCancelPendingValid(): boolean {
-  const raw = sessionStorage.getItem(CANCEL_PENDING_KEY);
-  if (!raw) return false;
-  const ts = Number(raw);
-  return !Number.isNaN(ts) && Date.now() - ts < CANCEL_PENDING_TTL_MS;
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-/** OAuth 後も未連携のときは退会意図フラグを捨てる（次回の別ログインで誤って cancel API を叩かない） */
-function clearStaleCancelPending(): void {
-  sessionStorage.removeItem(CANCEL_PENDING_KEY);
+/** Poll until backend reflects cancel (Google Form → Apps Script → google-submit) or timeout. */
+async function pollAfterGoogleFormSubmit(): Promise<void> {
+  const deadline = Date.now() + CANCEL_POLL_MAX_MS;
+  while (Date.now() < deadline) {
+    const m = await getMember();
+    let sub: SubscriptionInfo | null = null;
+    try {
+      sub = await fetchSubscriptionStatus();
+    } catch (err) {
+      if (!(err instanceof SubscriptionStatusError)) throw err;
+    }
+    const canceled = m?.subscriptionStatus === 'canceled' || sub?.status === 'canceled';
+    if (canceled) return;
+    await sleep(CANCEL_POLL_INTERVAL_MS);
+  }
 }
 
 // --- Plan definitions (hardcoded for MVP) ---
@@ -75,48 +92,53 @@ function createPayjpAdapter(): PayjpAdapter | null {
     console.error('[billing] PAY.JP.js (pay.js) が読み込まれていません');
     return null;
   }
-  if (!PAYJP_PUBLIC_KEY || PAYJP_PUBLIC_KEY === 'pk_test_') {
-    console.error('[billing] VITE_PAYJP_PUBLIC_KEY が未設定です。.env を確認してください');
+  if (!PAYJP_PUBLIC_KEY || !/^pk_(test|live)_[a-zA-Z0-9]{15,}$/.test(PAYJP_PUBLIC_KEY)) {
+    console.error('[billing] VITE_PAYJP_PUBLIC_KEY が未設定または不正です。.env を確認してください');
     return null;
   }
 
   try {
-    const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'subwindow' });
+    // iframe型: サブウィンドウ型よりポップアップブロック等の影響を受けにくい（2weeks-spec の iframe 固定に合わせる）
+    const payjp = window.Payjp(PAYJP_PUBLIC_KEY, { threeDSecureWorkflow: 'iframe' });
     const elements = payjp.elements({ locale: 'ja' });
-    let cachedCard: ReturnType<typeof elements.create> | null = null;
+    let cachedElements: import('./types.js').PayjpCardElements | null = null;
+
+    const elementStyle = {
+      base: {
+        color: '#061b31',
+        fontSize: '16px',
+        fontFamily: 'Inter, "Noto Sans JP", sans-serif',
+        '::placeholder': { color: '#64748d' },
+      },
+      invalid: { color: '#ea2261' },
+    };
 
     return {
-      createCardElement(selector) {
-        if (!cachedCard) {
-          cachedCard = elements.create('card', {
-            style: {
-              base: {
-                color: '#061b31',
-                fontSize: '16px',
-                fontFamily: 'Inter, "Noto Sans JP", sans-serif',
-                '::placeholder': { color: '#64748d' },
-              },
-              invalid: { color: '#ea2261' },
-            },
-          });
+      createCardElements(selectors) {
+        if (!cachedElements) {
+          cachedElements = {
+            cardNumber: elements.create('cardNumber', { style: elementStyle }),
+            cardExpiry: elements.create('cardExpiry', { style: elementStyle }),
+            cardCvc: elements.create('cardCvc', { style: elementStyle }),
+          };
         }
-        cachedCard.mount(selector);
-        return cachedCard;
+        cachedElements.cardNumber.mount(selectors.cardNumber);
+        cachedElements.cardExpiry.mount(selectors.cardExpiry);
+        cachedElements.cardCvc.mount(selectors.cardCvc);
+        return cachedElements;
       },
-      async createToken(cardElement, data) {
+      async createToken(cardNumberElement, data) {
         try {
-          const result = await payjp.createToken(
-            cardElement,
-            { three_d_secure: true, card: { name: data.name, email: data.email } },
-            { threeDSecureDialogOptions: { timeout: 1800000 } },
-          );
+          const result = await payjp.createToken(cardNumberElement, {
+            three_d_secure: true,
+            card: { name: data.name, email: data.email },
+          });
           if (result.error) {
             return { error: result.error.message };
           }
           if (!result.id) {
             return { error: 'トークンの取得に失敗しました。' };
           }
-          // CLAUDE.md: 3DS verified のみ許可（attempted も非許容）
           if (result.card?.three_d_secure_status !== 'verified') {
             return { error: '3Dセキュア認証が完了していません。もう一度お試しください。' };
           }
@@ -189,12 +211,10 @@ function startBillingFlow(app: HTMLElement): void {
         return;
       }
 
-      // Double-submit guard (3DS popup can stay open for minutes)
       if (isSubmitting) return;
       isSubmitting = true;
 
       try {
-        // Save form data WITHOUT re-rendering (preserves PAY.JP card iframe)
         billingState = {
           ...billingState,
           email: data.email,
@@ -203,21 +223,19 @@ function startBillingFlow(app: HTMLElement): void {
           privacyConsented: data.privacyConsented,
         };
 
-        // Disable submit button inline instead of destroying DOM
         const submitBtn = app.querySelector('.submit-button') as HTMLButtonElement | null;
         if (submitBtn) {
           submitBtn.setAttribute('disabled', 'true');
           submitBtn.textContent = '処理中...';
         }
 
-        // 1. Create PAY.JP token with 3DS (card iframe must remain mounted)
         const tokenResult = await payjpAdapter.createToken(currentCardElement, {
           name: data.cardholderName,
           email: data.email,
         });
 
         if (tokenResult.error || !tokenResult.tokenId) {
-          currentCardElement = null; // Card iframe will be re-mounted after re-render
+          currentCardElement = null;
           update({
             step: 'form',
             selectedPlanId: data.planId,
@@ -228,10 +246,8 @@ function startBillingFlow(app: HTMLElement): void {
           return;
         }
 
-        // Now safe to destroy DOM — card data is captured in token
         update({ step: 'submitting' });
 
-        // 2. POST /v1/subscriptions
         const result = await createSubscription({
           planId: data.planId,
           email: data.email,
@@ -239,10 +255,14 @@ function startBillingFlow(app: HTMLElement): void {
           privacyConsented: data.privacyConsented,
         });
 
+        // 課金完了 → サンクスページ（Discord連携ボタン表示）
         renderState(app, 'register_complete', startOAuth, {
           registerComplete: {
             result,
             plans: PLANS,
+            onLinkDiscord: () => {
+              startOAuth();
+            },
             onBackToTop: () => {
               void init();
             },
@@ -257,7 +277,7 @@ function startBillingFlow(app: HTMLElement): void {
     },
 
     onRetry: () => {
-      currentCardElement = null; // Clear stale reference; new element will be set via onCardElementReady
+      currentCardElement = null;
       update({ step: 'form', error: null });
     },
 
@@ -278,10 +298,25 @@ function startBillingFlow(app: HTMLElement): void {
 function startCancelFlow(app: HTMLElement): void {
   let dismiss: (() => void) | null = null;
   dismiss = showCancelConfirmModal(app, {
-    onConfirm: () => {
+    onConfirm: async () => {
       dismiss?.();
-      setCancelPending();
-      startOAuth();
+      try {
+        const result = await createCancelFormLink();
+        window.location.href = result.formUrl;
+      } catch (err) {
+        console.error('[cancel] createCancelFormLink failed:', err);
+        const cancelError = mapCancelError(err);
+        renderState(
+          app,
+          'cancel_error',
+          cancelError.kind === 'session_expired'
+            ? () => {
+                startOAuth();
+              }
+            : startOAuth,
+          { cancelError },
+        );
+      }
     },
     onDismiss: () => {
       dismiss?.();
@@ -303,39 +338,104 @@ async function init(): Promise<void> {
   renderState(app, 'loading', startOAuth);
 
   try {
-    const session = await checkSession();
-    if (session.linked) {
-      // Check for pending cancel after OAuth redirect (TTL-validated to prevent stale intent)
-      if (isCancelPendingValid()) {
-        sessionStorage.removeItem(CANCEL_PENDING_KEY);
-        renderState(app, 'loading', startOAuth);
+    const returnedFromGoogleForm = consumeCancelSubmittedQuery();
+    if (returnedFromGoogleForm) {
+      try {
+        await pollAfterGoogleFormSubmit();
+      } catch (err) {
+        console.error('[init] pollAfterGoogleFormSubmit failed:', err);
+      }
+    }
+
+    // Billing-first flow: check member_session first
+    const member = await getMember();
+
+    if (member) {
+      // Member exists (has active subscription via member_session)
+      if (!member.discordLinked) {
+        // Discord未連携 → OAuthコールバック帰還かチェック
+        // link_session Cookie があれば自動的にlink-discord APIを呼ぶ
+        let session: Awaited<ReturnType<typeof checkSession>> | null = null;
         try {
-          const result = await cancelSubscription();
-          renderState(app, 'cancel_complete', startOAuth, { cancelComplete: { result } });
+          session = await checkSession();
         } catch (err) {
-          console.error('[cancel] cancelSubscription failed:', err);
-          const cancelError = mapCancelError(err);
-          renderState(
-            app,
-            'cancel_error',
-            cancelError.kind === 'session_expired'
-              ? () => {
-                  setCancelPending();
-                  startOAuth();
-                }
-              : startOAuth,
-            { cancelError },
-          );
+          // 401 のみ「link_session なし / 期限切れ / 無効」— サンクスページへ進む
+          if (!(err instanceof SessionCheckError && err.status === 401)) {
+            console.error('[init] Session check failed:', err);
+            renderState(app, 'error', startOAuth, {
+              errorMessage: '連携状態の確認に失敗しました。しばらく経ってから再度お試しください。',
+            });
+            return;
+          }
         }
+
+        let linkErrorMessage: string | undefined;
+
+        if (session?.linked) {
+          // OAuth callback 帰還 → Discord連携実行
+          renderState(app, 'loading', startOAuth);
+          let linkResult: Awaited<ReturnType<typeof linkDiscord>> | null = null;
+          try {
+            linkResult = await linkDiscord();
+          } catch (err) {
+            console.error('[init] linkDiscord threw:', err);
+          }
+          if (linkResult?.ok) {
+            renderState(app, 'link_complete', startOAuth, {
+              linkComplete: {
+                roleGranted: linkResult.roleGranted ?? false,
+                onBackToTop: () => {
+                  void init();
+                },
+              },
+            });
+            return;
+          }
+          // link失敗 → エラーコード別に処理
+          if (linkResult?.errorCode === 'NO_SUBSCRIPTION') {
+            renderState(app, 'error', startOAuth, {
+              errorMessage: '有効な購読がないためDiscord連携できません。',
+            });
+            return;
+          }
+          linkErrorMessage =
+            linkResult?.errorCode === 'DISCORD_ALREADY_USED'
+              ? 'このDiscordアカウントは既に別のアカウントで使用されています。別のDiscordアカウントでお試しください。'
+              : linkResult && !linkResult.ok
+                ? 'Discord連携に失敗しました。再度お試しください。'
+                : undefined;
+        }
+
+        // Discord未連携 → サンクスページ
+        renderState(app, 'register_complete', startOAuth, {
+          registerComplete: {
+            result: {
+              ok: true as const,
+              memberId: member.memberId,
+              subscriptionStatus: member.subscriptionStatus ?? '',
+              planId: member.planId ?? '',
+              trialApplied: member.subscriptionStatus === 'trial',
+              accessEndAt: member.accessEndAt ?? '',
+            },
+            plans: PLANS,
+            onLinkDiscord: () => {
+              startOAuth();
+            },
+            onBackToTop: () => {
+              void init();
+            },
+            linkError: linkErrorMessage,
+          },
+        });
         return;
       }
 
+      // Discord連携済み → 購読状態表示
       let subscription: Awaited<ReturnType<typeof fetchSubscriptionStatus>>;
       try {
         subscription = await fetchSubscriptionStatus();
       } catch (err) {
         if (err instanceof SubscriptionStatusError) {
-          console.error('[init] Subscription status unavailable:', err);
           renderState(app, 'error', startOAuth, {
             errorMessage: '購読状況を確認できませんでした。しばらく経ってから再度お試しください。',
           });
@@ -344,37 +444,33 @@ async function init(): Promise<void> {
         throw err;
       }
 
-      if (subscription) {
+      const subscriptionForUi = buildSubscriptionForUi(member, subscription);
+      if (subscriptionForUi) {
         renderState(app, 'linked', startOAuth, {
           subscribed: {
-            subscription,
+            subscription: subscriptionForUi,
             plans: PLANS,
             onStartCancel: () => startCancelFlow(app),
+            memberRoleState: member.roleState,
           },
         });
         return;
       }
 
-      if (!session.discordUserId) {
-        renderState(app, 'error', startOAuth, {
-          errorMessage: 'セッション情報が不完全です。再度Discordで連携してください。',
-        });
-        return;
-      }
+      // 連携済みだが購読なし（退会後など）
+      startBillingFlow(app);
+      return;
+    }
 
-      renderState(app, 'linked', startOAuth, {
-        onStartBilling: () => startBillingFlow(app),
+    // member_session なし → 課金フォーム表示（初回 or Cookie期限切れ）
+    startBillingFlow(app);
+  } catch (err) {
+    console.error('[init] failed:', err);
+    if (err instanceof MemberFetchError) {
+      renderState(app, 'error', startOAuth, {
+        errorMessage: '会員情報を確認できませんでした。しばらく経ってから再度お試しください。',
       });
     } else {
-      clearStaleCancelPending();
-      renderState(app, 'not_linked', startOAuth);
-    }
-  } catch (err) {
-    if (err instanceof SessionCheckError && err.status === 401) {
-      clearStaleCancelPending();
-      renderState(app, 'not_linked', startOAuth);
-    } else {
-      console.error('[init] Session check failed:', err);
       renderState(app, 'error', startOAuth);
     }
   }

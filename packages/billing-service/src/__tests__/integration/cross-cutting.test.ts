@@ -87,7 +87,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
         PAYJP_PLAN_IDS: 'plan-001',
         DISCORD_BOT_TOKEN: 'bot-token',
         DISCORD_GUILD_ID: 'guild-001',
-        DISCORD_PAID_ROLE_ID: 'role-001',
+        DISCORD_PLAN_ROLE_IDS: 'role-starter',
         BILLING_INTERVAL_MONTHS: '1',
         INITIAL_FREE_CYCLES: '2',
         CANCEL_NOTICE_CYCLES: '1',

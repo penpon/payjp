@@ -6,6 +6,8 @@ import type { SubscriptionStatus } from '@hayane/shared';
 
 // --- Types ---
 
+export type PlanRoleMapping = Record<string, string>;
+
 export interface RequiredFieldsResult {
   ok: boolean;
   missingFields: string[];
@@ -94,7 +96,7 @@ const ALLOWED_EVENT_TYPES = new Set([
 
 const KNOWN_STATUSES: Set<string> = new Set(['active', 'trial', 'canceled', 'paused', 'deleted']);
 
-const GRANT_STATUSES: Set<string> = new Set(['active', 'trial', 'canceled']);
+const GRANT_STATUSES: Set<string> = new Set(['active', 'trial']);
 
 const STATUS_NO_DATA_STATUS_REQUIRED = new Set(['subscription.created', 'subscription.deleted']);
 
@@ -106,7 +108,8 @@ const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
-  'DISCORD_PAID_ROLE_ID',
+  'PAYJP_PLAN_IDS',
+  'DISCORD_PLAN_ROLE_IDS',
   'DAILY_RESYNC_CRON',
   'PAYJP_LIVEMODE',
 ] as const;
@@ -197,9 +200,49 @@ export function shouldGrantRole(status: string | null): boolean {
   return GRANT_STATUSES.has(status);
 }
 
+/** Epoch ms for access end, or null if unknown / invalid (supports ISO strings from some PG drivers). */
+function accessEndToEpochMs(accessEndAt: Date | string | null): number | null {
+  if (accessEndAt === null) return null;
+  if (accessEndAt instanceof Date) {
+    const t = accessEndAt.getTime();
+    return Number.isNaN(t) ? null : t;
+  }
+  if (typeof accessEndAt === 'string') {
+    const t = Date.parse(accessEndAt);
+    return Number.isNaN(t) ? null : t;
+  }
+  return null;
+}
+
+/** Paid Discord role should be present: active/trial, or canceled until access_end_at (current period end). */
+export function shouldGrantPaidDiscordAccess(
+  status: string | null,
+  accessEndAt: Date | string | null,
+  now: Date,
+): boolean {
+  if (status === null) return false;
+  if (status === 'active' || status === 'trial') return true;
+  if (status === 'canceled') {
+    const endMs = accessEndToEpochMs(accessEndAt);
+    if (endMs === null) return false;
+    return endMs > now.getTime();
+  }
+  return false;
+}
+
 // REQ-SYNC-010: PROP-SYNC-017
 export function shouldSyncRole(oldStatus: string | null, newStatus: string | null): boolean {
   return oldStatus !== newStatus;
+}
+
+export function resolveRoleIdForPlan(planId: string | null, mapping: PlanRoleMapping): string | null {
+  if (planId === null) return null;
+  return mapping[planId] ?? null;
+}
+
+export function shouldSwapRole(oldPlanId: string | null, newPlanId: string | null): boolean {
+  if (oldPlanId === null || newPlanId === null) return false;
+  return oldPlanId !== newPlanId;
 }
 
 // REQ-SYNC-011: PROP-SYNC-018
@@ -306,8 +349,14 @@ export function isAccessEndExpired(accessEndAt: Date | null, now: Date): boolean
 }
 
 // REQ-SYNC-019: PROP-SYNC-010
-export function calculateLastEventTimestamp(existing: number | null, resyncStartUnix: number): number {
-  return Math.max(existing ?? 0, resyncStartUnix);
+/** Coerces DB BIGINT (number | bigint | string from node-pg) before Math.max — mixing bigint and number throws. */
+export function calculateLastEventTimestamp(
+  existing: number | bigint | string | null,
+  resyncStartUnix: number,
+): number {
+  const existingNum = existing == null ? 0 : Number(existing);
+  const safeExisting = Number.isFinite(existingNum) ? existingNum : 0;
+  return Math.max(safeExisting, resyncStartUnix);
 }
 
 // REQ-SYNC-024: PROP-SYNC-020
@@ -357,7 +406,8 @@ export function evaluateChargeSearchResult(
 export function evaluateSubscriptionSearchResult(
   candidates: SubscriptionCandidate[],
   discordUserId: string,
-  accessEndAtUnix: number | null,
+  nextBillingAtUnix: number | null,
+  memberId?: string,
 ): 'single-match' | 'fail-close' {
   if (candidates.length === 0) return 'fail-close';
   if (candidates.length > 1) return 'fail-close';
@@ -365,13 +415,17 @@ export function evaluateSubscriptionSearchResult(
   const candidate = candidates[0];
 
   // Check metadata match
-  if (candidate.metadata?.discord_user_id === discordUserId) {
+  if (candidate.metadata?.discord_user_id === discordUserId && discordUserId !== '') {
+    return 'single-match';
+  }
+
+  if (memberId && candidate.metadata?.member_id === memberId) {
     return 'single-match';
   }
 
   // Fallback: no metadata match, check period_end
-  if (accessEndAtUnix === null) return 'fail-close';
-  if (candidate.current_period_end === accessEndAtUnix) {
+  if (nextBillingAtUnix === null) return 'fail-close';
+  if (candidate.current_period_end === nextBillingAtUnix) {
     return 'single-match';
   }
 

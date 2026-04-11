@@ -1,6 +1,9 @@
-FROM node:22-alpine
+# See Dockerfile (api) for base image choice.
+FROM node:22-bookworm-slim
 
 WORKDIR /app
+
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/server/package.json packages/server/

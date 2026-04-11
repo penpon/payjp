@@ -1,4 +1,12 @@
-import type { CancelResponse, SessionResponse, SubscribeResponse, SubscriptionInfo } from './types.js';
+import type {
+  CancelFormLinkResponse,
+  LinkDiscordResponse,
+  MemberInfo,
+  MemberRoleState,
+  SessionResponse,
+  SubscribeResponse,
+  SubscriptionInfo,
+} from './types.js';
 
 // --- Session ---
 
@@ -185,19 +193,14 @@ export class CancelError extends Error {
   }
 }
 
-function isCancelResponse(data: unknown): data is CancelResponse {
+function isCancelFormLinkResponse(data: unknown): data is CancelFormLinkResponse {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
-  return (
-    obj.ok === true &&
-    typeof obj.memberId === 'string' &&
-    typeof obj.cancelEffectiveAt === 'string' &&
-    typeof obj.roleRemovalAt === 'string'
-  );
+  return obj.ok === true && typeof obj.formUrl === 'string' && typeof obj.expiresAt === 'string';
 }
 
-export async function cancelSubscription(): Promise<CancelResponse> {
-  const res = await fetch('/v1/subscriptions/cancel', {
+export async function createCancelFormLink(): Promise<CancelFormLinkResponse> {
+  const res = await fetch('/v1/subscriptions/cancel/google-form-link', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -211,13 +214,78 @@ export async function cancelSubscription(): Promise<CancelResponse> {
       res.status,
       parsedError.errorCode,
       parsedError.operationId,
-      parsedError.message ?? `Cancel failed: ${res.status}`,
+      parsedError.message ?? `Cancel form link failed: ${res.status}`,
     );
   }
 
   const data: unknown = await res.json();
-  if (!isCancelResponse(data)) {
-    throw new Error('Invalid cancel response');
+  if (!isCancelFormLinkResponse(data)) {
+    throw new Error('Invalid cancel form link response');
   }
   return data;
+}
+
+// --- Member (billing-first flow) ---
+
+/** Thrown when GET /v1/members/me fails (non-2xx). Distinct from `null` which means 200 with no member session. */
+export class MemberFetchError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MemberFetchError';
+  }
+}
+
+export async function getMember(): Promise<MemberInfo | null> {
+  const res = await fetch('/v1/members/me', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new MemberFetchError(res.status, `Member fetch failed: ${res.status}`);
+  }
+  const data: unknown = await res.json();
+  if (typeof data !== 'object' || data === null) return null;
+  const obj = data as Record<string, unknown>;
+  if (obj.member === null || obj.member === undefined) return null;
+  const m = obj.member as Record<string, unknown>;
+  const memberId = typeof m.memberId === 'string' ? m.memberId : null;
+  if (!memberId) return null;
+  const roleRaw = m.roleState;
+  let roleState: MemberRoleState | null = null;
+  if (roleRaw === 'granted' || roleRaw === 'revoked' || roleRaw === 'unknown') {
+    roleState = roleRaw;
+  }
+  return {
+    memberId,
+    subscriptionStatus: typeof m.subscriptionStatus === 'string' ? m.subscriptionStatus : null,
+    planId: typeof m.planId === 'string' ? m.planId : null,
+    accessEndAt: typeof m.accessEndAt === 'string' ? m.accessEndAt : null,
+    discordLinked: m.discordLinked === true,
+    roleState,
+  };
+}
+
+export async function linkDiscord(): Promise<LinkDiscordResponse> {
+  const res = await fetch('/v1/members/link-discord', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data: unknown = await res.json().catch(() => ({}));
+  const obj = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+  if (!res.ok) {
+    return {
+      ok: false,
+      errorCode: typeof obj.errorCode === 'string' ? obj.errorCode : 'UNKNOWN',
+    };
+  }
+  return {
+    ok: true,
+    discordUserId: typeof obj.discordUserId === 'string' ? obj.discordUserId : undefined,
+    roleGranted: obj.roleGranted === true,
+  };
 }

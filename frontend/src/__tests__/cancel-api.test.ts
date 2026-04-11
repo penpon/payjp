@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CancelError, cancelSubscription } from '../api.js';
+import { CancelError, createCancelFormLink } from '../api.js';
 
-describe('cancelSubscription', () => {
+describe('createCancelFormLink', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
@@ -12,23 +12,22 @@ describe('cancelSubscription', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('should POST to /v1/subscriptions/cancel with credentials and empty body', async () => {
+  it('should POST to /v1/subscriptions/cancel/google-form-link with credentials and empty body', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(
         JSON.stringify({
           ok: true,
-          memberId: 'uuid-456',
-          cancelEffectiveAt: '2026-05-07T00:00:00Z',
-          roleRemovalAt: '2026-05-07T00:00:00Z',
+          formUrl: 'https://docs.google.com/forms/d/e/test-form/viewform?usp=pp_url',
+          expiresAt: '2026-05-07T00:00:00Z',
         }),
         { status: 200 },
       ),
     );
 
-    const result = await cancelSubscription();
+    const result = await createCancelFormLink();
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/v1/subscriptions/cancel',
+      '/v1/subscriptions/cancel/google-form-link',
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',
@@ -37,8 +36,8 @@ describe('cancelSubscription', () => {
       }),
     );
     expect(result.ok).toBe(true);
-    expect(result.cancelEffectiveAt).toBe('2026-05-07T00:00:00Z');
-    expect(result.roleRemovalAt).toBe('2026-05-07T00:00:00Z');
+    expect(result.formUrl).toContain('docs.google.com/forms');
+    expect(result.expiresAt).toBe('2026-05-07T00:00:00Z');
   });
 
   it('should throw CancelError on 503 with operationId', async () => {
@@ -54,7 +53,7 @@ describe('cancelSubscription', () => {
       ),
     );
 
-    const err = await cancelSubscription().catch((e: unknown) => e);
+    const err = await createCancelFormLink().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CancelError);
     expect((err as CancelError).status).toBe(503);
     expect((err as CancelError).operationId).toBe('op-cancel-123');
@@ -63,19 +62,19 @@ describe('cancelSubscription', () => {
   it('should throw CancelError on 401 with session error', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(
-        JSON.stringify({ ok: false, errorCode: 'INVALID_LINK_SESSION', message: 'Link session not found' }),
+        JSON.stringify({ ok: false, errorCode: 'INVALID_MEMBER_SESSION', message: 'Member session not found' }),
         { status: 401 },
       ),
     );
 
-    const err = await cancelSubscription().catch((e: unknown) => e);
+    const err = await createCancelFormLink().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CancelError);
-    expect((err as CancelError).errorCode).toBe('INVALID_LINK_SESSION');
+    expect((err as CancelError).errorCode).toBe('INVALID_MEMBER_SESSION');
   });
 
   it('should throw on invalid response shape', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ unexpected: true }), { status: 200 }));
 
-    await expect(cancelSubscription()).rejects.toThrow('Invalid cancel response');
+    await expect(createCancelFormLink()).rejects.toThrow('Invalid cancel form link response');
   });
 });

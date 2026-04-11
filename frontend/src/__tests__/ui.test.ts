@@ -1,13 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderState } from '../ui.js';
 
 describe('ui', () => {
   let container: HTMLDivElement;
   const onConnect = vi.fn();
+  const originalReload = window.location.reload;
 
   beforeEach(() => {
     container = document.createElement('div');
     onConnect.mockClear();
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, reload: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, reload: originalReload },
+      writable: true,
+      configurable: true,
+    });
   });
 
   describe('loading state', () => {
@@ -31,69 +45,34 @@ describe('ui', () => {
     });
   });
 
-  describe('not_linked state', () => {
-    it('should show heading and discord button', () => {
-      renderState(container, 'not_linked', onConnect);
-
-      expect(container.querySelector('.heading')?.textContent).toBe('Discord連携');
-      expect(container.querySelector('.discord-button')).not.toBeNull();
-      expect(container.querySelector('.discord-button')?.textContent).toContain('Discordで連携する');
-    });
-
-    it('should show description text', () => {
-      renderState(container, 'not_linked', onConnect);
-
-      expect(container.textContent).toContain('Discordアカウントとの連携が必要です');
-    });
-
-    it('should call onConnect when button is clicked', () => {
-      renderState(container, 'not_linked', onConnect);
-
-      container.querySelector<HTMLButtonElement>('.discord-button')?.click();
-      expect(onConnect).toHaveBeenCalledOnce();
-    });
-
-    it('should contain discord logo SVG', () => {
-      renderState(container, 'not_linked', onConnect);
-
-      expect(container.querySelector('.discord-button svg')).not.toBeNull();
-    });
-  });
-
   describe('linked state', () => {
-    it('should show success badge', () => {
-      renderState(container, 'linked', onConnect);
+    it('should show subscribed status when subscribed context is provided', () => {
+      renderState(container, 'linked', onConnect, {
+        subscribed: {
+          subscription: { status: 'active', planId: 'plan_starter', accessEndAt: '2026-05-01T00:00:00Z' },
+          plans: [{ id: 'plan_starter', name: 'スタータープラン', price: 25000, features: [] }],
+        },
+      });
 
-      expect(container.querySelector('.success-badge')).not.toBeNull();
-      expect(container.textContent).toContain('Discord連携済み');
+      expect(container.querySelector('.subscribed-status')).not.toBeNull();
+      expect(container.textContent).toContain('購読状況');
     });
 
-    it('should show plan placeholder', () => {
+    it('should show error fallback when subscribed context is missing', () => {
       renderState(container, 'linked', onConnect);
 
-      expect(container.querySelector('.plan-placeholder')).not.toBeNull();
-      expect(container.textContent).toContain('プラン選択は次のステップで利用可能になります');
-    });
-
-    it('should not show discord button', () => {
-      renderState(container, 'linked', onConnect);
-
-      expect(container.querySelector('.discord-button')).toBeNull();
-    });
-
-    it('should have role=status on success badge', () => {
-      renderState(container, 'linked', onConnect);
-
-      expect(container.querySelector('.success-badge')?.getAttribute('role')).toBe('status');
+      expect(container.querySelector('.error-badge')).not.toBeNull();
+      expect(container.textContent).toContain('ページの表示に失敗しました');
     });
   });
 
   describe('error state', () => {
-    it('should show error badge', () => {
+    it('should show error heading and error badge', () => {
       renderState(container, 'error', onConnect);
 
+      expect(container.querySelector('.heading')?.textContent).toBe('エラー');
       expect(container.querySelector('.error-badge')).not.toBeNull();
-      expect(container.textContent).toContain('連携状態の確認に失敗しました');
+      expect(container.textContent).toContain('状態の確認に失敗しました');
     });
 
     it('should have role=alert on error badge', () => {
@@ -102,17 +81,27 @@ describe('ui', () => {
       expect(container.querySelector('.error-badge')?.getAttribute('role')).toBe('alert');
     });
 
-    it('should show discord button for retry', () => {
+    it('should show reload button instead of discord button', () => {
       renderState(container, 'error', onConnect);
 
-      expect(container.querySelector('.discord-button')).not.toBeNull();
+      expect(container.querySelector('.discord-button')).toBeNull();
+      expect(container.querySelector('.submit-button')).not.toBeNull();
+      expect(container.querySelector('.submit-button')?.textContent).toBe('再読み込み');
     });
 
-    it('should call onConnect when retry button is clicked', () => {
+    it('should reload page when reload button is clicked', () => {
       renderState(container, 'error', onConnect);
 
-      container.querySelector<HTMLButtonElement>('.discord-button')?.click();
-      expect(onConnect).toHaveBeenCalledOnce();
+      container.querySelector<HTMLButtonElement>('.submit-button')?.click();
+      expect(window.location.reload).toHaveBeenCalledOnce();
+    });
+
+    it('should display custom error message when provided', () => {
+      renderState(container, 'error', onConnect, {
+        errorMessage: '会員情報を確認できませんでした。',
+      });
+
+      expect(container.textContent).toContain('会員情報を確認できませんでした。');
     });
   });
 
@@ -121,17 +110,17 @@ describe('ui', () => {
       renderState(container, 'loading', onConnect);
       expect(container.querySelector('.spinner')).not.toBeNull();
 
-      renderState(container, 'linked', onConnect);
+      renderState(container, 'error', onConnect);
       expect(container.querySelector('.spinner')).toBeNull();
-      expect(container.querySelector('.success-badge')).not.toBeNull();
+      expect(container.querySelector('.error-badge')).not.toBeNull();
     });
 
     it('should clean up event listeners on re-render (no double fire)', () => {
-      renderState(container, 'not_linked', onConnect);
-      renderState(container, 'not_linked', onConnect);
+      renderState(container, 'error', onConnect);
+      renderState(container, 'error', onConnect);
 
-      container.querySelector<HTMLButtonElement>('.discord-button')?.click();
-      expect(onConnect).toHaveBeenCalledOnce();
+      container.querySelector<HTMLButtonElement>('.submit-button')?.click();
+      expect(window.location.reload).toHaveBeenCalledOnce();
     });
   });
 });

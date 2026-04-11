@@ -8,6 +8,7 @@ const keyFile = path.join(certsDir, 'www.and--line.com-key.pem');
 const hasLocalCerts = fs.existsSync(certFile) && fs.existsSync(keyFile);
 
 export default defineConfig({
+  envDir: path.resolve(__dirname, '..'),
   build: {
     outDir: 'dist',
     emptyOutDir: true,

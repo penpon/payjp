@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { REST } from '@discordjs/rest';
-import type { BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
+import { REST, RequestMethod } from '@discordjs/rest';
+import type { AddGuildMemberResult, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
 import type { WebhookHandlerDeps } from '@hayane/sync-service';
 import Payjp from 'payjp';
@@ -40,18 +40,18 @@ function canBotAssignRole(params: {
   allRoles: DiscordApiRole[];
   botMember: DiscordApiMember;
   guildId: string;
-  paidRoleId: string;
+  roleId: string;
 }): boolean {
-  const { allRoles, botMember, guildId, paidRoleId } = params;
-  const paidRole = allRoles.find((r) => r.id === paidRoleId);
-  if (!paidRole) return false;
+  const { allRoles, botMember, guildId, roleId } = params;
+  const targetRole = allRoles.find((r) => r.id === roleId);
+  if (!targetRole) return false;
 
   const perms = mergeGuildPermissions(botMember.roles, allRoles, guildId);
   if ((perms & PERM_ADMINISTRATOR) === PERM_ADMINISTRATOR) return true;
   if ((perms & PERM_MANAGE_ROLES) !== PERM_MANAGE_ROLES) return false;
 
   const botTop = highestRolePosition(botMember.roles, allRoles);
-  return botTop > paidRole.position;
+  return botTop > targetRole.position;
 }
 
 // ---- 1. Env validation ----
@@ -63,11 +63,18 @@ const REQUIRED_ENV = [
   'DISCORD_REDIRECT_URI',
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
-  'DISCORD_PAID_ROLE_ID',
+  // DISCORD_PLAN_ROLE_IDS: comma-separated role IDs, same order as PAYJP_PLAN_IDS
+  'DISCORD_PLAN_ROLE_IDS',
   'PAYJP_SECRET_KEY',
   'PAYJP_LIVEMODE',
   'PAYJP_PLAN_IDS',
   'FRONTEND_BASE_URL',
+  'GOOGLE_FORM_CANCEL_BASE_URL',
+  'GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID',
+  'GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID',
+  'GOOGLE_FORM_CANCEL_SECRET',
+  'GOOGLE_FORM_CANCEL_TOKEN_SECRET',
+  'GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS',
 ] as const;
 
 type RequiredEnvKey = (typeof REQUIRED_ENV)[number];
@@ -82,6 +89,7 @@ const env = Object.fromEntries(REQUIRED_ENV.map((k) => [k, process.env[k] as str
   RequiredEnvKey,
   string
 >;
+const discordTokenEncryptionKey = process.env.DISCORD_TOKEN_ENCRYPTION_KEY;
 
 // Validate FRONTEND_BASE_URL is a valid origin (scheme://host[:port], no path/query)
 try {
@@ -99,6 +107,14 @@ try {
 
 if (env.PAYJP_LIVEMODE !== 'true' && env.PAYJP_LIVEMODE !== 'false') {
   process.stderr.write(`[startup] PAYJP_LIVEMODE must be "true" or "false", got: "${env.PAYJP_LIVEMODE}"\n`);
+  process.exit(1);
+}
+
+const googleFormCancelTokenTtlSeconds = Number(env.GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS);
+if (!Number.isInteger(googleFormCancelTokenTtlSeconds) || googleFormCancelTokenTtlSeconds <= 0) {
+  process.stderr.write(
+    `[startup] GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS must be a positive integer, got: "${env.GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS}"\n`,
+  );
   process.exit(1);
 }
 
@@ -221,7 +237,7 @@ try {
 }
 
 const discordClient: DiscordClient = {
-  async checkMembership(guildId, discordUserId) {
+  async checkMembership(guildId, discordUserId, roleId?: string) {
     try {
       await discordRest.get(`/guilds/${guildId}/members/${discordUserId}`);
     } catch (err: unknown) {
@@ -232,7 +248,6 @@ const discordClient: DiscordClient = {
       throw err;
     }
 
-    const paidRoleId = env.DISCORD_PAID_ROLE_ID;
     let rolesRaw: DiscordApiRole[];
     let botMemberRaw: DiscordApiMember;
     try {
@@ -248,26 +263,65 @@ const discordClient: DiscordClient = {
       throw err;
     }
 
-    const canAssignRole = canBotAssignRole({
-      allRoles: rolesRaw,
-      botMember: botMemberRaw,
-      guildId,
-      paidRoleId,
-    });
-    return { isMember: true, canAssignRole };
+    const canAssign = roleId
+      ? canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId })
+      : Object.values(planRoleMapping).some((rid) =>
+          canBotAssignRole({ allRoles: rolesRaw, botMember: botMemberRaw, guildId, roleId: rid }),
+        );
+    return { isMember: true, canAssignRole: canAssign };
   },
   async assignRole(guildId, discordUserId, roleId) {
     await discordRest.put(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
   },
+  async removeRole(guildId, discordUserId, roleId) {
+    await discordRest.delete(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`);
+  },
+  async addMemberToGuild(guildId, discordUserId, accessToken, roleId): Promise<AddGuildMemberResult> {
+    const body: Record<string, unknown> = { access_token: accessToken };
+    if (roleId) body.roles = [roleId];
+    const res = await discordRest.queueRequest({
+      fullRoute: `/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(discordUserId)}`,
+      method: RequestMethod.Put,
+      body,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Discord addGuildMember failed: HTTP ${res.status}${detail ? ` ${detail}` : ''}`);
+    }
+    // Drain 201 JSON body so the connection can be reused; 204 has no body.
+    if (res.status === 201) {
+      await res.json().catch(() => undefined);
+    }
+    // 201 = newly added (roles from body applied); 204 = already in guild (roles not applied)
+    return { joinedNew: res.status === 201 };
+  },
+  async revokeToken(accessToken) {
+    const params = new URLSearchParams({
+      token: accessToken,
+      token_type_hint: 'access_token',
+      client_id: env.DISCORD_CLIENT_ID,
+      client_secret: env.DISCORD_CLIENT_SECRET,
+    });
+    const res = await fetch('https://discord.com/api/oauth2/token/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Discord token revoke failed: HTTP ${res.status}${detail ? ` ${detail}` : ''}`);
+    }
+  },
 };
 
-const syncRole = async (userId: string, action: 'grant' | 'revoke'): Promise<void> => {
+async function syncRole(userId: string, action: 'grant' | 'revoke', roleId: string): Promise<void> {
+  const endpoint = `/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${roleId}` as const;
   if (action === 'grant') {
-    await discordRest.put(`/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${env.DISCORD_PAID_ROLE_ID}`);
+    await discordRest.put(endpoint);
   } else {
-    await discordRest.delete(`/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${env.DISCORD_PAID_ROLE_ID}`);
+    await discordRest.delete(endpoint);
   }
-};
+}
 
 // ---- 4. Wire dependencies ----
 
@@ -282,6 +336,20 @@ if (allowedPlanIds.length === 0) {
   process.exit(1);
 }
 
+const discordPlanRoleIds = env.DISCORD_PLAN_ROLE_IDS.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (discordPlanRoleIds.length !== allowedPlanIds.length) {
+  process.stderr.write(
+    `[startup] DISCORD_PLAN_ROLE_IDS must have the same number of comma-separated entries as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${discordPlanRoleIds.length})\n`,
+  );
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+const planRoleMapping: Record<string, string> = Object.fromEntries(
+  allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
+);
+
 const billingDeps: BillingDeps = {
   db: dbClient,
   payjp: payjpClient,
@@ -290,9 +358,16 @@ const billingDeps: BillingDeps = {
     frontendBaseUrl: env.FRONTEND_BASE_URL,
     allowedPlanIds,
     discordGuildId: env.DISCORD_GUILD_ID,
-    discordPaidRoleId: env.DISCORD_PAID_ROLE_ID,
+    planRoleMapping,
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    discordTokenEncryptionKey,
+    googleFormCancelBaseUrl: env.GOOGLE_FORM_CANCEL_BASE_URL,
+    googleFormCancelEmailEntryId: env.GOOGLE_FORM_CANCEL_EMAIL_ENTRY_ID,
+    googleFormCancelTokenEntryId: env.GOOGLE_FORM_CANCEL_TOKEN_ENTRY_ID,
+    googleFormCancelSecret: env.GOOGLE_FORM_CANCEL_SECRET,
+    googleFormCancelTokenSecret: env.GOOGLE_FORM_CANCEL_TOKEN_SECRET,
+    googleFormCancelTokenTtlSeconds,
   },
   clock: () => new Date(),
   generateOperationId: () => randomUUID(),
@@ -303,7 +378,7 @@ const webhookDeps: WebhookHandlerDeps = {
   payjpWebhookToken: process.env.PAYJP_WEBHOOK_TOKEN ?? '',
   expectedLivemode: env.PAYJP_LIVEMODE === 'true',
   discordGuildId: env.DISCORD_GUILD_ID,
-  discordRoleId: env.DISCORD_PAID_ROLE_ID,
+  planRoleMapping,
   syncRole,
   log: (entry) => console.log(JSON.stringify(entry)),
 };
@@ -318,6 +393,7 @@ const app = buildApp(
     discordClientId: env.DISCORD_CLIENT_ID,
     discordClientSecret: env.DISCORD_CLIENT_SECRET,
     discordRedirectUri: env.DISCORD_REDIRECT_URI,
+    discordTokenEncryptionKey,
     db: dbClient,
   },
   billingDeps,

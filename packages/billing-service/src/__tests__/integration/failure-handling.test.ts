@@ -54,6 +54,7 @@ function makeLinkSession(overrides: Partial<LinkSessionRecord> = {}): LinkSessio
     id: 'link-session-id-001',
     link_session_token_hash: 'dummy-hash',
     discord_user_id: DISCORD_USER_ID,
+    discord_access_token_encrypted: null,
     expires_at: new Date(NOW.getTime() + 3600 * 1000),
     used_at: null,
     created_at: NOW,
@@ -78,9 +79,15 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: 'https://frontend.example.com',
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    discordPaidRoleId: 'role-001',
+    planRoleMapping: { plan_test: 'role-001' },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
+    googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
+    googleFormCancelEmailEntryId: '1111111111',
+    googleFormCancelTokenEntryId: '2222222222',
+    googleFormCancelSecret: 'google-shared-secret',
+    googleFormCancelTokenSecret: 'google-token-secret',
+    googleFormCancelTokenTtlSeconds: 900,
   };
 }
 
@@ -91,8 +98,21 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
     findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
+    upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
+    updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertCancelFormToken: vi.fn().mockResolvedValue(undefined as never),
+    findCancelFormToken: vi.fn().mockResolvedValue(null),
+    consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
+    insertMemberSession: vi.fn().mockResolvedValue({
+      id: 'ms-1',
+      member_session_token_hash: 'h',
+      member_id: member.id,
+      expires_at: new Date(),
+      created_at: new Date(),
+    }),
+    findMemberSession: vi.fn().mockResolvedValue(null),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -108,6 +128,7 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     }),
     updateMemberAfterCancel: vi.fn().mockResolvedValue(undefined as never),
     updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
+    clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
@@ -129,6 +150,9 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -154,8 +178,21 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     findMemberByDiscordUserId: vi.fn().mockResolvedValue(member),
     findMemberById: vi.fn().mockResolvedValue(member),
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
+    upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
+    updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
     findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
+    insertCancelFormToken: vi.fn().mockResolvedValue(undefined as never),
+    findCancelFormToken: vi.fn().mockResolvedValue(null),
+    consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
+    insertMemberSession: vi.fn().mockResolvedValue({
+      id: 'ms-1',
+      member_session_token_hash: 'h',
+      member_id: member.id,
+      expires_at: new Date(),
+      created_at: new Date(),
+    }),
+    findMemberSession: vi.fn().mockResolvedValue(null),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -170,6 +207,7 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
       inflight_operation_started_at: null,
     }),
     updateMemberRoleState: vi.fn().mockResolvedValue(undefined),
+    clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
@@ -203,6 +241,9 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   const discord: DiscordClient = {
     checkMembership: vi.fn().mockResolvedValue({ isMember: true, canAssignRole: true }),
     assignRole: vi.fn().mockResolvedValue(undefined),
+    removeRole: vi.fn().mockResolvedValue(undefined),
+    addMemberToGuild: vi.fn().mockResolvedValue({ joinedNew: true }),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -218,7 +259,6 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
 function makeSubscribeRequest() {
   return {
     origin: 'https://frontend.example.com',
-    linkSessionToken: LINK_SESSION_TOKEN,
     email: 'test@example.com',
     payjpToken: 'tok_001',
     planId: PLAN_ID,

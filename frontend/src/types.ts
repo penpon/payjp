@@ -2,11 +2,11 @@
 
 export type AppState =
   | 'loading'
-  | 'not_linked'
   | 'linked'
   | 'error'
   | 'billing'
   | 'register_complete'
+  | 'link_complete'
   | 'cancel_complete'
   | 'cancel_error';
 
@@ -62,6 +62,25 @@ export interface SubscribeResponse {
   accessEndAt: string;
 }
 
+/** Mirrors `members.role_state` from GET /v1/members/me */
+export type MemberRoleState = 'granted' | 'revoked' | 'unknown';
+
+export interface MemberInfo {
+  memberId: string;
+  subscriptionStatus: string | null;
+  planId: string | null;
+  accessEndAt: string | null;
+  discordLinked: boolean;
+  roleState: MemberRoleState | null;
+}
+
+export interface LinkDiscordResponse {
+  ok: boolean;
+  discordUserId?: string;
+  roleGranted?: boolean;
+  errorCode?: string;
+}
+
 export interface SubscriptionInfo {
   status: string;
   planId: string | null;
@@ -77,6 +96,12 @@ export interface CancelResponse {
   roleRemovalAt: string;
 }
 
+export interface CancelFormLinkResponse {
+  ok: true;
+  formUrl: string;
+  expiresAt: string;
+}
+
 export type CancelErrorKind = 'no_subscription' | 'session_expired' | 'inflight' | 'server_error';
 
 export interface CancelUIError {
@@ -86,6 +111,18 @@ export interface CancelUIError {
 }
 
 // --- PAY.JP.js v2 types ---
+
+/** PAY.JP.js `Payjp()` 初期化時の 3Dセキュアワークフロー */
+export type PayjpThreeDSecureWorkflow = 'iframe' | 'redirect' | 'subwindow';
+
+export interface PayjpInitOptions {
+  threeDSecureWorkflow?: PayjpThreeDSecureWorkflow;
+}
+
+/** サブウィンドウ型の `createToken` 第3引数で利用（iframe型では通常不要） */
+export interface PayjpCreateTokenOptions {
+  threeDSecureDialogOptions?: { timeout?: number; windowFeatures?: Record<string, unknown> };
+}
 
 export interface PayjpCardElement {
   mount(target: string | HTMLElement): void;
@@ -103,7 +140,13 @@ export interface PayjpChangeEvent {
 }
 
 export interface PayjpElements {
-  create(type: 'card', options?: Record<string, unknown>): PayjpCardElement;
+  create(type: 'card' | 'cardNumber' | 'cardExpiry' | 'cardCvc', options?: Record<string, unknown>): PayjpCardElement;
+}
+
+export interface PayjpCardElements {
+  cardNumber: PayjpCardElement;
+  cardExpiry: PayjpCardElement;
+  cardCvc: PayjpCardElement;
 }
 
 /** PAY.JP.js `createToken` の解決値 */
@@ -118,22 +161,22 @@ export interface PayjpInstance {
   createToken(
     element: PayjpCardElement,
     data?: { three_d_secure?: boolean; card?: { name?: string; email?: string } },
-    options?: { threeDSecureDialogOptions?: { timeout?: number } },
+    options?: PayjpCreateTokenOptions,
   ): Promise<PayjpCreateTokenResult>;
 }
 
 declare global {
   interface Window {
-    Payjp?: (publicKey: string, options?: { threeDSecureWorkflow?: string }) => PayjpInstance;
+    Payjp?: (publicKey: string, options?: PayjpInitOptions) => PayjpInstance;
   }
 }
 
 // --- PAY.JP adapter (for testability) ---
 
 export interface PayjpAdapter {
-  createCardElement(selector: string): PayjpCardElement;
+  createCardElements(selectors: { cardNumber: string; cardExpiry: string; cardCvc: string }): PayjpCardElements;
   createToken(
-    cardElement: PayjpCardElement,
+    cardNumberElement: PayjpCardElement,
     data: { name: string; email: string },
   ): Promise<{ tokenId?: string; error?: string }>;
 }

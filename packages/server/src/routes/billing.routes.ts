@@ -1,22 +1,59 @@
-import type { BillingDeps, CancelRequest, SubscribeRequest } from '@hayane/billing-service';
+import type {
+  BillingDeps,
+  CancelFormLinkRequest,
+  CancelRequest,
+  GoogleCancelSubmitRequest,
+  SubscribeRequest,
+} from '@hayane/billing-service';
 import {
   formatRfc3339Utc,
   handleCancel,
+  handleCreateCancelFormLink,
+  handleGoogleCancelSubmit,
   handleSubscribe,
+  hasActiveSubscription,
   isSameOrigin,
   linkSessionTokenHash,
+  memberSessionTokenHash,
 } from '@hayane/billing-service';
+import type { Member } from '@hayane/shared';
+import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 function extractRequestContext(request: FastifyRequest): {
   body: Record<string, unknown> | null;
   origin: string;
   linkSessionToken: string;
+  memberSessionToken: string;
 } {
   return {
     body: request.body as Record<string, unknown> | null,
     origin: typeof request.headers.origin === 'string' ? request.headers.origin : '',
     linkSessionToken: request.cookies['__Host-link_session'] ?? '',
+    memberSessionToken: request.cookies['__Host-member_session'] ?? '',
+  };
+}
+
+/** Same entitlement rule as subscribe / sync: active/trial, or canceled until access_end_at. */
+function subscriptionStatusBodyForMember(
+  member: Member,
+  now: Date,
+):
+  | { subscription: null }
+  | { subscription: { status: string; planId: string | null; accessEndAt: string | null } }
+  | null {
+  if (!member.subscription_status || member.subscription_status === 'deleted') {
+    return null;
+  }
+  if (!hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
+    return { subscription: null };
+  }
+  return {
+    subscription: {
+      status: member.subscription_status,
+      planId: member.payjp_plan_id,
+      accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
+    },
   };
 }
 
@@ -46,15 +83,20 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
 
       const req: SubscribeRequest = {
         origin,
-        linkSessionToken,
         email: typeof body?.email === 'string' ? body.email : '',
         payjpToken: typeof body?.payjpToken === 'string' ? body.payjpToken : '',
         planId: typeof body?.planId === 'string' ? body.planId : '',
         privacyConsented: body?.privacyConsented === true,
+        linkSessionToken,
       };
 
       try {
         const result = await handleSubscribe(req, billingDeps);
+        // Issue __Host-member_session cookie on successful subscribe
+        if (result.ok && result.memberSessionToken) {
+          const attrs = buildCookieAttributes('__Host-member_session', 86400);
+          reply.header('Set-Cookie', serializeCookieAttributes(attrs, result.memberSessionToken));
+        }
         return sendBillingResponse(reply, result);
       } catch (err) {
         console.error(
@@ -92,36 +134,42 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         });
       }
 
-      const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
-      if (!linkSessionToken) {
-        return reply.status(200).send({ subscription: null });
-      }
-
       try {
         const now = billingDeps.clock();
-        const tokenHash = linkSessionTokenHash(linkSessionToken);
-        const linkSession = await billingDeps.db.findLinkSession(tokenHash);
-        if (!linkSession) {
-          return reply.status(200).send({ subscription: null });
-        }
-        if (linkSession.expires_at < now) {
-          return reply.status(200).send({ subscription: null });
+
+        // Try member_session first (billing-first flow)
+        const memberSessionToken = request.cookies['__Host-member_session'] ?? '';
+        if (memberSessionToken) {
+          const msHash = memberSessionTokenHash(memberSessionToken);
+          const ms = await billingDeps.db.findMemberSession(msHash);
+          if (ms && ms.expires_at > now) {
+            const member = await billingDeps.db.findMemberById(ms.member_id);
+            if (member) {
+              const body = subscriptionStatusBodyForMember(member, now);
+              if (body !== null) {
+                return reply.status(200).send(body);
+              }
+            }
+          }
         }
 
-        // used_at が立っていても Discord ユーザーに紐づく購読は返す。subscribe 失敗後も Cookie が残るケースで
-        // 実際に作成済みのサブスクリプションをフロントが取得できるようにする（POST は consume で二重利用不可）。
-        const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
-        if (!member?.subscription_status || member.subscription_status === 'deleted') {
-          return reply.status(200).send({ subscription: null });
+        // Fallback: link_session (cancel flow / legacy)
+        const linkSessionToken = request.cookies['__Host-link_session'] ?? '';
+        if (linkSessionToken) {
+          const tokenHash = linkSessionTokenHash(linkSessionToken);
+          const linkSession = await billingDeps.db.findLinkSession(tokenHash);
+          if (linkSession && linkSession.expires_at > now) {
+            const member = await billingDeps.db.findMemberByDiscordUserId(linkSession.discord_user_id);
+            if (member) {
+              const body = subscriptionStatusBodyForMember(member, now);
+              if (body !== null) {
+                return reply.status(200).send(body);
+              }
+            }
+          }
         }
 
-        return reply.status(200).send({
-          subscription: {
-            status: member.subscription_status,
-            planId: member.payjp_plan_id,
-            accessEndAt: member.access_end_at ? formatRfc3339Utc(member.access_end_at) : null,
-          },
-        });
+        return reply.status(200).send({ subscription: null });
       } catch (err) {
         console.error(
           JSON.stringify({
@@ -138,6 +186,102 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           statusCode: 503,
           errorCode: 'STATUS_UNAVAILABLE',
           message: 'Could not load subscription status',
+        });
+      }
+    },
+  );
+
+  app.post(
+    '/v1/subscriptions/cancel/google-form-link',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const { origin, memberSessionToken } = extractRequestContext(request);
+
+      const req: CancelFormLinkRequest = {
+        origin,
+        memberSessionToken,
+      };
+
+      try {
+        const result = await handleCreateCancelFormLink(req, billingDeps);
+        return sendBillingResponse(reply, result);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'cancel google-form-link handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
+        });
+      }
+    },
+  );
+
+  app.post(
+    '/v1/subscriptions/cancel/google-submit',
+    {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email', 'name', 'reason', 'token'],
+          properties: {
+            email: { type: 'string', maxLength: 254 },
+            name: { type: 'string', maxLength: 200 },
+            reason: { type: 'string', maxLength: 5000 },
+            token: { type: 'string', maxLength: 4096 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { body } = extractRequestContext(request);
+
+      const h = request.headers;
+      const sharedSecret =
+        typeof h['x-cancel-secret'] === 'string'
+          ? h['x-cancel-secret']
+          : typeof h['x-google-cancel-secret'] === 'string'
+            ? h['x-google-cancel-secret']
+            : '';
+
+      const req: GoogleCancelSubmitRequest = {
+        email: typeof body?.email === 'string' ? body.email : '',
+        name: typeof body?.name === 'string' ? body.name : '',
+        reason: typeof body?.reason === 'string' ? body.reason : '',
+        token: typeof body?.token === 'string' ? body.token : '',
+        secret: sharedSecret,
+      };
+
+      try {
+        const result = await handleGoogleCancelSubmit(req, billingDeps);
+        return sendBillingResponse(reply, result);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'billing-routes',
+            message: 'cancel google-submit handler threw unexpectedly',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
         });
       }
     },

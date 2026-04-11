@@ -1,12 +1,34 @@
 import type pg from 'pg';
-import type { LinkSessionRecord, Member, OAuthStateRecord } from '../types.js';
+import type {
+  CancelFormTokenRecord,
+  LinkSessionRecord,
+  Member,
+  MemberSessionRecord,
+  OAuthStateRecord,
+} from '../types.js';
 
 export interface DbClient {
   findMemberByDiscordUserId(discordUserId: string): Promise<Member | null>;
   findMemberById(memberId: string): Promise<Member | null>;
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
+  upsertProvisionalMemberByEmail(email: string): Promise<Member>;
+  updateMemberDiscordUserId(memberId: string, discordUserId: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
+  insertCancelFormToken(record: {
+    id: string;
+    memberId: string;
+    email: string;
+    expiresAt: Date;
+  }): Promise<CancelFormTokenRecord>;
+  findCancelFormToken(tokenId: string): Promise<CancelFormTokenRecord | null>;
+  consumeCancelFormToken(tokenId: string, now: Date): Promise<void>;
+  insertMemberSession(record: {
+    memberSessionTokenHash: string;
+    memberId: string;
+    expiresAt: Date;
+  }): Promise<MemberSessionRecord>;
+  findMemberSession(tokenHash: string): Promise<MemberSessionRecord | null>;
   setInflightOperation(
     memberId: string,
     operationId: string,
@@ -39,14 +61,16 @@ export interface DbClient {
       cancel_requested_at: Date;
       subscription_status: 'canceled';
       access_end_at: Date;
+      next_billing_at: Date | null;
       inflight_operation_id: null;
       inflight_operation_type: null;
       inflight_operation_started_at: null;
     },
   ): Promise<Member>;
-  acquireAdvisoryLock(discordUserId: string): Promise<boolean>;
-  releaseAdvisoryLock(discordUserId: string): Promise<void>;
-  withTransactionLock<T>(discordUserId: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
+  clearMemberDiscordUserId(memberId: string): Promise<void>;
+  acquireAdvisoryLock(lockKey: string): Promise<boolean>;
+  releaseAdvisoryLock(lockKey: string): Promise<void>;
+  withTransactionLock<T>(lockKey: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T>;
 }
 
 /** Subset of DbClient available inside a transaction (no nested transactions/locks) */
@@ -55,6 +79,8 @@ export interface TransactionDbClient {
   upsertProvisionalMember(discordUserId: string, email: string): Promise<Member>;
   findLinkSession(tokenHash: string): Promise<LinkSessionRecord | null>;
   consumeLinkSession(tokenHash: string, now: Date): Promise<void>;
+  findCancelFormToken(tokenId: string): Promise<CancelFormTokenRecord | null>;
+  consumeCancelFormToken(tokenId: string, now: Date): Promise<void>;
   setInflightOperation(
     memberId: string,
     operationId: string,
@@ -85,7 +111,7 @@ function assertString(v: unknown, field: string): string {
 function toMember(row: Record<string, unknown>): Member {
   return {
     id: assertString(row.id, 'id'),
-    discord_user_id: assertString(row.discord_user_id, 'discord_user_id'),
+    discord_user_id: (row.discord_user_id as string) ?? null,
     email: assertString(row.email, 'email'),
     payjp_customer_id: (row.payjp_customer_id as string) ?? null,
     payjp_subscription_id: (row.payjp_subscription_id as string) ?? null,
@@ -126,8 +152,30 @@ function toLinkSession(row: Record<string, unknown>): LinkSessionRecord {
     id: row.id as string,
     link_session_token_hash: row.link_session_token_hash as string,
     discord_user_id: row.discord_user_id as string,
+    discord_access_token_encrypted: (row.discord_access_token_encrypted as string) ?? null,
     expires_at: row.expires_at as Date,
     used_at: (row.used_at as Date) ?? null,
+    created_at: row.created_at as Date,
+  };
+}
+
+function toCancelFormToken(row: Record<string, unknown>): CancelFormTokenRecord {
+  return {
+    id: row.id as string,
+    member_id: row.member_id as string,
+    email: row.email as string,
+    expires_at: row.expires_at as Date,
+    used_at: (row.used_at as Date) ?? null,
+    created_at: row.created_at as Date,
+  };
+}
+
+function toMemberSession(row: Record<string, unknown>): MemberSessionRecord {
+  return {
+    id: row.id as string,
+    member_session_token_hash: row.member_session_token_hash as string,
+    member_id: row.member_id as string,
+    expires_at: row.expires_at as Date,
     created_at: row.created_at as Date,
   };
 }
@@ -159,9 +207,41 @@ async function queryUpsertProvisionalMember(q: Queryable, discordUserId: string,
   return toMember(result.rows[0] as Record<string, unknown>);
 }
 
+async function queryUpsertProvisionalMemberByEmail(q: Queryable, email: string): Promise<Member> {
+  const result = await q.query(
+    `INSERT INTO members (email, role_state, last_synced_at)
+     VALUES ($1, 'unknown', now())
+     ON CONFLICT (email)
+     DO UPDATE SET updated_at = now()
+     RETURNING *`,
+    [email],
+  );
+  return toMember(result.rows[0] as Record<string, unknown>);
+}
+
+async function queryUpdateMemberDiscordUserId(q: Queryable, memberId: string, discordUserId: string): Promise<Member> {
+  const result = await q.query(
+    `UPDATE members SET discord_user_id = $2, updated_at = now()
+     WHERE id = $1
+     RETURNING *`,
+    [memberId, discordUserId],
+  );
+  if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
+  return toMember(result.rows[0] as Record<string, unknown>);
+}
+
+async function queryClearMemberDiscordUserId(q: Queryable, memberId: string): Promise<void> {
+  await q.query(`UPDATE members SET discord_user_id = NULL, updated_at = now() WHERE id = $1`, [memberId]);
+}
+
 async function queryFindLinkSession(q: Queryable, tokenHash: string): Promise<LinkSessionRecord | null> {
   const result = await q.query('SELECT * FROM discord_link_sessions WHERE link_session_token_hash = $1', [tokenHash]);
   return result.rows[0] ? toLinkSession(result.rows[0] as Record<string, unknown>) : null;
+}
+
+async function queryFindCancelFormToken(q: Queryable, tokenId: string): Promise<CancelFormTokenRecord | null> {
+  const result = await q.query('SELECT * FROM cancel_form_tokens WHERE id = $1', [tokenId]);
+  return result.rows[0] ? toCancelFormToken(result.rows[0] as Record<string, unknown>) : null;
 }
 
 async function queryConsumeLinkSession(q: Queryable, tokenHash: string, now: Date): Promise<void> {
@@ -174,6 +254,19 @@ async function queryConsumeLinkSession(q: Queryable, tokenHash: string, now: Dat
   );
   if ((result.rowCount ?? 0) === 0) {
     throw new Error('Link session not found, already consumed, or expired');
+  }
+}
+
+async function queryConsumeCancelFormToken(q: Queryable, tokenId: string, now: Date): Promise<void> {
+  const result = await q.query(
+    `UPDATE cancel_form_tokens SET used_at = $2
+     WHERE id = $1
+       AND used_at IS NULL
+       AND expires_at > $2`,
+    [tokenId, now],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error('Cancel form token not found, already consumed, or expired');
   }
 }
 
@@ -298,13 +391,14 @@ async function queryUpdateMemberAfterCancel(
        cancel_requested_at = $2,
        subscription_status = $3,
        access_end_at = $4,
+       next_billing_at = $5,
        inflight_operation_id = NULL,
        inflight_operation_type = NULL,
        inflight_operation_started_at = NULL,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,
-    [memberId, params.cancel_requested_at, params.subscription_status, params.access_end_at],
+    [memberId, params.cancel_requested_at, params.subscription_status, params.access_end_at, params.next_billing_at],
   );
   if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
   return toMember(result.rows[0] as Record<string, unknown>);
@@ -329,11 +423,26 @@ export class PgDbClient implements DbClient {
   upsertProvisionalMember(discordUserId: string, email: string) {
     return queryUpsertProvisionalMember(this.pool, discordUserId, email);
   }
+  upsertProvisionalMemberByEmail(email: string) {
+    return queryUpsertProvisionalMemberByEmail(this.pool, email);
+  }
+  updateMemberDiscordUserId(memberId: string, discordUserId: string) {
+    return queryUpdateMemberDiscordUserId(this.pool, memberId, discordUserId);
+  }
+  clearMemberDiscordUserId(memberId: string) {
+    return queryClearMemberDiscordUserId(this.pool, memberId);
+  }
   findLinkSession(tokenHash: string) {
     return queryFindLinkSession(this.pool, tokenHash);
   }
   consumeLinkSession(tokenHash: string, now: Date) {
     return queryConsumeLinkSession(this.pool, tokenHash, now);
+  }
+  findCancelFormToken(tokenId: string) {
+    return queryFindCancelFormToken(this.pool, tokenId);
+  }
+  consumeCancelFormToken(tokenId: string, now: Date) {
+    return queryConsumeCancelFormToken(this.pool, tokenId, now);
   }
   setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
     return querySetInflightOperation(this.pool, memberId, operationId, operationType, now);
@@ -357,18 +466,18 @@ export class PgDbClient implements DbClient {
     return queryUpdateMemberRoleState(this.pool, memberId, roleState);
   }
 
-  async acquireAdvisoryLock(discordUserId: string): Promise<boolean> {
-    if (this.lockClients.has(discordUserId)) {
+  async acquireAdvisoryLock(lockKey: string): Promise<boolean> {
+    if (this.lockClients.has(lockKey)) {
       return false;
     }
     const client = await this.pool.connect();
     try {
       const result = await client.query<{ pg_try_advisory_lock: boolean }>(
         'SELECT pg_try_advisory_lock(0, hashtext($1))',
-        [discordUserId],
+        [lockKey],
       );
       if (result.rows[0].pg_try_advisory_lock) {
-        this.lockClients.set(discordUserId, client);
+        this.lockClients.set(lockKey, client);
         return true;
       }
       client.release();
@@ -379,28 +488,28 @@ export class PgDbClient implements DbClient {
     }
   }
 
-  async releaseAdvisoryLock(discordUserId: string): Promise<void> {
-    const client = this.lockClients.get(discordUserId);
+  async releaseAdvisoryLock(lockKey: string): Promise<void> {
+    const client = this.lockClients.get(lockKey);
     if (!client) {
       if (this.lockClients.size > 0) {
         const heldKeys = Array.from(this.lockClients.keys()).join(', ');
-        throw new Error(`Lock key mismatch: holding "${heldKeys}", tried to release "${discordUserId}"`);
+        throw new Error(`Lock key mismatch: holding "${heldKeys}", tried to release "${lockKey}"`);
       }
       throw new Error('No advisory lock is currently held');
     }
-    this.lockClients.delete(discordUserId);
+    this.lockClients.delete(lockKey);
     try {
-      await client.query('SELECT pg_advisory_unlock(0, hashtext($1))', [discordUserId]);
+      await client.query('SELECT pg_advisory_unlock(0, hashtext($1))', [lockKey]);
     } finally {
       client.release();
     }
   }
 
-  async withTransactionLock<T>(discordUserId: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T> {
+  async withTransactionLock<T>(lockKey: string, fn: (txDb: TransactionDbClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SELECT pg_advisory_xact_lock(0, hashtext($1))', [discordUserId]);
+      await client.query('SELECT pg_advisory_xact_lock(0, hashtext($1))', [lockKey]);
       const txDb = new PgTransactionClient(client);
       const result = await fn(txDb);
       await client.query('COMMIT');
@@ -415,7 +524,7 @@ export class PgDbClient implements DbClient {
             message: 'ROLLBACK failed after transaction error',
             rollbackError: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
             originalError: err instanceof Error ? err.message : String(err),
-            lockKey: discordUserId,
+            lockKey,
           }),
         );
       }
@@ -461,14 +570,53 @@ export class PgDbClient implements DbClient {
     linkSessionTokenHash: string;
     discordUserId: string;
     expiresAt: Date;
+    discordAccessTokenEncrypted?: string;
   }): Promise<LinkSessionRecord> {
     const result = await this.pool.query(
-      `INSERT INTO discord_link_sessions (link_session_token_hash, discord_user_id, expires_at)
-       VALUES ($1, $2, $3)
+      `INSERT INTO discord_link_sessions (link_session_token_hash, discord_user_id, discord_access_token_encrypted, expires_at)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [record.linkSessionTokenHash, record.discordUserId, record.expiresAt],
+      [record.linkSessionTokenHash, record.discordUserId, record.discordAccessTokenEncrypted ?? null, record.expiresAt],
     );
     return toLinkSession(result.rows[0] as Record<string, unknown>);
+  }
+
+  async insertCancelFormToken(record: {
+    id: string;
+    memberId: string;
+    email: string;
+    expiresAt: Date;
+  }): Promise<CancelFormTokenRecord> {
+    const result = await this.pool.query(
+      `INSERT INTO cancel_form_tokens (id, member_id, email, expires_at)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [record.id, record.memberId, record.email, record.expiresAt],
+    );
+    return toCancelFormToken(result.rows[0] as Record<string, unknown>);
+  }
+
+  // --- member_sessions ---
+
+  async insertMemberSession(record: {
+    memberSessionTokenHash: string;
+    memberId: string;
+    expiresAt: Date;
+  }): Promise<MemberSessionRecord> {
+    const result = await this.pool.query(
+      `INSERT INTO member_sessions (member_session_token_hash, member_id, expires_at)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [record.memberSessionTokenHash, record.memberId, record.expiresAt],
+    );
+    return toMemberSession(result.rows[0] as Record<string, unknown>);
+  }
+
+  async findMemberSession(tokenHash: string): Promise<MemberSessionRecord | null> {
+    const result = await this.pool.query('SELECT * FROM member_sessions WHERE member_session_token_hash = $1', [
+      tokenHash,
+    ]);
+    return result.rows[0] ? toMemberSession(result.rows[0] as Record<string, unknown>) : null;
   }
 
   // --- payjp_events ---
@@ -589,6 +737,12 @@ class PgTransactionClient implements TransactionDbClient {
   }
   consumeLinkSession(tokenHash: string, now: Date) {
     return queryConsumeLinkSession(this.client, tokenHash, now);
+  }
+  findCancelFormToken(tokenId: string) {
+    return queryFindCancelFormToken(this.client, tokenId);
+  }
+  consumeCancelFormToken(tokenId: string, now: Date) {
+    return queryConsumeCancelFormToken(this.client, tokenId, now);
   }
   setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
     return querySetInflightOperation(this.client, memberId, operationId, operationType, now);
