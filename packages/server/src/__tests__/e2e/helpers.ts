@@ -81,7 +81,8 @@ export function makeMockPayjpClient(): PayjpClient {
     cancelSubscription: vi.fn().mockResolvedValue({
       id: 'sub_test_e2e',
       status: 'canceled',
-      current_period_end: Math.floor(Date.now() / 1000),
+      // 請求期間終了（createSubscription / fetchSubscription と整合）。NOW にすると cancel 後に access_end_at が即時に上書きされる。
+      current_period_end: trialEnd,
       trial_end: null,
       plan: { id: 'plan_e2e', interval: 'month' },
       metadata: {},
