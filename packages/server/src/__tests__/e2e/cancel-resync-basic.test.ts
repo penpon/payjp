@@ -114,8 +114,10 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
       expect(member!.cancel_requested_at).not.toBeNull();
 
       // DB 確認: access_end_at が変更されていない（15 日後のまま）
+      // ハンドラは PAY.JP の current_period_end（秒）から Date を組み立てるため、ミリ秒以下は落ちる。
+      // toBeCloseTo(..., -3) は ±500ms しか許容せず、残差 0–999ms と噛み合わずフレークするので秒で比較する。
       const storedAccessEndAt = new Date(member!.access_end_at as Date);
-      expect(storedAccessEndAt.getTime()).toBeCloseTo(accessEndAt.getTime(), -3); // ms 単位ではなく秒単位で比較
+      expect(Math.floor(storedAccessEndAt.getTime() / 1000)).toBe(Math.floor(accessEndAt.getTime() / 1000));
     });
   });
 
