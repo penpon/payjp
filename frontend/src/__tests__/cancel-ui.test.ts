@@ -27,7 +27,10 @@ describe('cancel-ui', () => {
 
       expect(container.querySelector('.modal-overlay')).not.toBeNull();
       expect(container.querySelector('.modal-title')?.textContent).toBe('退会の確認');
-      expect(container.querySelector('.modal-body')).not.toBeNull();
+      const body = container.querySelector('.modal-body');
+      expect(body).not.toBeNull();
+      expect(body?.textContent).toContain('Google Formにて退会理由を入力してください');
+      expect(body?.textContent).toContain('送信後に自動で課金停止となります。');
 
       dismiss();
     });

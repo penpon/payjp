@@ -2,7 +2,6 @@ import { el } from './dom.js';
 import { createBackToTopButton, renderInflightSection, renderSessionExpiredSection } from './error-ui.js';
 import { formatDate } from './format.js';
 import type { CancelResponse, CancelUIError } from './types.js';
-import { createDiscordLogoSvg } from './widgets.js';
 
 // --- Cancel confirm modal ---
 
@@ -11,9 +10,8 @@ export function showCancelConfirmModal(
   container: HTMLElement,
   callbacks: { onConfirm: () => void; onDismiss: () => void },
 ): () => void {
-  const confirmBtn = el('button', { type: 'button', class: 'discord-button cancel-modal-confirm' }, [
-    createDiscordLogoSvg(20),
-    el('span', {}, ['Google Formへ進む']),
+  const confirmBtn = el('button', { type: 'button', class: 'submit-button cancel-modal-confirm' }, [
+    'Google Formへ進む',
   ]);
   confirmBtn.addEventListener('click', callbacks.onConfirm);
 
@@ -31,8 +29,9 @@ export function showCancelConfirmModal(
     [
       el('div', { class: 'modal' }, [
         el('h2', { class: 'modal-title', id: 'cancel-modal-title' }, ['退会の確認']),
-        el('p', { class: 'modal-body' }, [
-          'Google Formに移動して、氏名・メールアドレス・退会理由を送信してください。送信後に課金停止、アプリ利用停止、Discordロール削除が即時反映されます。',
+        el('div', { class: 'modal-body' }, [
+          el('p', {}, ['Google Formにて退会理由を入力してください']),
+          el('p', {}, ['送信後に自動で課金停止となります。']),
         ]),
         el('div', { class: 'modal-actions' }, [confirmBtn, dismissBtn]),
       ]),
