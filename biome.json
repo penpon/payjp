@@ -12,6 +12,8 @@
       "packages/**/*.json",
       "frontend/**/*.ts",
       "frontend/**/*.json",
+      "e2e/**/*.ts",
+      "playwright.config.ts",
       "*.json",
       "*.jsonc",
       ".claude/**/*.json"

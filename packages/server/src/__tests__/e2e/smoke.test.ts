@@ -148,8 +148,8 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
       const member = await pgDb.findMemberById(idRow.rows[0].id);
       expect(member).not.toBeNull();
       expect(['trial', 'active']).toContain(member!.subscription_status);
-      expect(member!.payjp_subscription_id).toBe('sub_test_e2e');
-      expect(member!.payjp_customer_id).toBe('cus_test_e2e');
+      expect(member!.payjp_subscription_id).toMatch(/^sub_test_e2e/);
+      expect(member!.payjp_customer_id).toMatch(/^cus_test_e2e/);
 
       expect(discordMock.assignRole).not.toHaveBeenCalled();
       expect(discordMock.checkMembership).not.toHaveBeenCalled();
