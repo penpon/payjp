@@ -1,23 +1,25 @@
 # インシデント対応計画 — PCI DSS SAQ A Req 12.10.1
 
-最終更新: 2026-04-09  
+最終更新: 2026-04-12  
 次回レビュー: 2027-04-09（年次、またはインシデント発生後に見直し）
 
 ## 1. 役割・責任・連絡先
 
 | 役割 | 担当 | 連絡先 | 責任 |
 |---|---|---|---|
-| インシデント責任者 | penpon | **TODO: 電話/メール記入** | 判断・エスカレーション・対外連絡 |
+| インシデント責任者 | penpon | **1Password に保管した電話・メール**（リポジトリに書かない） | 判断・エスカレーション・対外連絡 |
 | 技術対応 | penpon | 同上 | 封じ込め・調査・復旧 |
+
+実連絡先の一覧と取得手順は [ops/incident-contacts.md](ops/incident-contacts.md) を参照する。
 
 ### 外部連絡先
 
 | 連絡先 | 用途 | 連絡方法 |
 |---|---|---|
-| PAY.JP サポート | 決済関連インシデント・アカウント停止 | **TODO: PAY.JP管理画面から確認** |
+| PAY.JP サポート | 決済関連インシデント・アカウント停止 | [pay.jp](https://pay.jp/) ログイン後のサポート・お問い合わせ（URLはログイン後に表示される画面を正とする） |
 | Discord Developer Support | Bot・OAuth障害 | Discord Developer Portal |
 | Cloudflare | CDN・DNS障害 | Cloudflare ダッシュボード |
-| サーバーホスティング | インフラ障害 | **TODO: ホスティング連絡先** |
+| サーバーホスティング | インフラ障害 | 契約プロバイダのサポート（詳細は [ops/incident-contacts.md](ops/incident-contacts.md)） |
 
 ## 2. インシデント分類
 

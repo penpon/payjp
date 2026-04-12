@@ -1,0 +1,76 @@
+/* Shared styles for static legal pages (tokushou, terms, refund, contact, privacy footer) */
+body.legal-page {
+  font-family: Inter, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 24px 48px;
+  color: #273951;
+  line-height: 1.8;
+}
+
+.legal-page h1 {
+  font-size: 22px;
+  font-weight: 500;
+  color: #061b31;
+  margin-bottom: 8px;
+}
+
+.legal-page .updated {
+  font-size: 13px;
+  color: #64748d;
+  margin-bottom: 24px;
+}
+
+.legal-page h2 {
+  font-size: 16px;
+  font-weight: 500;
+  color: #061b31;
+  margin: 24px 0 8px;
+}
+
+.legal-page p,
+.legal-page li {
+  font-size: 14px;
+}
+
+.legal-page ul {
+  padding-left: 20px;
+}
+
+.legal-page .placeholder {
+  background: #f6f9fc;
+  border: 1px solid #e5edf5;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 13px;
+  color: #64748d;
+}
+
+.legal-page .legal-nav {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #e5edf5;
+  font-size: 13px;
+}
+
+.legal-page .legal-nav a {
+  color: #533afd;
+  margin-right: 12px;
+}
+
+.legal-page .legal-nav a:last-child {
+  margin-right: 0;
+}
+
+.legal-page .back-home {
+  display: inline-block;
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: #533afd;
+  text-decoration: none;
+}
+
+.legal-page .back-home:hover {
+  text-decoration: underline;
+}

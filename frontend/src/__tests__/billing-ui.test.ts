@@ -91,13 +91,16 @@ describe('billing-ui', () => {
       expect(badges.length).toBe(5);
     });
 
-    it('should render consent checkbox and privacy link', () => {
+    it('should render consent checkbox and terms + privacy links', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 
       expect(container.querySelector('#billing-consent')).not.toBeNull();
-      const link = container.querySelector('.consent-link');
-      expect(link?.getAttribute('href')).toBe('/privacy.html');
-      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+      const links = container.querySelectorAll('.consent-link');
+      expect(links.length).toBe(2);
+      expect(links[0]?.getAttribute('href')).toBe('/terms.html');
+      expect(links[1]?.getAttribute('href')).toBe('/privacy.html');
+      expect(links[0]?.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(links[1]?.getAttribute('rel')).toBe('noopener noreferrer');
     });
 
     it('should have submit button disabled by default', () => {
