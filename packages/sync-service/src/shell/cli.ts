@@ -21,6 +21,7 @@ import {
   shouldGrantPaidDiscordAccess,
   validateCliArgs,
 } from '../core/index.js';
+import { insertImpactLog, ROLE_SYNC_FAILED_WEBHOOK, resolveImpactLog } from './member-impact-log.js';
 import type { DbPool } from './types.js';
 
 /** Plan id from PAY.JP subscription object (`plan.id` or legacy `plan_id`). */
@@ -308,7 +309,11 @@ async function handleSubscribeRecovery(
     const cpe = (payjpSub as { current_period_end?: number }).current_period_end;
     const accessEndAt = cpe != null && cpe !== 0 ? new Date(cpe * 1000) : (member.access_end_at as Date | null);
     const action = shouldGrantPaidDiscordAccess(status, accessEndAt, deps.now()) ? 'grant' : 'revoke';
-    await syncRoleIds(deps, discordUserId, action, resolveRoleIdsForSync(planIdForSync, action, deps.planRoleMapping));
+    const roleIdsForRecovery = resolveRoleIdsForSync(planIdForSync, action, deps.planRoleMapping);
+    const syncOk = await syncRoleIds(deps, discordUserId, action, roleIdsForRecovery);
+    if (roleIdsForRecovery.length > 0 && syncOk) {
+      await resolveImpactLog(deps.db, memberId, ROLE_SYNC_FAILED_WEBHOOK);
+    }
 
     // Resolve impact logs
     await resolveImpactLog(deps.db, memberId, 'subscribe_recovery_no_customer');
@@ -470,88 +475,104 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
     return { success: true };
   }
 
+  let discordSyncAttempted = false;
+  let discordSyncAllOk = true;
+
   const accessEndAt = member.access_end_at as Date | null;
   const accessExpired = isAccessEndExpired(accessEndAt, deps.now());
 
   // No PAY.JP subscription id — only expired access forces a revoke
   if (!subscriptionId) {
     if (accessExpired) {
-      await syncRoleIds(deps, discordUserId, 'revoke', resolveRoleIdsForSync(planId, 'revoke', deps.planRoleMapping));
+      const roleIds = resolveRoleIdsForSync(planId, 'revoke', deps.planRoleMapping);
+      if (roleIds.length > 0) {
+        discordSyncAttempted = true;
+        discordSyncAllOk = await syncRoleIds(deps, discordUserId, 'revoke', roleIds);
+      }
     }
-    await resolveImpactLog(deps.db, memberId, 'resync_individual_error');
-    return { success: true };
-  }
-
-  // PAY.JP subscription state — member access_end expiry overrides PAY.JP period/grace when reconciling roles
-  const payjpSub = await deps.getPayjpSubscription(subscriptionId);
-  if (!payjpSub) {
-    await deps.db.query(`UPDATE members SET subscription_status = 'deleted', updated_at = now() WHERE id = $1`, [
-      memberId,
-    ]);
-    await syncRoleIds(deps, discordUserId, 'revoke', resolveRoleIdsForSync(planId, 'revoke', deps.planRoleMapping));
   } else {
-    const newStatus = payjpSub.status as string;
-    await deps.db.query('UPDATE members SET subscription_status = $1, updated_at = now() WHERE id = $2', [
-      newStatus,
-      memberId,
-    ]);
-    const cpe = (payjpSub as { current_period_end?: number }).current_period_end;
-    const mergedAccessEnd = cpe != null && cpe !== 0 ? new Date(cpe * 1000) : (member.access_end_at as Date | null);
-    const entitled = shouldGrantPaidDiscordAccess(newStatus, mergedAccessEnd, deps.now());
-    const action: 'grant' | 'revoke' = accessExpired || !entitled ? 'revoke' : 'grant';
-    const roleIds = resolveRoleIdsForSync(planId, action, deps.planRoleMapping);
-    if (roleIds.length === 0 && action === 'grant') {
-      deps.log({
-        timestamp: formatRfc3339Utc(deps.now()),
-        service: 'sync-service',
-        endpoint: 'cli/resync',
-        result: 'failure',
-        error: 'unmapped_plan_grant_skipped',
-        member_id: memberId,
-        payjp_plan_id: planId ?? 'null',
-      });
-    }
-    for (const roleId of roleIds) {
-      try {
-        await deps.syncRole(discordUserId, action, roleId);
-      } catch (err) {
+    // PAY.JP subscription state — member access_end expiry overrides PAY.JP period/grace when reconciling roles
+    const payjpSub = await deps.getPayjpSubscription(subscriptionId);
+    if (!payjpSub) {
+      await deps.db.query(`UPDATE members SET subscription_status = 'deleted', updated_at = now() WHERE id = $1`, [
+        memberId,
+      ]);
+      const roleIds = resolveRoleIdsForSync(planId, 'revoke', deps.planRoleMapping);
+      if (roleIds.length > 0) {
+        discordSyncAttempted = true;
+        discordSyncAllOk = await syncRoleIds(deps, discordUserId, 'revoke', roleIds);
+      }
+    } else {
+      const newStatus = payjpSub.status as string;
+      await deps.db.query('UPDATE members SET subscription_status = $1, updated_at = now() WHERE id = $2', [
+        newStatus,
+        memberId,
+      ]);
+      const cpe = (payjpSub as { current_period_end?: number }).current_period_end;
+      const mergedAccessEnd = cpe != null && cpe !== 0 ? new Date(cpe * 1000) : (member.access_end_at as Date | null);
+      const entitled = shouldGrantPaidDiscordAccess(newStatus, mergedAccessEnd, deps.now());
+      const action: 'grant' | 'revoke' = accessExpired || !entitled ? 'revoke' : 'grant';
+      const roleIds = resolveRoleIdsForSync(planId, action, deps.planRoleMapping);
+      if (roleIds.length === 0 && action === 'grant') {
         deps.log({
           timestamp: formatRfc3339Utc(deps.now()),
           service: 'sync-service',
           endpoint: 'cli/resync',
           result: 'failure',
-          error: 'role_sync_failed',
+          error: 'unmapped_plan_grant_skipped',
           member_id: memberId,
-          discord_user_id: discordUserId,
-          action,
-          roleId,
-          syncError: err instanceof Error ? err.message : String(err),
+          payjp_plan_id: planId ?? 'null',
         });
+      }
+      for (const roleId of roleIds) {
+        discordSyncAttempted = true;
+        try {
+          await deps.syncRole(discordUserId, action, roleId);
+        } catch (err) {
+          discordSyncAllOk = false;
+          deps.log({
+            timestamp: formatRfc3339Utc(deps.now()),
+            service: 'sync-service',
+            endpoint: 'cli/resync',
+            result: 'failure',
+            error: 'role_sync_failed',
+            member_id: memberId,
+            discord_user_id: discordUserId,
+            action,
+            roleId,
+            syncError: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
   }
 
   await resolveImpactLog(deps.db, memberId, 'resync_individual_error');
+  if (discordSyncAttempted && discordSyncAllOk) {
+    await resolveImpactLog(deps.db, memberId, ROLE_SYNC_FAILED_WEBHOOK);
+  }
 
   return { success: true };
 }
 
 // --- Role helpers ---
 
-/** Best-effort sync for a list of roleIds. Errors are swallowed (callers that need per-error logging handle their own loop). */
+/** Sync a list of roleIds. Returns true iff every call succeeded (true vacuously when roleIds is empty). */
 async function syncRoleIds(
   deps: CliDeps,
   discordUserId: string,
   action: 'grant' | 'revoke',
   roleIds: string[],
-): Promise<void> {
+): Promise<boolean> {
+  let allOk = true;
   for (const roleId of roleIds) {
     try {
       await deps.syncRole(discordUserId, action, roleId);
     } catch {
-      /* best-effort; logged in syncRole */
+      allOk = false;
     }
   }
+  return allOk;
 }
 
 /** Resolve roleId(s) for sync. If planId maps to a role, return it. Otherwise fallback to all roles (safety). */
@@ -561,24 +582,4 @@ function resolveRoleIdsForSync(planId: string | null, action: 'grant' | 'revoke'
   // Unknown plan → for revoke, try all roles; for grant, no-op (can't grant without known plan)
   if (action === 'revoke') return Object.values(mapping);
   return [];
-}
-
-// --- DB helpers ---
-
-async function insertImpactLog(db: DbPool, memberId: string, issueCode: string, operationId?: string): Promise<void> {
-  await db.query(
-    `INSERT INTO member_impact_logs (member_id, issue_code, operation_id)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (member_id, issue_code) WHERE resolved_at IS NULL DO NOTHING`,
-    [memberId, issueCode, operationId ?? null],
-  );
-}
-
-async function resolveImpactLog(db: DbPool, memberId: string, issueCode: string): Promise<void> {
-  await db.query(
-    `UPDATE member_impact_logs
-     SET resolved_at = now()
-     WHERE member_id = $1 AND issue_code = $2 AND resolved_at IS NULL`,
-    [memberId, issueCode],
-  );
 }

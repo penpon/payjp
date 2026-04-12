@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ROLE_SYNC_FAILED_WEBHOOK } from '../../shell/member-impact-log.js';
 import type { DbPool, WebhookHandlerDeps, WebhookRequest } from '../../shell/types.js';
 import { handleWebhook } from '../../shell/webhook.js';
 
@@ -38,6 +39,9 @@ function createMockDb(
     }
     if (text.includes('FROM members WHERE payjp_subscription_id')) {
       return { rows: options.memberBySub ? [options.memberBySub] : [], rowCount: options.memberBySub ? 1 : 0 };
+    }
+    if (text.includes('INSERT INTO member_impact_logs')) {
+      return { rows: [], rowCount: 1 };
     }
     if (text.includes('UPDATE members SET')) {
       return { rows: [], rowCount: 1 };
@@ -540,6 +544,13 @@ describe('INT-SYNC-026: Discord role retry all fail', () => {
     // Should still return 200, not propagate the error
     expect(res.status).toBe(200);
     expect((res.body as Record<string, unknown>).ok).toBe(true);
+
+    const impactInserts = (db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (c: unknown[]) =>
+        (c[0] as string).includes('INSERT INTO member_impact_logs') &&
+        (c[1] as string[])[1] === ROLE_SYNC_FAILED_WEBHOOK,
+    );
+    expect(impactInserts.length).toBeGreaterThan(0);
   });
 });
 

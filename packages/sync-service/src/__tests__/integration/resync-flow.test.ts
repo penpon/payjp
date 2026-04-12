@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CliDeps } from '../../shell/cli.js';
 import { runResyncCli } from '../../shell/cli.js';
+import { ROLE_SYNC_FAILED_WEBHOOK } from '../../shell/member-impact-log.js';
 import type { DbPool } from '../../shell/types.js';
 
 function mockDbPool(query: DbPool['query']): DbPool {
@@ -352,6 +353,44 @@ describe('INT-SYNC-024: member_impact_logs: insert on failure, resolve on recove
       (c[0] as string).includes('INSERT INTO member_impact_logs'),
     );
     expect(insertCalls.length).toBeGreaterThan(0);
+  });
+});
+
+// INT-SYNC-048: role_sync_failed_webhook resolved when reconcile syncs Discord successfully
+describe('INT-SYNC-048: role_sync_failed_webhook resolve on successful reconcile', () => {
+  it('--all issues UPDATE to resolve role_sync_failed_webhook when all syncRole calls succeed', async () => {
+    const members = [
+      {
+        id: 'mem_1',
+        discord_user_id: 'user_1',
+        subscription_status: 'canceled',
+        payjp_plan_id: 'plan_1',
+        payjp_subscription_id: 'sub_1',
+        access_end_at: new Date('2026-04-05T12:00:00Z'),
+      },
+    ];
+    const deps = createMockDeps({
+      db: mockDbPool(
+        vi.fn(async (text: string, _params?: unknown[]) => {
+          if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
+            return { rows: members, rowCount: 1 };
+          }
+          return { rows: [], rowCount: 0 };
+        }),
+      ),
+      getPayjpSubscription: vi.fn(async () => ({
+        id: 'sub_1',
+        status: 'canceled',
+        metadata: { discord_user_id: 'user_1' },
+      })),
+    });
+
+    await runResyncCli(['--all'], deps);
+    const resolveWebhookCalls = (deps.db.query as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (c: unknown[]) =>
+        (c[0] as string).includes('UPDATE member_impact_logs') && (c[1] as string[])[1] === ROLE_SYNC_FAILED_WEBHOOK,
+    );
+    expect(resolveWebhookCalls.length).toBeGreaterThan(0);
   });
 });
 
