@@ -45,6 +45,9 @@ import {
 
 const hasTestDb = Boolean(TEST_DB_URL);
 
+/** 課金先行 subscribe は email で member を作る（discord_user_id は link-discord まで NULL） */
+const FAILURE_RECOVERY_SUBSCRIBE_EMAIL = 'failure-recovery-test@example.com';
+
 // PAY.JP createSubscription の不確定失敗を模倣するエラー
 function makeTimeoutError(): Error {
   const err = new Error('ETIMEDOUT') as NodeJS.ErrnoException;
@@ -69,7 +72,7 @@ async function postSubscribe(
     cookies: { '__Host-link_session': linkToken },
     body: JSON.stringify({
       planId,
-      email: 'failure-recovery-test@example.com',
+      email: FAILURE_RECOVERY_SUBSCRIBE_EMAIL,
       payjpToken: 'tok_test_e2e',
       privacyConsented: true,
     }),
@@ -82,9 +85,7 @@ async function getMember(pool: pg.Pool, discordUserId: string): Promise<Record<s
   return res.rows[0] as Record<string, unknown> | undefined;
 }
 
-/** 課金先行 subscribe は email で member を作る（discord_user_id は link-discord まで NULL） */
-const FAILURE_RECOVERY_SUBSCRIBE_EMAIL = 'failure-recovery-test@example.com';
-
+/** subscribe 後の課金先行 member 行は email で突き合わせる（discord_user_id は link-discord まで NULL） */
 async function getMemberByEmail(pool: pg.Pool, email: string): Promise<Record<string, unknown> | undefined> {
   const res = await pool.query('SELECT * FROM members WHERE email = $1', [email]);
   return res.rows[0] as Record<string, unknown> | undefined;
