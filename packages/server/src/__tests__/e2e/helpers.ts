@@ -184,7 +184,7 @@ export async function completeOAuthFlow(
 }
 
 /**
- * 購読完了状態の member を作成して返す（課金先行: link_session 不要）。
+ * 購読完了状態の member を作成して返す（`__Host-link_session` 必須）。
  */
 export async function subscribeUser(
   app: ReturnType<typeof buildApp>,
@@ -194,11 +194,13 @@ export async function subscribeUser(
 ): Promise<{ memberId: string }> {
   const planId = overrides.planId ?? E2E_BILLING_CONFIG.allowedPlanIds[0];
   const email = `${discordUserId}@e2e-test.example.com`;
+  const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
 
   const res = await app.inject({
     method: 'POST',
     url: '/v1/subscriptions',
     headers: { 'content-type': 'application/json', origin: 'https://example.com' },
+    cookies: { '__Host-link_session': rawToken },
     body: JSON.stringify({
       planId,
       email,
@@ -281,6 +283,12 @@ export function makeWebhookEvent(
 export function makeCliDeps(pool: pg.Pool, overrides: Partial<CliDeps> = {}): CliDeps {
   return {
     db: createPgPool(pool),
+    planInitialChargeAmounts: {
+      plan_e2e: 1000,
+      plan_e2e_standard: 2000,
+      plan_e2e_premium: 3000,
+    },
+    initialChargeCurrency: 'jpy',
     getPayjpSubscription: vi.fn().mockResolvedValue({
       id: 'sub_test_e2e',
       status: 'active',

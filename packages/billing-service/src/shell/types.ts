@@ -96,6 +96,9 @@ export interface BillingConfig {
   allowedPlanIds: string[];
   discordGuildId: string;
   planRoleMapping: Record<string, string>;
+  /** JPY amounts keyed by PAY.JP plan id (initial charge must match selected plan). */
+  planInitialChargeAmounts: Record<string, number>;
+  /** Fallback when a plan id is missing from planInitialChargeAmounts (should not happen for allowed plans). */
   initialChargeAmount: number;
   initialChargeAmountCurrency: string;
   discordTokenEncryptionKey?: string;

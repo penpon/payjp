@@ -1,5 +1,6 @@
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
+import { linkSessionTokenHash } from '@hayane/billing-service';
 import type { CancelFormTokenRecord, LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
 import type { InjectOptions } from 'light-my-request';
 import { describe, expect, it, vi } from 'vitest';
@@ -57,6 +58,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     role_state: 'unknown',
     last_synced_at: NOW,
     last_payjp_event_created_at: null,
+    inflight_subscribe_plan_id: null,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,
@@ -94,7 +96,8 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: FRONTEND_BASE_URL,
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    planRoleMapping: { plan_test: 'role-001' },
+    planRoleMapping: { [PLAN_ID]: 'role-plan-001' },
+    planInitialChargeAmounts: { [PLAN_ID]: 1000 },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
@@ -165,7 +168,13 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
     upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
     updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
-    findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
+    findLinkSession: vi
+      .fn()
+      .mockImplementation((h: string) =>
+        Promise.resolve(
+          h === linkSessionTokenHash(LINK_SESSION_TOKEN) ? makeLinkSession({ link_session_token_hash: h }) : null,
+        ),
+      ),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
     insertCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
     findCancelFormToken: vi.fn().mockResolvedValue(makeCancelFormToken()),
@@ -242,7 +251,7 @@ function cancelPayload() {
   return {};
 }
 
-/** Common inject options for subscribe endpoint (no link_session needed) */
+/** Common inject options for subscribe endpoint (__Host-link_session required) */
 function subscribeInjectOpts(url: string, payload: Record<string, unknown>, overrides: { origin?: string } = {}) {
   const { origin = FRONTEND_BASE_URL } = overrides;
   return {
@@ -250,6 +259,7 @@ function subscribeInjectOpts(url: string, payload: Record<string, unknown>, over
     url,
     headers: { origin, 'content-type': 'application/json' },
     payload,
+    cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
   };
 }
 

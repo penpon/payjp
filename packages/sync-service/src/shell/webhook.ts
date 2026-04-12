@@ -391,10 +391,17 @@ async function insertPayjpEvent(db: DbPool, event: PayjpEventInsert): Promise<vo
   };
 
   await db.query(
-    `INSERT INTO payjp_events (id, event_type, payload, processing_result, member_id, processed_at)
-     VALUES ($1, $2, $3, $4, $5, now())
+    `INSERT INTO payjp_events (id, event_type, payload, processing_result, member_id, processed_at, data_metadata_operation_id)
+     VALUES ($1, $2, $3, $4, $5, now(), $6)
      ON CONFLICT (id) DO NOTHING`,
-    [event.id, event.event_type, JSON.stringify(enrichedPayload), event.processing_result, event.member_id ?? null],
+    [
+      event.id,
+      event.event_type,
+      JSON.stringify(enrichedPayload),
+      event.processing_result,
+      event.member_id ?? null,
+      event.data_metadata_operation_id ?? null,
+    ],
   );
 }
 

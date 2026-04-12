@@ -137,7 +137,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       try {
         const now = billingDeps.clock();
 
-        // Try member_session first (billing-first flow)
+        // Prefer member_session (post-subscribe member cookie), then link_session fallback
         const memberSessionToken = request.cookies['__Host-member_session'] ?? '';
         if (memberSessionToken) {
           const msHash = memberSessionTokenHash(memberSessionToken);

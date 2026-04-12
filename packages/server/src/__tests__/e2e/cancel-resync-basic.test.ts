@@ -129,13 +129,20 @@ describe.skipIf(!hasTestDb)('E2E Cancel / Resync / Daily Resync — 基本スモ
       const discordUserId = `resync-cli-basic-${randomUUID()}`;
       const futureTimestamp = Math.floor(Date.now() / 1000) + 30 * 86400;
 
-      // メンバーを事前挿入（active / PAY.JP 情報あり）
+      // メンバーを事前挿入（active / PAY.JP 情報あり）。payjp_plan_id 無しだと grant 同期が unmapped で失敗する
       await pool.query(
         `INSERT INTO members
            (id, discord_user_id, email, subscription_status,
-            payjp_customer_id, payjp_subscription_id, access_end_at, role_state)
-         VALUES ($1, $2, $3, 'active', $4, $5, NOW() + INTERVAL '30 days', 'granted')`,
-        [randomUUID(), discordUserId, `${discordUserId}@e2e-test.example.com`, 'cus_test_e2e', 'sub_test_cli'],
+            payjp_customer_id, payjp_subscription_id, payjp_plan_id, access_end_at, role_state)
+         VALUES ($1, $2, $3, 'active', $4, $5, $6, NOW() + INTERVAL '30 days', 'granted')`,
+        [
+          randomUUID(),
+          discordUserId,
+          `${discordUserId}@e2e-test.example.com`,
+          'cus_test_e2e',
+          'sub_test_cli',
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const cliDeps = makeCliDeps(pool, {

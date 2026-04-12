@@ -34,6 +34,7 @@ export interface DbClient {
     operationId: string,
     operationType: 'subscribe' | 'cancel',
     now: Date,
+    subscribePlanId?: string | null,
   ): Promise<void>;
   clearInflightOperation(memberId: string): Promise<void>;
   updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
@@ -86,6 +87,7 @@ export interface TransactionDbClient {
     operationId: string,
     operationType: 'subscribe' | 'cancel',
     now: Date,
+    subscribePlanId?: string | null,
   ): Promise<void>;
   clearInflightOperation(memberId: string): Promise<void>;
   updateMemberCustomerId(memberId: string, payjpCustomerId: string): Promise<void>;
@@ -124,6 +126,7 @@ function toMember(row: Record<string, unknown>): Member {
     inflight_operation_id: (row.inflight_operation_id as string) ?? null,
     inflight_operation_type: (row.inflight_operation_type as Member['inflight_operation_type']) ?? null,
     inflight_operation_started_at: (row.inflight_operation_started_at as Date) ?? null,
+    inflight_subscribe_plan_id: (row.inflight_subscribe_plan_id as string) ?? null,
     privacy_consented_at: (row.privacy_consented_at as Date) ?? null,
     access_end_at: (row.access_end_at as Date) ?? null,
     next_billing_at: (row.next_billing_at as Date) ?? null,
@@ -276,15 +279,18 @@ async function querySetInflightOperation(
   operationId: string,
   operationType: 'subscribe' | 'cancel',
   now: Date,
+  subscribePlanId?: string | null,
 ): Promise<void> {
+  const planForRow = operationType === 'subscribe' ? (subscribePlanId ?? null) : null;
   const result = await q.query(
     `UPDATE members
      SET inflight_operation_id = $2,
          inflight_operation_type = $3,
          inflight_operation_started_at = $4,
+         inflight_subscribe_plan_id = $5,
          updated_at = now()
      WHERE id = $1 AND inflight_operation_id IS NULL`,
-    [memberId, operationId, operationType, now],
+    [memberId, operationId, operationType, now, planForRow],
   );
   if ((result.rowCount ?? 0) === 0) {
     throw new Error(`Member not found or inflight operation already set: ${memberId}`);
@@ -297,6 +303,7 @@ async function queryClearInflightOperation(q: Queryable, memberId: string): Prom
      SET inflight_operation_id = NULL,
          inflight_operation_type = NULL,
          inflight_operation_started_at = NULL,
+         inflight_subscribe_plan_id = NULL,
          updated_at = now()
      WHERE id = $1`,
     [memberId],
@@ -395,6 +402,7 @@ async function queryUpdateMemberAfterCancel(
        inflight_operation_id = NULL,
        inflight_operation_type = NULL,
        inflight_operation_started_at = NULL,
+       inflight_subscribe_plan_id = NULL,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,
@@ -444,8 +452,14 @@ export class PgDbClient implements DbClient {
   consumeCancelFormToken(tokenId: string, now: Date) {
     return queryConsumeCancelFormToken(this.pool, tokenId, now);
   }
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
-    return querySetInflightOperation(this.pool, memberId, operationId, operationType, now);
+  setInflightOperation(
+    memberId: string,
+    operationId: string,
+    operationType: 'subscribe' | 'cancel',
+    now: Date,
+    subscribePlanId?: string | null,
+  ) {
+    return querySetInflightOperation(this.pool, memberId, operationId, operationType, now, subscribePlanId);
   }
   clearInflightOperation(memberId: string) {
     return queryClearInflightOperation(this.pool, memberId);
@@ -744,8 +758,14 @@ class PgTransactionClient implements TransactionDbClient {
   consumeCancelFormToken(tokenId: string, now: Date) {
     return queryConsumeCancelFormToken(this.client, tokenId, now);
   }
-  setInflightOperation(memberId: string, operationId: string, operationType: 'subscribe' | 'cancel', now: Date) {
-    return querySetInflightOperation(this.client, memberId, operationId, operationType, now);
+  setInflightOperation(
+    memberId: string,
+    operationId: string,
+    operationType: 'subscribe' | 'cancel',
+    now: Date,
+    subscribePlanId?: string | null,
+  ) {
+    return querySetInflightOperation(this.client, memberId, operationId, operationType, now, subscribePlanId);
   }
   clearInflightOperation(memberId: string) {
     return queryClearInflightOperation(this.client, memberId);

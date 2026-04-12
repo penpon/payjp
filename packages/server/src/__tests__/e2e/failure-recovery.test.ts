@@ -45,7 +45,7 @@ import {
 
 const hasTestDb = Boolean(TEST_DB_URL);
 
-/** 課金先行 subscribe は email で member を作る（discord_user_id は link-discord まで NULL） */
+/** 旧フィクスチャ: email のみで member を作るケース（discord_user_id は後続リンクまで NULL） */
 const FAILURE_RECOVERY_SUBSCRIBE_EMAIL = 'failure-recovery-test@example.com';
 
 // PAY.JP createSubscription の不確定失敗を模倣するエラー
@@ -85,7 +85,7 @@ async function getMember(pool: pg.Pool, discordUserId: string): Promise<Record<s
   return res.rows[0] as Record<string, unknown> | undefined;
 }
 
-/** subscribe 後の課金先行 member 行は email で突き合わせる（discord_user_id は link-discord まで NULL） */
+/** subscribe 後の member 行は email で突き合わせる（discord_user_id は link-discord まで NULL の旧パターン） */
 async function getMemberByEmail(pool: pg.Pool, email: string): Promise<Record<string, unknown> | undefined> {
   const res = await pool.query('SELECT * FROM members WHERE email = $1', [email]);
   return res.rows[0] as Record<string, unknown> | undefined;
@@ -201,9 +201,16 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const cliDeps = makeCliDeps(pool, {
@@ -238,9 +245,17 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, payjp_initial_charge_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, $6, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', 'ch_pre_existing', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, payjp_initial_charge_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, $6, 'subscribe', NOW(), $7)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          'ch_pre_existing',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const listPayjpCharges = vi.fn().mockResolvedValue({ data: [], has_more: false });
@@ -272,9 +287,16 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const createPayjpCharge = vi.fn().mockResolvedValue({ id: 'ch_should_not_create' });
@@ -307,11 +329,11 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const operationId = randomUUID();
       const memberId = randomUUID();
 
-      // payjp_customer_id を NULL のまま挿入
+      // payjp_customer_id を NULL のまま挿入（plan は必須 — CLI は customer 欠落で fail-close）
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, NULL, $4, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, NULL, $4, 'subscribe', NOW(), $5)`,
+        [memberId, discordUserId, `${discordUserId}@e2e.test`, operationId, E2E_BILLING_CONFIG.allowedPlanIds[0]],
       );
 
       const cliDeps = makeCliDeps(pool);
@@ -330,9 +352,16 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const cliDeps = makeCliDeps(pool, {
@@ -360,9 +389,16 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       // 各ページは一致なし、最後のページで has_more=true のまま
@@ -394,9 +430,17 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const oldTimestamp = Math.floor(Date.now() / 1000) - 86400; // 1 日前
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, last_payjp_event_created_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId, oldTimestamp],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, last_payjp_event_created_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6, $7)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          oldTimestamp,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const cliDeps = makeCliDeps(pool, {
@@ -437,9 +481,16 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const cliDeps = makeCliDeps(pool, {
@@ -481,9 +532,9 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const memberId = randomUUID();
 
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, NULL, $4, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, NULL, $4, 'subscribe', NOW(), $5)`,
+        [memberId, discordUserId, `${discordUserId}@e2e.test`, operationId, E2E_BILLING_CONFIG.allowedPlanIds[0]],
       );
 
       const cliDeps = makeCliDeps(pool);
@@ -510,17 +561,27 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
 
       // 503 後の状態を直接作成
       await pool.query(
-        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW())`,
-        [memberId, discordUserId, `${discordUserId}@e2e.test`, 'cus_test_e2e', operationId],
+        `INSERT INTO members (id, discord_user_id, email, subscription_status, payjp_customer_id, inflight_operation_id, inflight_operation_type, inflight_operation_started_at, inflight_subscribe_plan_id)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'subscribe', NOW(), $6)`,
+        [
+          memberId,
+          discordUserId,
+          `${discordUserId}@e2e.test`,
+          'cus_test_e2e',
+          operationId,
+          E2E_BILLING_CONFIG.allowedPlanIds[0],
+        ],
       );
 
       const cliDeps = makeCliDeps(pool);
       // --all で日次 resync を実行
       const output = await runResyncCli(['--all'], cliDeps);
 
-      // --all は inflight member をスキップ（success 扱い）するため exitCode=0
-      expect(output.exitCode).toBe(0);
+      // inflight メンバーは reconcile しないが、CLI は「失敗」として failed_count に数える（sync-service reconcileMember）
+      expect(output.result.processed_count).toBe(1);
+      expect(output.result.succeeded_count).toBe(0);
+      expect(output.result.failed_count).toBe(1);
+      expect(output.exitCode).toBe(2);
 
       // inflight は保持されたまま
       const member = await getMember(pool, discordUserId);

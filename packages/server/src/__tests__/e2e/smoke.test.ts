@@ -10,6 +10,7 @@
  * 前提: DATABASE_URL_TEST または DATABASE_URL が設定済みの PostgreSQL に接続可能であること。
  */
 
+import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -20,6 +21,7 @@ import {
   E2E_BILLING_CONFIG,
   E2E_PLAN_ROLE_MAPPING,
   E2E_WEBHOOK_TOKEN,
+  insertLinkedSession,
   makeMockDiscordClient,
   makeMockPayjpClient,
   type PgDbClient,
@@ -116,10 +118,12 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Smoke 2: Subscribe フロー（課金先行 — link_session 不要）
+  // Smoke 2: Subscribe（E2E inject。link_session 必須の実装へ追随して更新すること）
   // ---------------------------------------------------------------------------
   describe('Smoke 2: Subscribe flow', () => {
-    it('初回ユーザー → charge + trial subscription、DB に member が存在する（subscribe では Discord 未使用）', async () => {
+    it('初回ユーザー → charge + trial subscription、DB に member が存在する（課金前に Discord 検証）', async () => {
+      const discordUserId = `smoke-${randomUUID()}`;
+      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
@@ -131,6 +135,7 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
           'content-type': 'application/json',
           origin: 'https://example.com',
         },
+        cookies: { '__Host-link_session': rawToken },
         body: JSON.stringify({
           planId: E2E_BILLING_CONFIG.allowedPlanIds[0],
           email: 'smoke-test@example.com',
@@ -152,7 +157,7 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
       expect(member!.payjp_customer_id).toMatch(/^cus_test_e2e/);
 
       expect(discordMock.assignRole).not.toHaveBeenCalled();
-      expect(discordMock.checkMembership).not.toHaveBeenCalled();
+      expect(discordMock.checkMembership).toHaveBeenCalled();
 
       expect(payjpMock.fetchToken).toHaveBeenCalledWith('tok_test_e2e');
       expect(payjpMock.createCustomer).toHaveBeenCalledOnce();

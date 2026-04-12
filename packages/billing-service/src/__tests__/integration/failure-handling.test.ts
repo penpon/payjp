@@ -6,6 +6,7 @@
 
 import type { LinkSessionRecord, Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { linkSessionTokenHash } from '../../core/index.js';
 import { handleCancel } from '../../shell/cancel.js';
 import { handleSubscribe } from '../../shell/subscribe.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
@@ -43,6 +44,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     role_state: 'unknown',
     last_synced_at: NOW,
     last_payjp_event_created_at: null,
+    inflight_subscribe_plan_id: null,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,
@@ -79,7 +81,8 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: 'https://frontend.example.com',
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    planRoleMapping: { plan_test: 'role-001' },
+    planRoleMapping: { [PLAN_ID]: 'role-plan-001' },
+    planInitialChargeAmounts: { [PLAN_ID]: 1000 },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
@@ -101,7 +104,13 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
     upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
     updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
-    findLinkSession: vi.fn().mockResolvedValue(makeLinkSession()),
+    findLinkSession: vi
+      .fn()
+      .mockImplementation((h: string) =>
+        Promise.resolve(
+          h === linkSessionTokenHash(LINK_SESSION_TOKEN) ? makeLinkSession({ link_session_token_hash: h }) : null,
+        ),
+      ),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
     insertCancelFormToken: vi.fn().mockResolvedValue(undefined as never),
     findCancelFormToken: vi.fn().mockResolvedValue(null),
@@ -264,6 +273,7 @@ function makeSubscribeRequest() {
     payjpToken: 'tok_001',
     planId: PLAN_ID,
     privacyConsented: true,
+    linkSessionToken: LINK_SESSION_TOKEN,
   };
 }
 

@@ -67,6 +67,8 @@ export interface Member {
   inflight_operation_id: string | null;
   inflight_operation_type: InflightOperationType | null;
   inflight_operation_started_at: Date | null;
+  /** Selected PAY.JP plan id while subscribe is inflight (recovery). */
+  inflight_subscribe_plan_id: string | null;
   privacy_consented_at: Date | null;
   access_end_at: Date | null;
   next_billing_at: Date | null;

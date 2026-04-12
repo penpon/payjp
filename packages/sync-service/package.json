@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@hayane/billing-service": "*",
     "@hayane/shared": "*"
   },
   "devDependencies": {

@@ -25,6 +25,8 @@ function createMockCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     cancelPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'canceled' })),
     syncRole: vi.fn(async () => {}),
     planRoleMapping: { plan_1: 'role_1' },
+    planInitialChargeAmounts: { plan_1: 1000 },
+    initialChargeCurrency: 'jpy',
     log: vi.fn(),
     now: () => new Date('2026-04-06T12:00:00Z'),
     ...overrides,
@@ -113,6 +115,7 @@ describe('runDailyResync', () => {
                 discord_user_id: 'u1',
                 inflight_operation_id: 'op_1',
                 inflight_operation_type: 'subscribe',
+                payjp_plan_id: 'plan_1',
                 payjp_subscription_id: 'sub_1',
                 access_end_at: null,
                 subscription_status: 'active',
@@ -129,7 +132,9 @@ describe('runDailyResync', () => {
     await runDailyResync(deps);
 
     const entry: LogEntry = log.mock.calls[0][0];
-    expect(entry.result).toBe('success');
+    // Inflight members count as failed reconciliation (manual --operation-id required)
+    expect(entry.result).toBe('failure');
+    expect(entry.failed_count).toBe(1);
 
     // Verify no UPDATE cleared inflight fields
     const queryCalls = (db.query as ReturnType<typeof vi.fn>).mock.calls;

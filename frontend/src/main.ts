@@ -476,7 +476,32 @@ async function init(): Promise<void> {
       return;
     }
 
-    // member_session なし → 課金フォーム表示（初回 or Cookie期限切れ）
+    // member_session なし → 課金には __Host-link_session 必須（Discord OAuth 後に発行）
+    let hasLinkSession = false;
+    try {
+      const s = await checkSession();
+      hasLinkSession = s.linked === true;
+    } catch (err) {
+      if (!(err instanceof SessionCheckError && err.status === 401)) {
+        console.error('[init] Session check failed:', err);
+        renderState(app, 'error', startOAuth, {
+          errorMessage: '連携状態の確認に失敗しました。しばらく経ってから再度お試しください。',
+        });
+        return;
+      }
+      hasLinkSession = false;
+    }
+    if (!hasLinkSession) {
+      renderState(app, 'error', startOAuth, {
+        errorMessage:
+          '購読には先に Discord アカウントとの連携が必要です。「Discordと連携する」からログインしてください。',
+        onDiscordConnect: () => {
+          startOAuth();
+        },
+      });
+      return;
+    }
+
     startBillingFlow(app);
   } catch (err) {
     console.error('[init] failed:', err);

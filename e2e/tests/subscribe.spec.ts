@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { installPayjpMockRoute } from '../fixtures/payjp-mock.js';
 
-test('billing-first subscribe shows completion', async ({ page }) => {
+test('subscribe flow shows completion after Discord and billing', async ({ page }) => {
   await installPayjpMockRoute(page);
   const email = `e2e-subscribe-${Date.now()}@example.com`;
   await page.goto('/');

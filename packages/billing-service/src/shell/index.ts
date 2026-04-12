@@ -1,6 +1,8 @@
 export {
+  calculateTrialEnd,
   formatRfc3339Utc,
   hasActiveSubscription,
+  isFirstTimeUser,
   isSameOrigin,
   linkSessionTokenHash,
   memberSessionTokenHash,

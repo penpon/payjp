@@ -1,5 +1,5 @@
 -- Migration 001: Billing-first flow
--- members.discord_user_id を NULL 許容に変更（課金先行フロー対応）
+-- members.discord_user_id を NULL 許容に変更（歴史的マイグレーション名 billing_first。現仕様の用語は `2weeks-spec.md` §5 / CR-008）
 -- members.email に UNIQUE 制約追加（重複防止キー）
 
 -- discord_user_id: NOT NULL → NULL 許容（既存データに影響なし）

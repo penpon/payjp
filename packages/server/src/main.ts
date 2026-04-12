@@ -3,8 +3,15 @@ import { REST, RequestMethod } from '@discordjs/rest';
 import type { AddGuildMemberResult, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
 import type { WebhookHandlerDeps } from '@hayane/sync-service';
-import Payjp from 'payjp';
+import { runDailyResync } from '@hayane/sync-service';
+import { CronJob } from 'cron';
 import { buildApp } from './app.js';
+import {
+  buildCliDepsFromPayjpApi,
+  createPayjpApi,
+  parseSubscriptionPlanConfig,
+  toMetadata,
+} from './cli-deps-factory.js';
 import type { SyncDeps } from './routes/sync.routes.js';
 
 /** Discord permission bits (https://discord.com/developers/docs/topics/permissions) */
@@ -75,6 +82,9 @@ const REQUIRED_ENV = [
   'GOOGLE_FORM_CANCEL_SECRET',
   'GOOGLE_FORM_CANCEL_TOKEN_SECRET',
   'GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS',
+  'PAYJP_WEBHOOK_TOKEN',
+  'PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS',
+  'DAILY_RESYNC_CRON',
 ] as const;
 
 type RequiredEnvKey = (typeof REQUIRED_ENV)[number];
@@ -156,17 +166,20 @@ try {
 }
 console.log('[startup] DB migrations applied.');
 
+const dbClient = new PgDbClient(pool);
+const dbPool = createPgPool(pool);
+const planParse = parseSubscriptionPlanConfig(env, 'startup');
+if (!planParse.ok) {
+  process.stderr.write(planParse.message);
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+const { allowedPlanIds, planRoleMapping, planInitialChargeAmounts } = planParse;
+
 // ---- 3. Create clients ----
 
 // PAY.JP client (payjp uses export= pattern; cast required for ESM interop)
-const payjpApi = (
-  Payjp as unknown as (key: string) => Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>
-)(env.PAYJP_SECRET_KEY);
-
-function toMetadata(raw: unknown): Record<string, string> {
-  if (raw === null || raw === undefined || typeof raw !== 'object') return {};
-  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
-}
+const payjpApi = createPayjpApi(env.PAYJP_SECRET_KEY);
 
 function toSubscription(s: Record<string, unknown>) {
   const plan = s.plan as Record<string, unknown>;
@@ -322,41 +335,17 @@ const discordClient: DiscordClient = {
   },
 };
 
-async function syncRole(userId: string, action: 'grant' | 'revoke', roleId: string): Promise<void> {
-  const endpoint = `/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${roleId}` as const;
-  if (action === 'grant') {
-    await discordRest.put(endpoint);
-  } else {
-    await discordRest.delete(endpoint);
-  }
-}
+const cliDeps = buildCliDepsFromPayjpApi({
+  db: dbPool,
+  payjpApi,
+  discordRest,
+  discordGuildId: env.DISCORD_GUILD_ID,
+  planRoleMapping,
+  planInitialChargeAmounts,
+});
+const { syncRole } = cliDeps;
 
 // ---- 4. Wire dependencies ----
-
-const dbClient = new PgDbClient(pool);
-const dbPool = createPgPool(pool);
-const allowedPlanIds = env.PAYJP_PLAN_IDS.split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-if (allowedPlanIds.length === 0) {
-  process.stderr.write('[startup] PAYJP_PLAN_IDS must contain at least one plan ID\n');
-  await closePoolIgnoringStartupErrors();
-  process.exit(1);
-}
-
-const discordPlanRoleIds = env.DISCORD_PLAN_ROLE_IDS.split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-if (discordPlanRoleIds.length !== allowedPlanIds.length) {
-  process.stderr.write(
-    `[startup] DISCORD_PLAN_ROLE_IDS must have the same number of comma-separated entries as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${discordPlanRoleIds.length})\n`,
-  );
-  await closePoolIgnoringStartupErrors();
-  process.exit(1);
-}
-const planRoleMapping: Record<string, string> = Object.fromEntries(
-  allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
-);
 
 const billingDeps: BillingDeps = {
   db: dbClient,
@@ -367,6 +356,7 @@ const billingDeps: BillingDeps = {
     allowedPlanIds,
     discordGuildId: env.DISCORD_GUILD_ID,
     planRoleMapping,
+    planInitialChargeAmounts,
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     discordTokenEncryptionKey,
@@ -384,7 +374,7 @@ const billingDeps: BillingDeps = {
 
 const webhookDeps: WebhookHandlerDeps = {
   db: dbPool,
-  payjpWebhookToken: process.env.PAYJP_WEBHOOK_TOKEN ?? '',
+  payjpWebhookToken: env.PAYJP_WEBHOOK_TOKEN,
   expectedLivemode: env.PAYJP_LIVEMODE === 'true',
   discordGuildId: env.DISCORD_GUILD_ID,
   planRoleMapping,
@@ -409,9 +399,34 @@ const app = buildApp(
   syncDeps,
 );
 
+let dailyResyncCron: CronJob | null = null;
+try {
+  dailyResyncCron = new CronJob(
+    env.DAILY_RESYNC_CRON,
+    () => {
+      void runDailyResync({
+        cliDeps,
+        log: (entry) => console.log(JSON.stringify(entry)),
+      }).catch((err) => {
+        console.error(`[daily-resync] ${err instanceof Error ? err.message : String(err)}`);
+      });
+    },
+    null,
+    false,
+  );
+} catch (err) {
+  process.stderr.write(
+    `[startup] Invalid DAILY_RESYNC_CRON "${env.DAILY_RESYNC_CRON}": ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+
 try {
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`[startup] Server listening on port ${port}`);
+  dailyResyncCron?.start();
+  console.log(`[startup] Daily resync cron scheduled: ${env.DAILY_RESYNC_CRON}`);
 } catch (err) {
   console.error('[startup] Failed to start server:', err);
   await closePoolIgnoringStartupErrors();
@@ -421,6 +436,12 @@ try {
 // Graceful shutdown — always close the DB pool; surface partial failures via exit code
 async function shutdownGracefully(): Promise<void> {
   let exitCode = 0;
+  try {
+    dailyResyncCron?.stop();
+  } catch (err) {
+    console.error('[shutdown] Error stopping daily resync cron:', err);
+    exitCode = 1;
+  }
   try {
     await app.close();
   } catch (err) {

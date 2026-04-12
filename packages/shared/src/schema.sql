@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS members (
   inflight_operation_id           TEXT,
   inflight_operation_type         TEXT CHECK (inflight_operation_type IN ('subscribe', 'cancel')),
   inflight_operation_started_at   TIMESTAMPTZ,
+  inflight_subscribe_plan_id      TEXT,
   privacy_consented_at            TIMESTAMPTZ,
   created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now()

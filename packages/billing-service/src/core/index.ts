@@ -129,7 +129,7 @@ export function calculateTrialEnd(now: Date): Date {
 }
 
 // PROP-BILL-009: REQ-BILL-013, REQ-BILL-014
-// Includes member_id + operation_id for billing-first; discord_user_id when already linked (sync/CLI compatibility).
+// PAY.JP metadata: member_id + operation_id; discord_user_id when linked (sync/CLI compatibility).
 export function buildSubscriptionMetadata(
   memberId: string,
   operationId: string,
