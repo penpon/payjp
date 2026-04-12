@@ -14,7 +14,6 @@ import {
   closePool,
   createTestDb,
   E2E_BILLING_CONFIG,
-  insertLinkedSession,
   makeMockDiscordClient,
   makeMockPayjpClient,
   type PgDbClient,
@@ -37,7 +36,7 @@ function makeSubscribeBody(email: string, planId = E2E_BILLING_CONFIG.allowedPla
   });
 }
 
-async function postSubscribe(app: ReturnType<typeof buildE2EApp>, rawToken: string, email: string, planId?: string) {
+async function postSubscribe(app: ReturnType<typeof buildE2EApp>, email: string, planId?: string) {
   return app.inject({
     method: 'POST',
     url: '/v1/subscriptions',
@@ -45,7 +44,6 @@ async function postSubscribe(app: ReturnType<typeof buildE2EApp>, rawToken: stri
       'content-type': 'application/json',
       origin: 'https://example.com',
     },
-    cookies: { '__Host-link_session': rawToken },
     body: makeSubscribeBody(email, planId),
   });
 }
@@ -75,10 +73,8 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
   // ---------------------------------------------------------------------------
 
   describe('並列リクエスト', () => {
-    it('同一 discord_user_id への 2 並列リクエスト: charge/subscription は 1 回のみ、DB レコードも 1 件', async () => {
+    it('同一メールアドレスへの 2 並列リクエスト: charge/subscription は 1 回のみ、DB レコードも 1 件', async () => {
       const discordUserId = `concurrent-user-2-${randomUUID()}`;
-
-      // 各リクエストに固有のリンクセッションが必要（消費される）
       const payjpMock = makeMockPayjpClient();
       const originalCreateCustomer = payjpMock.createCustomer;
       payjpMock.createCustomer = vi.fn().mockImplementation(async (...args: unknown[]) => {
@@ -88,11 +84,6 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
 
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
-
-      const [session1, session2] = await Promise.all([
-        insertLinkedSession(pgDb, discordUserId),
-        insertLinkedSession(pgDb, discordUserId),
-      ]);
 
       vi.mocked(payjpMock.createCharge).mockClear();
       vi.mocked(payjpMock.createSubscription).mockClear();
@@ -106,10 +97,7 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       });
 
       const subscribeEmail = `${discordUserId}@e2e-concurrent.example.com`;
-      const [res1, res2] = await Promise.all([
-        postSubscribe(app, session1.rawToken, subscribeEmail),
-        postSubscribe(app, session2.rawToken, subscribeEmail),
-      ]);
+      const [res1, res2] = await Promise.all([postSubscribe(app, subscribeEmail), postSubscribe(app, subscribeEmail)]);
 
       // non-blocking advisory lock のため、成功は 1 件のみで残りは LOCK_UNAVAILABLE(503)
       const responses = [res1, res2];
@@ -126,15 +114,14 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       expect(payjpMock.createCharge).toHaveBeenCalledOnce();
       expect(payjpMock.createSubscription).toHaveBeenCalledOnce();
 
-      // DB に member は 1 件のみ
-      const { rows } = await pool.query<{ cnt: number }>(
-        'SELECT COUNT(*)::int AS cnt FROM members WHERE discord_user_id = $1',
-        [discordUserId],
-      );
+      // DB に member は 1 件のみ（メール起点の仮登録では discord_user_id は NULL のまま）
+      const { rows } = await pool.query<{ cnt: number }>('SELECT COUNT(*)::int AS cnt FROM members WHERE email = $1', [
+        subscribeEmail.toLowerCase(),
+      ]);
       expect(rows[0].cnt).toBe(1);
     });
 
-    it('同一 discord_user_id への 3 並列リクエスト: charge/subscription は 1 回のみ、DB レコードも 1 件', async () => {
+    it('同一メールアドレスへの 3 並列リクエスト: charge/subscription は 1 回のみ、DB レコードも 1 件', async () => {
       const discordUserId = `concurrent-user-3-${randomUUID()}`;
 
       const payjpMock = makeMockPayjpClient();
@@ -145,12 +132,6 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       });
 
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
-
-      const [session1, session2, session3] = await Promise.all([
-        insertLinkedSession(pgDb, discordUserId),
-        insertLinkedSession(pgDb, discordUserId),
-        insertLinkedSession(pgDb, discordUserId),
-      ]);
 
       vi.mocked(payjpMock.createCharge).mockClear();
       vi.mocked(payjpMock.createSubscription).mockClear();
@@ -163,9 +144,9 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
 
       const subscribeEmail = `${discordUserId}@e2e-concurrent.example.com`;
       const [res1, res2, res3] = await Promise.all([
-        postSubscribe(app, session1.rawToken, subscribeEmail),
-        postSubscribe(app, session2.rawToken, subscribeEmail),
-        postSubscribe(app, session3.rawToken, subscribeEmail),
+        postSubscribe(app, subscribeEmail),
+        postSubscribe(app, subscribeEmail),
+        postSubscribe(app, subscribeEmail),
       ]);
 
       const responses = [res1, res2, res3];
@@ -181,10 +162,9 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       expect(payjpMock.createCharge).toHaveBeenCalledOnce();
       expect(payjpMock.createSubscription).toHaveBeenCalledOnce();
 
-      const { rows } = await pool.query<{ cnt: number }>(
-        'SELECT COUNT(*)::int AS cnt FROM members WHERE discord_user_id = $1',
-        [discordUserId],
-      );
+      const { rows } = await pool.query<{ cnt: number }>('SELECT COUNT(*)::int AS cnt FROM members WHERE email = $1', [
+        subscribeEmail.toLowerCase(),
+      ]);
       expect(rows[0].cnt).toBe(1);
     });
 
@@ -200,22 +180,13 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
 
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      // バッチ 1: 2 並列
-      const [s1, s2] = await Promise.all([
-        insertLinkedSession(pgDb, discordUserId),
-        insertLinkedSession(pgDb, discordUserId),
-      ]);
-
       const subscribeEmail = `${discordUserId}@e2e-concurrent.example.com`;
-      await Promise.all([
-        postSubscribe(app, s1.rawToken, subscribeEmail),
-        postSubscribe(app, s2.rawToken, subscribeEmail),
-      ]);
+      // バッチ 1: 2 並列
+      await Promise.all([postSubscribe(app, subscribeEmail), postSubscribe(app, subscribeEmail)]);
 
       // バッチ 2: ロック解放後の単発リクエスト
       // 既にアクティブな購読があるためそれが返されるが、エラーではないことを確認
-      const s3 = await insertLinkedSession(pgDb, discordUserId);
-      const res = await postSubscribe(app, s3.rawToken, subscribeEmail);
+      const res = await postSubscribe(app, subscribeEmail);
 
       // ロックが正しく解放されていれば 200（既存サブスクリプション返却）
       // LOCK_UNAVAILABLE (503) にならないことを確認
@@ -250,8 +221,7 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
       const subscribeEmail = `${discordUserId}@e2e-test.example.com`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const res = await postSubscribe(app, rawToken, subscribeEmail);
+      const res = await postSubscribe(app, subscribeEmail);
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true });
@@ -283,8 +253,7 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
       const subscribeEmail = `${discordUserId}@e2e-test.example.com`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const res = await postSubscribe(app, rawToken, subscribeEmail);
+      const res = await postSubscribe(app, subscribeEmail);
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true });
@@ -315,8 +284,7 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
       const subscribeEmail = `${discordUserId}@e2e-test.example.com`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const res = await postSubscribe(app, rawToken, subscribeEmail);
+      const res = await postSubscribe(app, subscribeEmail);
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true });
@@ -348,8 +316,7 @@ describe.skipIf(!hasTestDb)('E2E — 同時購読ガード（T-P0-03）', () => 
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
       const subscribeEmail = `${discordUserId}@e2e-test.example.com`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const res = await postSubscribe(app, rawToken, subscribeEmail);
+      const res = await postSubscribe(app, subscribeEmail);
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true });

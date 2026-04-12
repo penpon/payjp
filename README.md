@@ -5,6 +5,7 @@ PAY.JP 定期課金の状態に応じて Discord ロールを自動付与/剥奪
 - **リリース目標**: 2026-04-20
 - **体制**: 1名
 - **仕様書**: `docs/2weeks-spec.md` / `docs/implementation-design-mvp.md` / `docs/tdd-acceptance-matrix-mvp.md`
+- **運用・本番前チェック**: `docs/ops/resync-cli.md` / `docs/ops/manual-role-revoke.md` / `docs/ops/production-readiness-checklist.md` / 証跡は `docs/evidence/`
 - **将来拡張（管理画面の境界）**: `docs/admin-console-boundary.md`（CR-005）
 
 ## サービス構成

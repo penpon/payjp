@@ -4,9 +4,9 @@ import { renderBilling, renderSubscribed } from '../billing-ui.js';
 import type { BillingFormState, PayjpAdapter, PlanDef } from '../types.js';
 
 const PLANS: PlanDef[] = [
-  { id: 'plan_starter', name: 'スタータープラン', price: 25000, features: ['掲載枠：1枠'] },
-  { id: 'plan_business', name: 'ビジネスプラン', price: 50000, features: ['掲載枠：3枠'] },
-  { id: 'plan_enterprise', name: 'エンタープライズプラン', price: 100000, features: ['掲載枠：10枠'] },
+  { id: 'plan_starter', name: 'スタータープラン', price: 20000, features: ['コミュニティ参加権'] },
+  { id: 'plan_business', name: 'ビジネスプラン', price: 50000, features: ['優先サポート'] },
+  { id: 'plan_enterprise', name: 'エンタープライズプラン', price: 70000, features: ['個別相談枠'] },
 ];
 
 function createMockCallbacks(): BillingCallbacks {
@@ -91,13 +91,16 @@ describe('billing-ui', () => {
       expect(badges.length).toBe(5);
     });
 
-    it('should render consent checkbox and privacy link', () => {
+    it('should render consent checkbox and terms + privacy links', () => {
       renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
 
       expect(container.querySelector('#billing-consent')).not.toBeNull();
-      const link = container.querySelector('.consent-link');
-      expect(link?.getAttribute('href')).toBe('/privacy.html');
-      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+      const links = container.querySelectorAll('.consent-link');
+      expect(links.length).toBe(2);
+      expect(links[0]?.getAttribute('href')).toBe('/terms.html');
+      expect(links[1]?.getAttribute('href')).toBe('/privacy.html');
+      expect(links[0]?.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(links[1]?.getAttribute('rel')).toBe('noopener noreferrer');
     });
 
     it('should have submit button disabled by default', () => {

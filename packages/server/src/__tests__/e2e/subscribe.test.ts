@@ -6,7 +6,7 @@
  *   - Plan 検証: 許可プラン3種 / 未知プラン
  *   - 3DS 検証: verified 以外のステータスはすべて 422
  *   - セキュリティ — Origin: 未指定 / 不一致 / null / ポート違い
- *   - __Host-link_session 必須・課金前に Discord 検証（2weeks-spec §5 / §6.2）
+ *   - メール起点の購読（課金前に Discord 検証しない。連携は課金後）
  *   - 冪等性 / inflight ガード: inflight 中 / 既存 active / trial / canceled(access_end_at 有効)
  *   - DB 永続化: 各フィールド保存確認 / mock 呼び出し引数検証
  *
@@ -21,7 +21,6 @@ import {
   closePool,
   createTestDb,
   E2E_BILLING_CONFIG,
-  insertLinkedSession,
   makeMockDiscordClient,
   makeMockPayjpClient,
   type PgDbClient,
@@ -45,7 +44,7 @@ function memberEmailForDiscordFixture(discordUserId: string): string {
   return `${discordUserId}@e2e.test`;
 }
 
-/** POST /v1/subscriptions。`linkSessionToken` 省略時は Cookie なし（422/403 等の早期終了テスト用） */
+/** POST /v1/subscriptions */
 function buildSubscribeRequest(
   overrides: {
     planId?: string;
@@ -53,6 +52,7 @@ function buildSubscribeRequest(
     payjpToken?: string;
     privacyConsented?: boolean;
     origin?: string;
+    /** @deprecated 課金フローでは未使用。後方互換テスト用 */
     linkSessionToken?: string;
   } = {},
 ) {
@@ -111,13 +111,11 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   // -------------------------------------------------------------------------
   describe('Trial 判定', () => {
     it('初回ユーザー → charge 作成 + trial subscription → trialApplied: true', async () => {
-      const discordUserId = `uid-first-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
-      const res = await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      const res = await app.inject(buildSubscribeRequest({ email: `first-${randomUUID()}@e2e.test` }));
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -130,6 +128,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
     it('非初回ユーザー（first_trial_granted_at 設定済み）→ subscription のみ（charge なし）→ trialApplied: false', async () => {
       const discordUserId = `uid-trial-not-first-${randomUUID()}`;
+      const memberEmail = memberEmailForDiscordFixture(discordUserId);
       const payjpMock = makeMockPayjpClient();
       // trial 非適用：trial_end なし
       (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -148,13 +147,10 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       await pool.query(
         `INSERT INTO members (id, discord_user_id, email, subscription_status, first_trial_granted_at, payjp_customer_id)
          VALUES ($1, $2, $3, 'deleted', NOW(), 'cus_test_e2e')`,
-        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
+        [randomUUID(), discordUserId, memberEmail],
       );
 
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const res = await app.inject(
-        buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId), linkSessionToken: rawToken }),
-      );
+      const res = await app.inject(buildSubscribeRequest({ email: memberEmail }));
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -167,6 +163,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
     it('退会後再加入 → first_trial_granted_at が保持され trial は再適用されない', async () => {
       const discordUserId = `uid-rejoin-${randomUUID()}`;
+      const memberEmail = memberEmailForDiscordFixture(discordUserId);
       const payjpMock = makeMockPayjpClient();
       (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'sub_test_e2e',
@@ -183,13 +180,10 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       await pool.query(
         `INSERT INTO members (id, discord_user_id, email, subscription_status, first_trial_granted_at, payjp_customer_id)
          VALUES ($1, $2, $3, 'deleted', NOW() - INTERVAL '60 days', 'cus_test_e2e')`,
-        [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
+        [randomUUID(), discordUserId, memberEmail],
       );
 
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const res = await app.inject(
-        buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId), linkSessionToken: rawToken }),
-      );
+      const res = await app.inject(buildSubscribeRequest({ email: memberEmail }));
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -197,7 +191,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       expect(body.trialApplied).toBe(false);
 
       // DB: first_trial_granted_at が古い値のまま保持されている（再設定されていない）
-      const member = await findMemberByEmail(pgDb, pool, memberEmailForDiscordFixture(discordUserId));
+      const member = await findMemberByEmail(pgDb, pool, memberEmail);
       expect(member).not.toBeNull();
       // 60日以上前の値であることを確認（再設定された場合は直近になる）
       const trialGrantedAt = member!.first_trial_granted_at;
@@ -212,19 +206,17 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   // -------------------------------------------------------------------------
   describe('Plan 検証', () => {
     it('Plan A (plan_e2e) → 200', async () => {
-      const discordUserId = `uid-plan-a-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const app = buildE2EApp(pgDb, { payjp: makeMockPayjpClient(), discord: makeMockDiscordClient() });
 
-      const res = await app.inject(buildSubscribeRequest({ planId: 'plan_e2e', linkSessionToken: rawToken }));
+      const res = await app.inject(
+        buildSubscribeRequest({ planId: 'plan_e2e', email: `plan-a-${randomUUID()}@e2e.test` }),
+      );
 
       expect(res.statusCode).toBe(200);
       expect(res.json().ok).toBe(true);
     });
 
     it('Plan B (plan_e2e_standard) → 200', async () => {
-      const discordUserId = `uid-plan-b-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'sub_test_e2e',
@@ -236,15 +228,15 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       });
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      const res = await app.inject(buildSubscribeRequest({ planId: 'plan_e2e_standard', linkSessionToken: rawToken }));
+      const res = await app.inject(
+        buildSubscribeRequest({ planId: 'plan_e2e_standard', email: `plan-b-${randomUUID()}@e2e.test` }),
+      );
 
       expect(res.statusCode).toBe(200);
       expect(res.json().ok).toBe(true);
     });
 
     it('Plan C (plan_e2e_premium) → 200', async () => {
-      const discordUserId = `uid-plan-c-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'sub_test_e2e',
@@ -256,7 +248,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       });
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      const res = await app.inject(buildSubscribeRequest({ planId: 'plan_e2e_premium', linkSessionToken: rawToken }));
+      const res = await app.inject(
+        buildSubscribeRequest({ planId: 'plan_e2e_premium', email: `plan-c-${randomUUID()}@e2e.test` }),
+      );
 
       expect(res.statusCode).toBe(200);
       expect(res.json().ok).toBe(true);
@@ -277,8 +271,6 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   // -------------------------------------------------------------------------
   describe('3DS 検証', () => {
     async function assert3dsRejected(three_d_secure_status: string | null, usedOverride?: boolean): Promise<void> {
-      const discordUserId = `uid-3ds-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       (payjpMock.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'tok_test_e2e',
@@ -288,7 +280,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       });
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      const res = await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      const res = await app.inject(buildSubscribeRequest({ email: `3ds-${randomUUID()}@e2e.test` }));
 
       expect(res.statusCode).toBe(422);
       expect(res.json().ok).toBe(false);
@@ -315,8 +307,6 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
     });
 
     it('used: true → 422（使用済みトークン）', async () => {
-      const discordUserId = `uid-used-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       (payjpMock.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: 'tok_test_e2e',
@@ -326,7 +316,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       });
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      const res = await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      const res = await app.inject(buildSubscribeRequest({ email: `used-${randomUUID()}@e2e.test` }));
 
       expect(res.statusCode).toBe(422);
       expect(res.json().ok).toBe(false);
@@ -385,10 +375,10 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   });
 
   // -------------------------------------------------------------------------
-  // link_session
+  // Cookie / 冪等（メール起点）
   // -------------------------------------------------------------------------
-  describe('link_session', () => {
-    it('__Host-link_session なし → 401 LINK_SESSION_REQUIRED', async () => {
+  describe('subscribe session cookie', () => {
+    it('__Host-link_session なし → 200（初回購読）', async () => {
       const app = buildE2EApp(pgDb, { payjp: makeMockPayjpClient(), discord: makeMockDiscordClient() });
 
       const res = await app.inject({
@@ -397,42 +387,42 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
         headers: { 'content-type': 'application/json', origin: VALID_ORIGIN },
         body: JSON.stringify({
           planId: E2E_BILLING_CONFIG.allowedPlanIds[0],
-          email: 'test@example.com',
+          email: `nosession-${randomUUID()}@e2e.test`,
           payjpToken: 'tok_test_e2e',
           privacyConsented: true,
         }),
       });
 
-      expect(res.statusCode).toBe(401);
-      expect(res.json().ok).toBe(false);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
     });
 
-    it('無効な link_session トークン → 401 INVALID_LINK_SESSION', async () => {
+    it('無効な __Host-link_session があっても無視され 200（後方互換）', async () => {
       const app = buildE2EApp(pgDb, { payjp: makeMockPayjpClient(), discord: makeMockDiscordClient() });
 
       const res = await app.inject({
-        ...buildSubscribeRequest({ linkSessionToken: 'dead-token-not-in-db' }),
+        ...buildSubscribeRequest({
+          linkSessionToken: 'dead-token-not-in-db',
+          email: `legacy-${randomUUID()}@e2e.test`,
+        }),
       });
 
-      expect(res.statusCode).toBe(401);
-      expect(res.json().ok).toBe(false);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
     });
 
-    it('同一 discord_user_id で 2 回目は既存購読のため 200 かつ 2 回目は PAY.JP fetchToken 未呼び出し', async () => {
-      const discordUserId = `uid-idem-${randomUUID()}`;
+    it('同一 email で 2 回目は既存購読のため 200 かつ 2 回目は PAY.JP fetchToken 未呼び出し', async () => {
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
       const email = `uidempotent-${randomUUID()}@e2e.test`;
-      const { rawToken: t1 } = await insertLinkedSession(pgDb, discordUserId);
-      const firstRes = await app.inject(buildSubscribeRequest({ email, linkSessionToken: t1 }));
+      const firstRes = await app.inject(buildSubscribeRequest({ email }));
       expect(firstRes.statusCode).toBe(200);
 
       const callCountBefore = (payjpMock.fetchToken as ReturnType<typeof vi.fn>).mock.calls.length;
 
-      const { rawToken: t2 } = await insertLinkedSession(pgDb, discordUserId);
-      const secondRes = await app.inject(buildSubscribeRequest({ email, linkSessionToken: t2 }));
+      const secondRes = await app.inject(buildSubscribeRequest({ email }));
 
       expect(secondRes.statusCode).toBe(200);
       expect(secondRes.json().ok).toBe(true);
@@ -441,12 +431,10 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Discord（課金前ギルド検証）
+  // Discord（課金 API では呼ばない）
   // -------------------------------------------------------------------------
   describe('Discord', () => {
-    it('ギルド非メンバー → 409、PAY.JP は呼ばれない', async () => {
-      const discordUserId = `uid-noguild-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+    it('subscribe では checkMembership を呼ばない（ギルド検証は課金後の link-discord）', async () => {
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       (discordMock.checkMembership as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -455,31 +443,12 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       });
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
-      const res = await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      const res = await app.inject(buildSubscribeRequest({ email: `noguild-${randomUUID()}@e2e.test` }));
 
-      expect(res.statusCode).toBe(409);
-      expect(res.json().ok).toBe(false);
-      expect(payjpMock.fetchToken).not.toHaveBeenCalled();
-      expect(discordMock.checkMembership).toHaveBeenCalled();
-    });
-
-    it('ロール付与不可 → 503、PAY.JP は呼ばれない', async () => {
-      const discordUserId = `uid-norole-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
-      const payjpMock = makeMockPayjpClient();
-      const discordMock = makeMockDiscordClient();
-      (discordMock.checkMembership as ReturnType<typeof vi.fn>).mockResolvedValue({
-        isMember: true,
-        canAssignRole: false,
-      });
-      const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
-
-      const res = await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
-
-      expect(res.statusCode).toBe(503);
-      expect(res.json().ok).toBe(false);
-      expect(payjpMock.fetchToken).not.toHaveBeenCalled();
-      expect(discordMock.checkMembership).toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
+      expect(payjpMock.fetchToken).toHaveBeenCalled();
+      expect(discordMock.checkMembership).not.toHaveBeenCalled();
     });
   });
 
@@ -489,7 +458,6 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   describe('冪等性 / inflight ガード', () => {
     it('inflight_operation_id が DB に存在 → 503 + 既存 operationId 返却、PAY.JP 未呼び出し', async () => {
       const discordUserId = `uid-inflight-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const existingOpId = 'existing-op-id';
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
@@ -502,9 +470,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
         [randomUUID(), discordUserId, `${discordUserId}@e2e.test`, existingOpId],
       );
 
-      const res = await app.inject(
-        buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId), linkSessionToken: rawToken }),
-      );
+      const res = await app.inject(buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId) }));
 
       expect(res.statusCode).toBe(503);
       const body = res.json();
@@ -520,7 +486,6 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
     it('既存 active subscription → 200 返却（新規 PAY.JP 呼び出しなし）', async () => {
       const discordUserId = `uid-existing-active-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
@@ -531,9 +496,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
         [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
-      const res = await app.inject(
-        buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId), linkSessionToken: rawToken }),
-      );
+      const res = await app.inject(buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId) }));
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -546,7 +509,6 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
     it('既存 trial subscription → 200 返却（新規 PAY.JP 呼び出しなし）', async () => {
       const discordUserId = `uid-existing-trial-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
@@ -557,9 +519,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
         [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
-      const res = await app.inject(
-        buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId), linkSessionToken: rawToken }),
-      );
+      const res = await app.inject(buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId) }));
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -571,7 +531,6 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
 
     it('canceled かつ access_end_at が未来 → 200 返却（新規 PAY.JP 呼び出しなし）', async () => {
       const discordUserId = `uid-existing-canceled-future-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       const discordMock = makeMockDiscordClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
@@ -582,9 +541,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
         [randomUUID(), discordUserId, `${discordUserId}@e2e.test`],
       );
 
-      const res = await app.inject(
-        buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId), linkSessionToken: rawToken }),
-      );
+      const res = await app.inject(buildSubscribeRequest({ email: memberEmailForDiscordFixture(discordUserId) }));
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -600,15 +557,14 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
   // -------------------------------------------------------------------------
   describe('DB 永続化', () => {
     it('成功後 — payjp_customer_id / payjp_initial_charge_id / payjp_subscription_id が保存される', async () => {
-      const discordUserId = `uid-persist-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const app = buildE2EApp(pgDb, { payjp: makeMockPayjpClient(), discord: makeMockDiscordClient() });
 
-      const res = await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      const persistEmail = `persist-${randomUUID()}@e2e.test`;
+      const res = await app.inject(buildSubscribeRequest({ email: persistEmail }));
 
       expect(res.statusCode).toBe(200);
 
-      const member = await findMemberByEmail(pgDb, pool, 'test@example.com');
+      const member = await findMemberByEmail(pgDb, pool, persistEmail);
       expect(member).not.toBeNull();
       expect(member!.payjp_customer_id).toMatch(/^cus_test_e2e/);
       expect(member!.payjp_initial_charge_id).toMatch(/^ch_test_e2e/);
@@ -616,24 +572,22 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
     });
 
     it('初回ユーザー — subscription_status が "trial" で保存される', async () => {
-      const discordUserId = `uid-stat-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+      const statEmail = `stat-${randomUUID()}@e2e.test`;
       const app = buildE2EApp(pgDb, { payjp: makeMockPayjpClient(), discord: makeMockDiscordClient() });
 
-      await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      await app.inject(buildSubscribeRequest({ email: statEmail }));
 
-      const member = await findMemberByEmail(pgDb, pool, 'test@example.com');
+      const member = await findMemberByEmail(pgDb, pool, statEmail);
       expect(member!.subscription_status).toBe('trial');
     });
 
     it('初回ユーザー — first_trial_granted_at が設定される', async () => {
-      const discordUserId = `uid-ftrial-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+      const ftrialEmail = `ftrial-${randomUUID()}@e2e.test`;
       const app = buildE2EApp(pgDb, { payjp: makeMockPayjpClient(), discord: makeMockDiscordClient() });
 
-      await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      await app.inject(buildSubscribeRequest({ email: ftrialEmail }));
 
-      const member = await findMemberByEmail(pgDb, pool, 'test@example.com');
+      const member = await findMemberByEmail(pgDb, pool, ftrialEmail);
       expect(member!.first_trial_granted_at).not.toBeNull();
       // 直近（1分以内）に設定されていること
       const diffMs = Date.now() - member!.first_trial_granted_at!.getTime();
@@ -641,8 +595,7 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
     });
 
     it('access_end_at が subscription.current_period_end から設定される', async () => {
-      const discordUserId = `uid-access-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+      const accessEmail = `access-${randomUUID()}@e2e.test`;
       const periodEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
       const payjpMock = makeMockPayjpClient();
       (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -655,9 +608,9 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
       });
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      await app.inject(buildSubscribeRequest({ email: accessEmail }));
 
-      const member = await findMemberByEmail(pgDb, pool, 'test@example.com');
+      const member = await findMemberByEmail(pgDb, pool, accessEmail);
       expect(member!.access_end_at).not.toBeNull();
       // current_period_end ± 2秒の範囲にあること
       const accessEndUnix = Math.floor(member!.access_end_at!.getTime() / 1000);
@@ -665,12 +618,10 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
     });
 
     it('createCharge が metadata.member_id と metadata.operation_id を含めて呼ばれる', async () => {
-      const discordUserId = `uid-chmeta-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const payjpMock = makeMockPayjpClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      await app.inject(buildSubscribeRequest({ linkSessionToken: rawToken }));
+      await app.inject(buildSubscribeRequest({ email: `chmeta-${randomUUID()}@e2e.test` }));
 
       expect(payjpMock.createCharge).toHaveBeenCalledOnce();
       const chargeArgs = (payjpMock.createCharge as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
@@ -684,13 +635,11 @@ describe.skipIf(!hasTestDb)('E2E Subscribe — T-P0-02', () => {
     });
 
     it('createSubscription が plan / metadata.member_id / metadata.operation_id を含めて呼ばれる', async () => {
-      const discordUserId = `uid-submeta-${randomUUID()}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       const planId = E2E_BILLING_CONFIG.allowedPlanIds[0];
       const payjpMock = makeMockPayjpClient();
       const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: makeMockDiscordClient() });
 
-      await app.inject(buildSubscribeRequest({ planId, linkSessionToken: rawToken }));
+      await app.inject(buildSubscribeRequest({ planId, email: `submeta-${randomUUID()}@e2e.test` }));
 
       expect(payjpMock.createSubscription).toHaveBeenCalledOnce();
       const subArgs = (payjpMock.createSubscription as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<

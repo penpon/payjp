@@ -8,7 +8,7 @@
 
 | 要件ID | 要件（2.スコープ） | 主担当サービス | MVP完了条件 |
 |---|---|---|---|
-| R1 | Discord OAuth Lite（identifyのみ） | auth-service | start/callback/sessionが仕様通り動作 |
+| R1 | Discord OAuth（identify + guilds.join） | auth-service | start/callback/sessionが仕様通り動作 |
 | R2 | 3プランから1つを選択して定期課金開始 | billing-service | `planId` 許可リストで登録成功 |
 | R3 | 初回ユーザーは1か月目課金 + 2か月目/3か月目無料 | billing-service | `discord_user_id` 単位の `first_trial_granted_at` で一度のみ適用 |
 | R4 | 4か月目以降は月次課金 | billing-service | 非初回は `trial_end` なし月次継続 |
@@ -53,7 +53,7 @@
   - `POST /v1/subscriptions/cancel/google-submit`
   - `POST /v1/subscriptions/cancel`
   - `members` の課金状態更新、`inflight_operation_*` 管理
-  - 初回無料判定、Google Form退会トークン検証、Discord事前チェック
+  - 初回無料判定、Google Form退会トークン検証（subscribe では Discord 事前チェックなし）
 - 境界:
   - Webhook受信ループ処理を持たない
   - 日次全件再同期は行わない（sync-service担当）
@@ -79,7 +79,7 @@
 | `GET /v1/auth/discord/start` | なし | Discord認可URLへ `302` | - |
 | `GET /v1/auth/discord/callback` | `code`, `state`, `__Host-oauth_session` | `__Host-link_session` 設定 + フロントへ `302` | `401`（state/Cookie/TTL不正） |
 | `GET /v1/auth/discord/session` | `__Host-link_session` | `{ linked: boolean }` | - |
-| `POST /v1/subscriptions` | `{ planId, email, payjpToken }` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), subscriptionStatus: "active"|"trial"|"canceled"|"paused"|"deleted", planId: string, trialApplied: boolean, accessEndAt: string(RFC3339 UTC) }` | `401/403/409/422/503` |
+| `POST /v1/subscriptions` | `{ planId, email, payjpToken, privacyConsented }` + `Origin`（`__Host-link_session` 不要） | `{ ok: true, memberId: string(uuid), subscriptionStatus: "active"|"trial"|"canceled"|"paused"|"deleted", planId: string, trialApplied: boolean, accessEndAt: string(RFC3339 UTC) }` + 成功時 `Set-Cookie: __Host-member_session` 可 | `403/422/503` 等 |
 | `POST /v1/subscriptions/cancel/google-form-link` | `{}` + `__Host-member_session` + `Origin` | `{ ok: true, formUrl: string, expiresAt: string(RFC3339 UTC) }` | `401/403/409/503` |
 | `POST /v1/subscriptions/cancel/google-submit` | `{ name, email, reason, token }` + `X-Cancel-Secret`（移行期間は旧 `X-Google-Cancel-Secret` も可） | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/409/503` |
 | `POST /v1/subscriptions/cancel` | `{}` + `__Host-link_session` + `Origin` | `{ ok: true, memberId: string(uuid), cancelEffectiveAt: string(RFC3339 UTC), roleRemovalAt: string(RFC3339 UTC) }` | `401/403/409/503` |
@@ -110,16 +110,16 @@
 | `members` | 会員・購読状態の正 | billing-service / sync-service / resync CLI | `inflight_operation_*`, `payjp_customer_id`, `payjp_subscription_id`, `payjp_initial_charge_id`, `access_end_at`, `first_trial_granted_at` を保持 |
 | `payjp_events` | Webhook受信履歴と処理結果 | sync-service | `payjp_event_id` で冪等化（token検証通過イベントのみ） |
 | `oauth_states` | OAuth `state` ワンタイム検証 | auth-service | `state_hash + oauth_session_hash` をTTL付きで管理 |
-| `discord_link_sessions` | 課金前連携セッション | auth-service（発行）/ billing-service（消費） | `__Host-link_session` のワンタイム原本 |
+| `discord_link_sessions` | OAuth 後の一時セッション | auth-service（発行）/ billing-service（link-discord で消費可） | `__Host-link_session` は **課金後** の Discord 紐付け用 |
 | `member_impact_logs` | 会員影響の未解決/解消追跡 | sync-service / resync CLI | 再同期で解消時は同一 `member_id + issue_code` を `resolved_at` 更新 |
 
 ## 5. 重要シーケンス
 
-### 5.0 用語（購読と Discord 検証）
+### 5.0 用語（購読と Discord）
 
-- **主目的**: ユーザー価値の中心は **購読（定期課金）の開始と維持** である（正本: `2weeks-spec.md` §5 冒頭）。
-- **検証順序**: `POST /v1/subscriptions` では、PAY.JP への書き込みより前に、`__Host-link_session` による Discord 連携済み確認およびギルド参加・ロール付与可能性を検証する（§5.1 step6 相当）。
-- **俗称の扱い**: 「Discord-first」等は **課金API前に Discord 前提を満たす** 順序を指す。課金より Discord をビジネス上優先する、という意味ではない。
+- **主目的**: ユーザー価値の中心は **購読（定期課金）の開始と維持** である（正本: `2weeks-spec.md` §5）。
+- **支払後連携**: `POST /v1/subscriptions` は **メール起点**で PAY.JP へ書き込む。Discord OAuth・ギルド参加・ロール付与は **`POST /v1/members/link-discord`**（および同期）で行う。
+- **旧称**: 「Discord-first」（課金前に Discord を検証する順序）は **採用しない**（CR-009）。
 
 ### 5.1 購読開始（`POST /v1/subscriptions`）
 
@@ -127,20 +127,18 @@
 - `payjpToken` 生成時に `PAY.JP.js createToken` へ `three_d_secure: true` を指定し、`card.name`（カード名義）と `card.email` または `card.phone` を必須で渡す。
 - 3Dセキュア実施に伴う個人情報取り扱いへの同意をUIで取得し、同意なしは `createToken` を開始しない。
 
-1. `Origin` / `__Host-link_session` / `planId` を検証する（`Origin` は `scheme+host+port` 正規化比較）
-2. `pg_advisory_lock(discord_user_id::bigint)` を取得する
-3. `members` 行が無い場合は `discord_user_id + email` で仮行を作成し、購読作成中状態を永続化する
+1. `Origin` / `planId` / `privacyConsented` / `email` を検証する（`Origin` は `scheme+host+port` 正規化比較）
+2. `upsertProvisionalMemberByEmail(email)` で `members` 行を確定する
+3. `pg_try_advisory_lock('member:' || member_id)` 相当のキーでロックを取得する
 4. `inflight_operation_*` 残留時は `503 + 既存operationId` で即終了する（PAY.JP書き込みは行わない）
 5. 既存 `active/trial`、または `canceled && access_end_at > now` は新規作成せず既存結果を返す
-6. Discord参加・権限（ロール付与可能性）を検証し、不成立時は課金前に失敗させる
-7. `operationId` を保存し `inflight_operation_*`（`type=subscribe`）を設定する
-8. 認証前提検証通過時点で `__Host-link_session` を消費する（成功/失敗問わず再利用不可）
-9. `payjpToken` を再取得し、`used=false` かつ `card.three_d_secure_status=verified` を検証する
-10. PAY.JP書き込み（customer/charge/subscription）を実行する
-11. customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
-12. 初回のみ `charge` を実行する。`charge` 作成時は `metadata.discord_user_id` と `metadata.operation_id`（=`operationId`）を必須設定し、成功時点で `members.payjp_initial_charge_id` を即時保存する（非初回は `charge` を実行しない）
-13. 初回は `trial_end=+3か月`、非初回は `trial_end` なしでsubscriptionを作成する。subscription作成時は `metadata.discord_user_id` と `metadata.operation_id`（=`operationId`）を必須設定し、成功時点で `members.payjp_subscription_id=subscription.id` を即時保存する
-14. `members` 更新、初回ロール同期（最大3回の短時間リトライ）、成功時のみ `inflight_operation_*` クリア。不確定失敗時は `503 + operationId` を返し、`inflight_operation_*` を保持する
+6. `operationId` を保存し `inflight_operation_*`（`type=subscribe`）を設定する
+7. `payjpToken` を再取得し、`used=false` かつ `card.three_d_secure_status=verified` を検証する
+8. PAY.JP書き込み（customer/charge/subscription）を実行する（`metadata` に `member_id` / `operation_id` 必須。`discord_user_id` は未連携時は省略されうる）
+9. customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
+10. 初回のみ `charge` を実行する。`charge` 作成時は `metadata.operation_id`（=`operationId`）を必須設定し、成功時点で `members.payjp_initial_charge_id` を即時保存する（非初回は `charge` を実行しない）
+11. 初回は `trial_end=+3か月`、非初回は `trial_end` なしでsubscriptionを作成する。subscription作成時は `metadata.operation_id`（=`operationId`）を必須設定し、成功時点で `members.payjp_subscription_id=subscription.id` を即時保存する
+12. `members` 更新、成功時のみ `inflight_operation_*` クリア、`member_session` 発行。不確定失敗時は `503 + operationId` を返し、`inflight_operation_*` を保持する
 
 ### 5.2 Google Form退会リンク生成（`POST /v1/subscriptions/cancel/google-form-link`）
 

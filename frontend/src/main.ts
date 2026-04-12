@@ -1,3 +1,4 @@
+import './payment-page.css';
 import {
   checkSession,
   createCancelFormLink,
@@ -59,27 +60,20 @@ const PLANS: PlanDef[] = [
   {
     id: 'plan_starter',
     name: 'スタータープラン',
-    price: 25000,
-    features: ['掲載枠：1枠', '応募上限：30件/月', '標準検索機能', '基本レポート'],
+    price: 20000,
+    features: ['SESコミュニティ参加権（月次）', 'Discord 自動招待・ロール付与', '法人向けチャンネルへのアクセス'],
   },
   {
     id: 'plan_business',
     name: 'ビジネスプラン',
     price: 50000,
-    features: ['掲載枠：3枠', '応募上限：100件/月', '優先表示機能', '期限付き招待枠', '商談予約機能', 'KYCバッジ'],
+    features: ['スターターの内容に加え、優先サポート枠', '追加チャンネル・資料への優先アクセス'],
   },
   {
     id: 'plan_enterprise',
     name: 'エンタープライズプラン',
-    price: 100000,
-    features: [
-      '掲載枠：10枠',
-      '応募上限：300件/月',
-      'トップ掲載枠',
-      'チーム席数：5名',
-      'CS伴走サポート',
-      'API連携（β）',
-    ],
+    price: 70000,
+    features: ['ビジネスの内容に加え、運営との個別相談枠（月1回）', 'カスタムオンボーディング支援'],
   },
 ];
 
@@ -476,32 +470,7 @@ async function init(): Promise<void> {
       return;
     }
 
-    // member_session なし → 課金には __Host-link_session 必須（Discord OAuth 後に発行）
-    let hasLinkSession = false;
-    try {
-      const s = await checkSession();
-      hasLinkSession = s.linked === true;
-    } catch (err) {
-      if (!(err instanceof SessionCheckError && err.status === 401)) {
-        console.error('[init] Session check failed:', err);
-        renderState(app, 'error', startOAuth, {
-          errorMessage: '連携状態の確認に失敗しました。しばらく経ってから再度お試しください。',
-        });
-        return;
-      }
-      hasLinkSession = false;
-    }
-    if (!hasLinkSession) {
-      renderState(app, 'error', startOAuth, {
-        errorMessage:
-          '購読には先に Discord アカウントとの連携が必要です。「Discordと連携する」からログインしてください。',
-        onDiscordConnect: () => {
-          startOAuth();
-        },
-      });
-      return;
-    }
-
+    // member_session なし → 課金フォームを先に表示（支払完了後に Discord OAuth）
     startBillingFlow(app);
   } catch (err) {
     console.error('[init] failed:', err);

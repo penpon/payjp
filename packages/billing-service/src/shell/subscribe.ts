@@ -1,7 +1,7 @@
 /**
- * Subscribe orchestration — 課金（購読）が主目的。PAY.JP 書き込み前に
- * __Host-link_session（必須）と Discord サーバー参加・ロール付与可否を検証し、
- * 検証通過後に link_session をワンタイム消費してから PAY.JP に書き込む。
+ * Subscribe orchestration — B2B「支払後に Discord 連携」フロー。
+ * メールで仮会員を確定し、PAY.JP 書き込み前に Discord 参加は要求しない。
+ * 課金成功後に `__Host-member_session` を発行し、OAuth + `guilds.join` は member ルートで実施する。
  */
 import { randomBytes } from 'node:crypto';
 import type { Member } from '@hayane/shared';
@@ -15,7 +15,6 @@ import {
   isFirstTimeUser,
   isSameOrigin,
   isThreeDSecureVerified,
-  linkSessionTokenHash,
   memberSessionTokenHash,
   validatePlanId,
 } from '../core/index.js';
@@ -88,7 +87,7 @@ const EMAIL_RE =
   /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps): Promise<SubscribeResult> {
-  const { db, payjp, config, discord, clock, generateOperationId } = deps;
+  const { db, payjp, config, clock, generateOperationId } = deps;
   const now = clock();
 
   // Step 1: Origin / planId / email / consent validation
@@ -116,42 +115,24 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     return { ok: false, statusCode: 422, errorCode: 'PLAN_ROLE_UNMAPPED', message: 'Plan has no Discord role mapping' };
   }
 
-  // Step 2: __Host-link_session 必須（課金前に Discord 連携済みであること）
-  const rawLinkToken = typeof req.linkSessionToken === 'string' ? req.linkSessionToken.trim() : '';
-  if (rawLinkToken.length === 0) {
-    return {
-      ok: false,
-      statusCode: 401,
-      errorCode: 'LINK_SESSION_REQUIRED',
-      message: 'Discord link session is required before subscribing',
-    };
-  }
+  // Step 2: Email-bound provisional member（課金前に Discord ID は不要）
+  const provisional = await db.upsertProvisionalMemberByEmail(normalizedEmail);
+  const lockKey = `member:${provisional.id}`;
 
-  const lsHash = linkSessionTokenHash(rawLinkToken);
-  const linkSession = await db.findLinkSession(lsHash);
-  if (!linkSession || linkSession.expires_at <= now || linkSession.used_at !== null) {
-    return {
-      ok: false,
-      statusCode: 401,
-      errorCode: 'INVALID_LINK_SESSION',
-      message: 'Link session is missing, expired, or already used',
-    };
-  }
-
-  const discordUserId = linkSession.discord_user_id;
-  const lockKey = discordUserId;
-
-  // Step 3: Advisory lock (per Discord account)
+  // Step 3: Advisory lock (per member)
   const lockAcquired = await db.acquireAdvisoryLock(lockKey);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
   }
 
   try {
-    // Step 4: Provisional member — Discord-bound only
-    const member = await db.upsertProvisionalMember(discordUserId, normalizedEmail);
+    const memberFresh = await db.findMemberById(provisional.id);
+    if (!memberFresh) {
+      return { ok: false, statusCode: 503, errorCode: 'MEMBER_NOT_FOUND', message: 'Member row missing after upsert' };
+    }
+    const member = memberFresh;
 
-    // Step 5: Inflight operation check
+    // Step 4: Inflight operation check
     if (hasInflightOperation(member.inflight_operation_id)) {
       return {
         ok: false,
@@ -162,7 +143,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 6: Existing subscription check
+    // Step 5: Existing subscription check
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
       const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
@@ -173,74 +154,11 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 7: PAY.JP 書き込み前 — Discord 事前検証（guild 参加 / ロール付与可否）
-    let discordCheck: Awaited<ReturnType<typeof discord.checkMembership>>;
-    try {
-      discordCheck = await discord.checkMembership(config.discordGuildId, discordUserId, planRoleId);
-    } catch (err) {
-      slog('error', 'Discord checkMembership failed before subscribe', {
-        email: normalizedEmail,
-        discordUserId,
-        error: String(err),
-      });
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'DISCORD_UNAVAILABLE',
-        message: 'Discord validation failed',
-      };
-    }
-
-    if (!discordCheck.isMember) {
-      return {
-        ok: false,
-        statusCode: 409,
-        errorCode: 'DISCORD_NOT_IN_GUILD',
-        message: 'User must join the Discord server before subscribing',
-      };
-    }
-
-    if (!discordCheck.canAssignRole) {
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'DISCORD_ROLE_UNAVAILABLE',
-        message: 'Bot cannot assign the plan role in this server',
-      };
-    }
-
-    // Step 8: Persist operationId BEFORE any PAY.JP write (incl. selected plan for recovery)
+    // Step 6: Persist operationId BEFORE any PAY.JP write (incl. selected plan for recovery)
     const operationId = generateOperationId();
     await db.setInflightOperation(member.id, operationId, 'subscribe', now, req.planId);
 
-    // Step 9: One-time link_session consumption（認証前提検証通過後、PAY.JP 読み取り前）
-    try {
-      await db.consumeLinkSession(lsHash, now);
-    } catch (err) {
-      slog('error', 'consumeLinkSession failed after prechecks', {
-        email: normalizedEmail,
-        operationId,
-        error: String(err),
-      });
-      try {
-        await db.clearInflightOperation(member.id);
-      } catch (clearErr) {
-        slog('error', 'clearInflightOperation failed after consumeLinkSession error', {
-          email: normalizedEmail,
-          operationId,
-          error: String(clearErr),
-        });
-      }
-      return {
-        ok: false,
-        statusCode: 401,
-        errorCode: 'INVALID_LINK_SESSION',
-        message: 'Link session could not be consumed',
-        operationId,
-      };
-    }
-
-    // Step 10: PAY.JP token 3DS verification (READ-only)
+    // Step 7: PAY.JP token 3DS verification (READ-only)
     let payjpTokenData: Awaited<ReturnType<typeof payjp.fetchToken>>;
     try {
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
@@ -302,7 +220,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 11: Customer creation or reuse
+    // Step 8: Customer creation or reuse
     const metadata = buildSubscriptionMetadata(member.id, operationId, member.discord_user_id);
     let customerId = member.payjp_customer_id;
     if (!customerId) {
@@ -362,7 +280,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
 
-    // Step 12: Initial charge (first-time only) — amount プランに合わせる
+    // Step 9: Initial charge (first-time only) — amount プランに合わせる
     const isFirstTime = isFirstTimeUser(member.first_trial_granted_at);
     const chargeAmount = initialChargeAmountJpy(req.planId, config);
     let initialChargeId: string | null = null;
@@ -451,7 +369,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
 
-    // Step 13: Subscription creation
+    // Step 10: Subscription creation
     const trialEnd = isFirstTime ? calculateTrialEnd(now) : undefined;
     const subscriptionParams = {
       customer: customerId,
@@ -514,7 +432,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
 
-    // Step 14: Member state update + clear inflight
+    // Step 11: Member state update + clear inflight
     const subscriptionStatus = determineSubscriptionStatus(isFirstTime);
     const accessEndAt = new Date(subscription.current_period_end * 1000);
     const nextBillingAt = new Date(subscription.current_period_end * 1000);
@@ -548,7 +466,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 15: Clear inflight operation
+    // Step 12: Clear inflight operation
     try {
       await db.clearInflightOperation(updatedMember.id);
     } catch (err) {
@@ -574,7 +492,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       inflight_subscribe_plan_id: null,
     };
 
-    // Step 16: Issue member session token for post-subscribe flows (only if DB row is persisted)
+    // Step 13: Issue member session token for post-subscribe flows (only if DB row is persisted)
     const memberSessionToken = await issueMemberSessionToken(db, updatedMember.id, now, {
       email: normalizedEmail,
       operationId,

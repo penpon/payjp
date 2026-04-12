@@ -50,7 +50,7 @@ describe('ui', () => {
       renderState(container, 'linked', onConnect, {
         subscribed: {
           subscription: { status: 'active', planId: 'plan_starter', accessEndAt: '2026-05-01T00:00:00Z' },
-          plans: [{ id: 'plan_starter', name: 'スタータープラン', price: 25000, features: [] }],
+          plans: [{ id: 'plan_starter', name: 'スタータープラン', price: 20000, features: [] }],
         },
       });
 

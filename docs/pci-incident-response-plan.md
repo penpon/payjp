@@ -1,23 +1,25 @@
 # インシデント対応計画 — PCI DSS SAQ A Req 12.10.1
 
-最終更新: 2026-04-09  
+最終更新: 2026-04-12  
 次回レビュー: 2027-04-09（年次、またはインシデント発生後に見直し）
 
 ## 1. 役割・責任・連絡先
 
 | 役割 | 担当 | 連絡先 | 責任 |
 |---|---|---|---|
-| インシデント責任者 | penpon | **TODO: 電話/メール記入** | 判断・エスカレーション・対外連絡 |
+| インシデント責任者 | penpon | **1Password に保管した電話・メール**（リポジトリに書かない） | 判断・エスカレーション・対外連絡 |
 | 技術対応 | penpon | 同上 | 封じ込め・調査・復旧 |
+
+実連絡先の一覧と取得手順は [ops/incident-contacts.md](ops/incident-contacts.md) を参照する。
 
 ### 外部連絡先
 
 | 連絡先 | 用途 | 連絡方法 |
 |---|---|---|
-| PAY.JP サポート | 決済関連インシデント・アカウント停止 | **TODO: PAY.JP管理画面から確認** |
+| PAY.JP サポート | 決済関連インシデント・アカウント停止 | [pay.jp](https://pay.jp/) ログイン後のサポート・お問い合わせ（URLはログイン後に表示される画面を正とする） |
 | Discord Developer Support | Bot・OAuth障害 | Discord Developer Portal |
 | Cloudflare | CDN・DNS障害 | Cloudflare ダッシュボード |
-| サーバーホスティング | インフラ障害 | **TODO: ホスティング連絡先** |
+| サーバーホスティング | インフラ障害 | 契約プロバイダのサポート（詳細は [ops/incident-contacts.md](ops/incident-contacts.md)） |
 
 ## 2. インシデント分類
 
@@ -35,8 +37,11 @@
 | nginx アクセスログ | 異常な4xx/5xxスパイク | 通常の10倍以上 |
 | アプリケーションログ | `payjp_events.processing_result = 'failed'` | 連続3件以上 |
 | `member_impact_logs` | `resolved_at IS NULL` の件数 | 5件以上 |
+| 決済ページ整合性（補償的統制） | `frontend/index.html` のスクリプトタグ、CSP 定義、本番ヘッダ | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) の頻度・手順に従う |
 | 手動確認 | PAY.JP ダッシュボード、Discordサーバー | 日次確認 |
 | 外部通知 | ユーザーからの報告 | 随時 |
+
+決済ページの改ざん・スクリプト混入に関する **許可リスト・監視頻度** は [pci-payment-page-script-register.md](pci-payment-page-script-register.md) および上記 `pci-payment-page-monitoring.md` を正とする。
 
 ## 4. インシデント対応手順
 

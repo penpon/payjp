@@ -14,6 +14,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "build:frontend": "npm -w frontend run build",
+    "check:payment-security": "tsx scripts/check-payment-page-security.ts",
+    "check:payment-security:live": "tsx scripts/check-payment-page-security.ts --live",
     "docker:compose": "bash scripts/docker-compose-op.sh",
     "docker:up": "bash scripts/docker-compose-op.sh up --build",
     "docker:down": "bash scripts/docker-compose-op.sh down",
@@ -28,6 +30,7 @@
     "@playwright/test": "^1.56.1",
     "@types/node": "^25",
     "lefthook": "^2.1.5",
+    "tsx": "^4.21.0",
     "vitest": "^4.1.4"
   }
 }
