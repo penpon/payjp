@@ -14,5 +14,5 @@ test('OAuth start → Discord redirect mock → callback → session shows linke
   });
 
   expect(data.linked).toBe(true);
-  expect(data.discordUserId).toBe('111222333444555001');
+  expect(data.discordUserId).toMatch(/^\d{15,20}$/);
 });

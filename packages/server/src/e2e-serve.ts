@@ -25,6 +25,8 @@ const E2E_BROWSER_PLAN_ROLES: Record<string, string> = {
 };
 
 function installDiscordFetchMock(): void {
+  /** New base each server boot so persisted DB rows from prior runs do not collide with the next OAuth mock id. */
+  let e2eDiscordUserIdSeq = BigInt(Date.now()) * 1000n;
   const orig = globalThis.fetch.bind(globalThis);
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url =
@@ -46,7 +48,9 @@ function installDiscordFetchMock(): void {
       });
     }
     if (url.includes('discord.com/api/users/@me') && !url.includes('/guilds/')) {
-      return new Response(JSON.stringify({ id: '111222333444555001', username: 'e2e_user' }), {
+      const id = String(e2eDiscordUserIdSeq);
+      e2eDiscordUserIdSeq += 1n;
+      return new Response(JSON.stringify({ id, username: 'e2e_user' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
