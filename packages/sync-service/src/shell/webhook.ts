@@ -21,6 +21,7 @@ import {
   validateWebhookToken,
   type WebhookEvent,
 } from '../core/index.js';
+import { insertImpactLog, ROLE_SYNC_FAILED_WEBHOOK } from './member-impact-log.js';
 import type { DbPool, PayjpEventInsert, WebhookHandlerDeps, WebhookRequest, WebhookResponse } from './types.js';
 
 // Constant-time string comparison via HMAC — normalizes length and prevents timing leaks from Buffer allocation
@@ -508,7 +509,7 @@ async function attemptRoleSync(
       roleId,
       roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
     } as unknown as LogEntry);
-    // Mark role_state as unknown so daily resync can recover
+    // Mark role_state as unknown so daily resync can recover; record member impact (idempotent per member+issue)
     try {
       await deps.db.query("UPDATE members SET role_state = 'unknown', updated_at = now() WHERE id = $1", [
         lockedMember.id,
@@ -526,6 +527,25 @@ async function attemptRoleSync(
         roleId,
         roleSyncError: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
         dbError: dbErr instanceof Error ? dbErr.message : String(dbErr),
+      } as unknown as LogEntry);
+    }
+    try {
+      await insertImpactLog(deps.db, lockedMember.id as string, ROLE_SYNC_FAILED_WEBHOOK, undefined, {
+        errorLabel,
+        action,
+        roleId,
+        message: roleSyncErr instanceof Error ? roleSyncErr.message : String(roleSyncErr),
+      });
+    } catch (impactErr) {
+      deps.log({
+        timestamp: formatRfc3339Utc(new Date()),
+        service: 'sync-service',
+        endpoint: '/v1/payjp/webhook',
+        result: 'failure',
+        error: 'member_impact_log_insert_failed',
+        member_id: lockedMember.id as string,
+        discord_user_id: discordUserId,
+        impactError: impactErr instanceof Error ? impactErr.message : String(impactErr),
       } as unknown as LogEntry);
     }
   }
