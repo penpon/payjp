@@ -1,7 +1,6 @@
 /**
- * Subscribe Orchestration — Discord-first flow
- *
- * 課金前に __Host-link_session（必須）と Discord サーバー参加・ロール付与可否を検証し、
+ * Subscribe orchestration — 課金（購読）が主目的。PAY.JP 書き込み前に
+ * __Host-link_session（必須）と Discord サーバー参加・ロール付与可否を検証し、
  * 検証通過後に link_session をワンタイム消費してから PAY.JP に書き込む。
  */
 import { randomBytes } from 'node:crypto';

@@ -1,7 +1,7 @@
 # PAY.JP × Discord 連携サービス 2週間MVP仕様書（OAuth Lite + Multi Plan + Monthly Billing版）
 
 - 作成日: 2026-03-28
-- 更新日: 2026-04-11
+- 更新日: 2026-04-12
 - 対象: 日本向け有料Discordコミュニティ（約150名）
 - 体制: 1名
 - リリース目標: 2026-04-20（当初2週間目安: 2026-04-15 から変更）
@@ -92,6 +92,8 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - PostgreSQL（最小5テーブル: `members`, `payjp_events`, `oauth_states`, `discord_link_sessions`, `member_impact_logs`）
 
 ## 5. ユーザーフロー（MVP）
+
+本MVPにおけるユーザー価値の中心は **購読（定期課金）の開始と維持** である。Discord OAuth・サーバー参加・ロール付与可否の検証は、**PAY.JP API による書き込みより前**に行う前提条件であり、課金より「Discord を優先する」という意味ではない。俗称の「Discord-first」等は **検証順序（課金API前に Discord を検証する）** を指す表現として扱い、本文では上記の順序で記述する。
 
 1. ユーザーが `/` で「Discord連携」を押す。
 2. `GET /v1/auth/discord/start` からDiscord認可画面へ遷移する。
@@ -679,6 +681,8 @@ MVP（〜2026-04-20）では、以下は実装しない。
 3. 本文の用語は「3Dセキュア」に統一する。
 4. 月の表記は「1か月/2か月目」の形式に統一する。
 5. `*_unix` はDBの `timestamptz` をUTCとして Unix 秒（整数）へ変換した値を指す（例: `inflight_operation_started_at_unix = floor(extract(epoch from members.inflight_operation_started_at))`、`access_end_at_unix = floor(extract(epoch from members.access_end_at))`）。PAY.JP APIの `since/until/current_period_end` との比較・送信はUTCのUnix秒（整数）で行い、JSTはログ/運用表示のみに用いる。
+6. **購読（課金）** と **Discord 事前検証** の関係: ユーザー価値の主目的は購読の開始・維持である。Discord 連携済みであること・ギルド参加・ロール付与可能性は、`POST /v1/subscriptions` において **PAY.JP 書き込み前** に満たすこと（§5 step7、§6.2 item5）。
+7. 俗称「Discord-first」は **課金APIより前に Discord 側前提を検証する** 順序を指す。課金より Discord を価値上優先する、という解釈は用いない。
 
 ## Change Request 履歴
 
@@ -737,3 +741,11 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: `members.access_end_at` 到達後は、課金コアの `hasActiveSubscription` と同一の判定で「有効な購読なし」とみなし、`GET /v1/subscriptions/status` は `subscription: null` を返す（DB上 `subscription_status=canceled` が残っていても同様）。フロントは同じ判定で退会済み表示の合成を猶予期間内に限定し、Discord 連携済みかつ購読なしの場合は既存の課金フォーム（`POST /v1/subscriptions`）へ誘導する。
 - 理由: 退会後の利用終了日経過後も購読状況画面に固定され再入会できない問題を解消し、仕様どおり再加入（トライアル再適用なし等）を画面から可能にするため
 - 影響範囲: `GET /v1/subscriptions/status`、server `billing.routes`、frontend `member-entitlement` / `main` 初期化、`docs/implementation-design-mvp.md` §3.1
+
+### CR-008: 購読主目的と「Discord-first」俗称の明文化（用語のみ）
+
+- 日付: 2026-04-12
+- 起票: 購読フロー説明の誤解防止（課金API前の Discord 検証との混同）
+- 変更内容: §5 冒頭および §16 に、**ユーザー価値の中心は購読（課金）**であり、Discord 検証は **PAY.JP 書き込み前の前提** であること、俗称「Discord-first」が **検証順序** を指すこと（課金より Discord を価値上優先する意味ではないこと）を明記する。`docs/implementation-design-mvp.md` §5.0 を追加し、`docs/tdd-acceptance-matrix-mvp.md` に参照一行を追加する。
+- 理由: 実装・レビューで「Discord-first」と略した際に、主目的の取り違えが起きないようにするため
+- 影響範囲: `docs/2weeks-spec.md` §5・§16、`docs/implementation-design-mvp.md` §5.0、`docs/tdd-acceptance-matrix-mvp.md` 冒頭、`課金先行` / `billing-first` 等の誤解を招くコメントの置換（挙動変更なし）

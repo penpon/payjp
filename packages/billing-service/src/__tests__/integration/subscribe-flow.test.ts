@@ -265,7 +265,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // PROP-BILL-021: Consent validation (link session removed in billing-first flow)
+  // PROP-BILL-021: Consent validation (link_session consumed after pre-billing validation)
   // -------------------------------------------------------------------------
   describe('PROP-BILL-021: Consent validation', () => {
     it('rejects with 422 when privacyConsented is false (CONSENT_REQUIRED)', async () => {

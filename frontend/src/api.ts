@@ -225,7 +225,7 @@ export async function createCancelFormLink(): Promise<CancelFormLinkResponse> {
   return data;
 }
 
-// --- Member (billing-first flow) ---
+// --- Member API (__Host-member_session after subscribe) ---
 
 /** Thrown when GET /v1/members/me fails (non-2xx). Distinct from `null` which means 200 with no member session. */
 export class MemberFetchError extends Error {
