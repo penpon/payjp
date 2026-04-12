@@ -45,6 +45,9 @@ import {
 
 const hasTestDb = Boolean(TEST_DB_URL);
 
+/** postSubscribe と同じメール — 課金先行フローでは members は email で upsert される */
+const SUBSCRIBE_TEST_EMAIL = 'failure-recovery-test@example.com';
+
 // PAY.JP createSubscription の不確定失敗を模倣するエラー
 function makeTimeoutError(): Error {
   const err = new Error('ETIMEDOUT') as NodeJS.ErrnoException;
@@ -79,6 +82,12 @@ async function postSubscribe(
 /** members テーブルから discord_user_id で 1 行取得する */
 async function getMember(pool: pg.Pool, discordUserId: string): Promise<Record<string, unknown> | undefined> {
   const res = await pool.query('SELECT * FROM members WHERE discord_user_id = $1', [discordUserId]);
+  return res.rows[0] as Record<string, unknown> | undefined;
+}
+
+/** 課金先行 subscribe 後の member 行は email で突き合わせる（discord_user_id は link-discord まで NULL） */
+async function getMemberByEmail(pool: pg.Pool, email: string): Promise<Record<string, unknown> | undefined> {
+  const res = await pool.query('SELECT * FROM members WHERE email = $1', [email]);
   return res.rows[0] as Record<string, unknown> | undefined;
 }
 
@@ -144,7 +153,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       expect(res.statusCode).toBe(503);
       const { operationId } = res.json<{ operationId: string }>();
 
-      const member = await getMember(pool, discordUserId);
+      const member = await getMemberByEmail(pool, SUBSCRIBE_TEST_EMAIL);
       expect(member).toBeDefined();
       expect(member!.inflight_operation_id).toBe(operationId);
       expect(member!.inflight_operation_type).toBe('subscribe');
@@ -408,7 +417,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       expect(output.exitCode).toBe(0);
 
       const member = await getMember(pool, discordUserId);
-      const updatedTimestamp = member!.last_payjp_event_created_at as number;
+      const updatedTimestamp = Number(member!.last_payjp_event_created_at);
       // 古いタイムスタンプより新しく更新されている
       expect(updatedTimestamp).toBeGreaterThanOrEqual(oldTimestamp);
       // CLI 実行前の時刻以上（リカバリ時刻が反映される）
@@ -542,7 +551,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       expect(typeof body.operationId).toBe('string');
 
       // DB 確認: payjp_customer_id は設定済み（customer 作成は成功）、charge_id は未設定
-      const member = await getMember(pool, discordUserId);
+      const member = await getMemberByEmail(pool, SUBSCRIBE_TEST_EMAIL);
       expect(member).toBeDefined();
       expect(member!.payjp_customer_id).not.toBeNull();
       expect(member!.payjp_initial_charge_id).toBeNull();
