@@ -259,6 +259,19 @@ body {
   background: rgba(59, 130, 246, 0.12);
   border: 1px solid rgba(59, 130, 246, 0.45);
   color: #1d4ed8;
+  white-space: pre-line;
+}
+
+/* Access gate (shared passcode) — center passcode field, space before submit */
+.gate-passcode-field {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.gate-passcode-field .form-input {
+  width: min(100%, 320px);
+  flex: 0 1 auto;
 }
 
 .plan-placeholder {
@@ -579,6 +592,7 @@ body {
   border-radius: 4px;
   padding: 12px 16px;
   margin-bottom: 16px;
+  white-space: pre-line;
 }
 
 .warning-banner {

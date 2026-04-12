@@ -63,6 +63,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.admin
+      # Same as `api`: host network during build so `npm ci` matches registry/DNS behavior.
+      network: host
     expose:
       - "3011"
     environment:

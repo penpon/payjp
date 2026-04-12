@@ -43,7 +43,7 @@ function renderGateLocked(ctx: {
 }): HTMLDivElement {
   const input = el('input', {
     type: 'password',
-    class: 'text-input',
+    class: 'form-input',
     autocomplete: 'current-password',
     'aria-label': 'アクセス用パスコード',
     placeholder: 'パスコード',
@@ -72,9 +72,9 @@ function renderGateLocked(ctx: {
   const children: Node[] = [
     el('h1', { class: 'heading' }, ['アクセス確認']),
     el('div', { class: 'badge info-badge', role: 'status' }, [
-      'このサイトの購読フォームは共有パスコードで保護されています。運営から案内されたコードを入力してください。',
+      'このサイトの購読フォームは共有パスコードで保護されています。\n運営から案内されたコードを入力してください。',
     ]),
-    input,
+    el('div', { class: 'gate-passcode-field' }, [input]),
   ];
   if (err) {
     children.push(el('div', { class: 'badge error-badge', role: 'alert' }, [err]));

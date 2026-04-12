@@ -446,7 +446,7 @@ async function init(): Promise<void> {
           }
           linkErrorMessage =
             linkResult?.errorCode === 'DISCORD_ALREADY_USED'
-              ? 'このDiscordアカウントは既に別のアカウントで使用されています。別のDiscordアカウントでお試しください。'
+              ? 'このDiscordアカウントは既に別のアカウントで使用されています。\n別のDiscordアカウントでお試しください。'
               : linkResult && !linkResult.ok
                 ? 'Discord連携に失敗しました。再度お試しください。'
                 : undefined;
