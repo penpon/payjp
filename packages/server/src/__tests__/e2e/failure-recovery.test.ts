@@ -577,8 +577,11 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       // --all で日次 resync を実行
       const output = await runResyncCli(['--all'], cliDeps);
 
-      // --all は inflight member をスキップ（success 扱い）するため exitCode=0
-      expect(output.exitCode).toBe(0);
+      // inflight メンバーは reconcile しないが、CLI は「失敗」として failed_count に数える（sync-service reconcileMember）
+      expect(output.result.processed_count).toBe(1);
+      expect(output.result.succeeded_count).toBe(0);
+      expect(output.result.failed_count).toBe(1);
+      expect(output.exitCode).toBe(2);
 
       // inflight は保持されたまま
       const member = await getMember(pool, discordUserId);
