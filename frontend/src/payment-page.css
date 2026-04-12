@@ -863,7 +863,8 @@ body {
     font-size: 26px;
   }
 
-  #app {
+  /* Keep footer and main column the same width as #app (was only #app, footer stretched full .page-wrapper). */
+  .page-wrapper {
     max-width: 480px;
   }
 }
