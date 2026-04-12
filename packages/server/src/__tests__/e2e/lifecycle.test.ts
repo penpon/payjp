@@ -26,6 +26,7 @@ import {
   closePool,
   createTestDb,
   E2E_BILLING_CONFIG,
+  E2E_PLAN_ROLE_MAPPING,
   E2E_WEBHOOK_TOKEN,
   insertLinkedSession,
   makeCliDeps,
@@ -38,6 +39,9 @@ import {
 } from './helpers.js';
 
 const hasTestDb = Boolean(TEST_DB_URL);
+
+/** Default plan’s Discord role id (matches `E2E_PLAN_ROLE_MAPPING` for subscribe default plan). */
+const E2E_PLAN_ROLE_ID = E2E_PLAN_ROLE_MAPPING[E2E_BILLING_CONFIG.allowedPlanIds[0]]!;
 
 // ---------------------------------------------------------------------------
 // ユーティリティ
@@ -72,6 +76,8 @@ async function postCancel(app: ReturnType<typeof buildE2EApp>, linkToken: string
     url: '/v1/subscriptions/cancel',
     headers: { 'content-type': 'application/json', origin: 'https://example.com' },
     cookies: { '__Host-link_session': linkToken },
+    // Empty JSON — Fastify returns 400 if Content-Type is application/json but body is absent.
+    payload: {},
   });
 }
 
@@ -157,7 +163,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(memberAfterWebhook).toBeDefined();
     expect(memberAfterWebhook!.subscription_status).toBe('active');
     // active になったのでロール grant が呼ばれる（trial→active はステータス変化）
-    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant');
+    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_ID);
     syncRole.mockClear();
 
     // Step 3: Cancel リクエスト（新しい link_session が必要）
@@ -168,7 +174,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     const memberAfterCancel = await getMember(pool, discordUserId);
     expect(memberAfterCancel!.cancel_requested_at).not.toBeNull();
     // キャンセル要求中はロール維持（revoke は呼ばれない）
-    expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'revoke');
+    expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_ID);
 
     // Step 4: access_end_at を過去に設定して CLI --all でロール剥奪
     await pool.query(
@@ -190,8 +196,8 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
 
     // ロール剥奪が最終的に適用されること（期限内 canceled は grant と見なすため、最後の呼び出しが revoke である必要がある）
     const callsAfterCli = syncRole.mock.calls.filter(([uid]) => uid === discordUserId);
-    expect(callsAfterCli.at(-1)).toEqual([discordUserId, 'revoke']);
-    expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'grant');
+    expect(callsAfterCli.at(-1)).toEqual([discordUserId, 'revoke', E2E_PLAN_ROLE_ID]);
+    expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_ID);
   });
 
   // =========================================================================
@@ -605,7 +611,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(wh1.statusCode).toBe(200);
     const m1 = await getMember(pool, discordUserId);
     expect(m1!.subscription_status).toBe('active');
-    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant');
+    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_ID);
     syncRole.mockClear();
 
     // Webhook 2: active → paused
@@ -628,7 +634,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(wh2.statusCode).toBe(200);
     const m2 = await getMember(pool, discordUserId);
     expect(m2!.subscription_status).toBe('paused');
-    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_ID);
     syncRole.mockClear();
 
     // Webhook 3: paused → resumed (active)
@@ -652,7 +658,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(wh3.statusCode).toBe(200);
     const m3 = await getMember(pool, discordUserId);
     expect(m3!.subscription_status).toBe('active');
-    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant');
+    expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_ID);
   });
 
   // =========================================================================
