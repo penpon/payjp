@@ -143,8 +143,12 @@ async function renderMembers(root: HTMLElement): Promise<void> {
     for (const [k, v] of fd.entries()) {
       if (typeof v === 'string' && v.length > 0) p.set(k, v);
     }
-    window.location.hash = 'members';
-    window.history.replaceState({}, '', `${window.location.pathname}?${p.toString()}`);
+    const qs = p.toString();
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${qs ? `?${qs}` : ''}#members`,
+    );
     void render();
   });
   const qIn = document.createElement('input');
