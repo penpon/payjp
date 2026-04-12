@@ -747,3 +747,44 @@ describe('INT-SYNC-037: Daily resync: individual member error → continue', () 
     expect(result.result.failed_count).toBeGreaterThanOrEqual(1);
   });
 });
+
+// INT-SYNC-038: Unmapped plan + grant must count as failure in --all
+describe('INT-SYNC-038: CLI --all: unmapped plan grant skipped → failed_count', () => {
+  it('treats unmapped_plan_grant_skipped as reconcile failure (not vacuous success)', async () => {
+    const futureUnix = Math.floor(new Date('2026-12-31T00:00:00Z').getTime() / 1000);
+    const members = [
+      {
+        id: 'mem_unmapped',
+        discord_user_id: 'user_unmapped',
+        subscription_status: 'active',
+        payjp_plan_id: 'plan_not_in_mapping',
+        payjp_subscription_id: 'sub_unmapped',
+        access_end_at: new Date('2026-12-31T00:00:00Z'),
+        inflight_operation_id: null,
+      },
+    ];
+    const deps = createMockDeps({
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
+          if (text.includes('SELECT * FROM members') && !text.includes('WHERE')) {
+            return { rows: members, rowCount: 1 };
+          }
+          return { rows: [], rowCount: 0 };
+        }),
+      ),
+      getPayjpSubscription: vi.fn(async () => ({
+        id: 'sub_unmapped',
+        status: 'active',
+        current_period_end: futureUnix,
+      })),
+    });
+
+    const result = await runResyncCli(['--all'], deps);
+    expect(result.result.processed_count).toBe(1);
+    expect(result.result.succeeded_count).toBe(0);
+    expect(result.result.failed_count).toBe(1);
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'unmapped_plan_grant_skipped', member_id: 'mem_unmapped' }),
+    );
+  });
+});

@@ -574,6 +574,7 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
           member_id: memberId,
           payjp_plan_id: planId ?? 'null',
         });
+        discordSyncAttempted = true;
         discordSyncAllOk = false;
       }
       for (const roleId of roleIds) {
