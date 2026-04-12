@@ -56,6 +56,56 @@ export function hasInflightOperation(inflightOperationId: string | null): inflig
   return inflightOperationId !== null;
 }
 
+/** Calendar date parts in Asia/Tokyo (used for cancel acceptance window). */
+export function toJstYmd(d: Date): { y: number; m: number; day: number } {
+  const s = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+  const [y, m, day] = s.split('-').map((p) => Number.parseInt(p, 10));
+  return { y, m, day };
+}
+
+function daysInMonthUtcCalendar(year: number, month1To12: number): number {
+  return new Date(Date.UTC(year, month1To12, 0)).getUTCDate();
+}
+
+/** Subtract whole calendar months from a JST YMD, clamping the day to the target month's last day. */
+export function subtractJstCalendarMonths(
+  y: number,
+  m: number,
+  day: number,
+  months: number,
+): { y: number; m: number; day: number } {
+  const totalMonths = y * 12 + (m - 1) - months;
+  const ny = Math.floor(totalMonths / 12);
+  const nm = (totalMonths % 12) + 1;
+  const maxDay = daysInMonthUtcCalendar(ny, nm);
+  return { y: ny, m: nm, day: Math.min(day, maxDay) };
+}
+
+export function compareJstYmd(
+  a: { y: number; m: number; day: number },
+  b: { y: number; m: number; day: number },
+): number {
+  if (a.y !== b.y) return a.y - b.y;
+  if (a.m !== b.m) return a.m - b.m;
+  return a.day - b.day;
+}
+
+/**
+ * True when `now` (JST calendar date) is on or after the acceptance start date:
+ * access_end_at's JST calendar date minus `cancelNoticeCycles` months (month-end clamping).
+ */
+export function isCancelAcceptanceWindowOpen(now: Date, accessEndAt: Date, cancelNoticeCycles: number): boolean {
+  const nowJst = toJstYmd(now);
+  const endJst = toJstYmd(accessEndAt);
+  const start = subtractJstCalendarMonths(endJst.y, endJst.m, endJst.day, cancelNoticeCycles);
+  return compareJstYmd(nowJst, start) >= 0;
+}
+
 // PROP-BILL-005: REQ-BILL-009
 export function isThreeDSecureVerified(threeDSecureStatus: string | null): boolean {
   return threeDSecureStatus === 'verified';

@@ -90,6 +90,7 @@ function makeConfig(): BillingConfig {
     googleFormCancelSecret: 'google-shared-secret',
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
+    cancelNoticeCycles: 1,
   };
 }
 
@@ -411,7 +412,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
   // PROP-BILL-061: Cancel inflight guard
   // -------------------------------------------------------------------------
   describe('PROP-BILL-061: Cancel inflight guard', () => {
-    it('503 + existing operationId after link session consumption', async () => {
+    it('503 + existing operationId; link session not consumed (retry same token)', async () => {
       const existingOpId = 'existing-cancel-op-456';
       const deps = makeSuccessfulDeps({
         inflight_operation_id: existingOpId,
@@ -423,7 +424,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
         expect(result.statusCode).toBe(503);
         expect(result.operationId).toBe(existingOpId);
       }
-      expect(deps.db.consumeLinkSession).toHaveBeenCalled();
+      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
     });
   });
 
@@ -474,13 +475,13 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const idxCancel = callOrder.indexOf('cancelSubscription');
       const idxUpdateMember = callOrder.indexOf('updateMemberAfterCancel');
 
-      // findSession → findMember(initial) → Lock → findMember(locked) → consumeSession → setInflight → cancelSubscription → updateMember
+      // findSession → findMember(initial) → Lock → findMember(locked) → setInflight → cancelSubscription → updateMember → consumeSession
       expect(idxFindSession).toBeLessThan(idxLock);
       expect(idxFindMember).toBeLessThan(idxLock);
-      expect(idxLock).toBeLessThan(idxConsumeSession);
-      expect(idxConsumeSession).toBeLessThan(idxInflight);
+      expect(idxLock).toBeLessThan(idxInflight);
       expect(idxInflight).toBeLessThan(idxCancel);
       expect(idxCancel).toBeLessThan(idxUpdateMember);
+      expect(idxUpdateMember).toBeLessThan(idxConsumeSession);
     });
   });
 });
