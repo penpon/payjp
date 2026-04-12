@@ -8,7 +8,9 @@ export default defineConfig({
       'packages/billing-service/vitest.config.ts',
       'packages/sync-service/vitest.config.ts',
       'packages/server/vitest.config.ts',
+      'packages/admin-server/vitest.config.ts',
       'frontend/vitest.config.ts',
+      'admin-frontend/vitest.config.ts',
     ],
   },
 });

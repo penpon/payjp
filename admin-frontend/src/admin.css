@@ -1,0 +1,78 @@
+:root {
+  font-family: system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+body {
+  margin: 0;
+}
+a {
+  color: #7dd3fc;
+}
+header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #334155;
+}
+main {
+  padding: 1rem 1.5rem 2rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+th,
+td {
+  border-bottom: 1px solid #334155;
+  padding: 0.5rem 0.35rem;
+  text-align: left;
+}
+th {
+  color: #94a3b8;
+  font-weight: 600;
+}
+.row-muted {
+  color: #94a3b8;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: inherit;
+}
+button.primary {
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+.error {
+  color: #fca5a5;
+  margin: 0.5rem 0;
+}
+dl.grid {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.35rem 1rem;
+}
+dt {
+  color: #94a3b8;
+}

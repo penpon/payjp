@@ -212,6 +212,14 @@ describe('billing-ui', () => {
       const firstCard = container.querySelector('.plan-card');
       expect(firstCard?.getAttribute('role')).toBe('radio');
     });
+
+    it('should label plan amounts as tax-exclusive', () => {
+      renderBilling(container, defaultFormState(), createMockCallbacks(), createMockPayjpAdapter(), PLANS);
+
+      const priceEl = container.querySelector('.plan-card-price');
+      expect(priceEl?.textContent).toContain('20,000');
+      expect(priceEl?.textContent).toContain('税抜');
+    });
   });
 
   describe('submitting step', () => {

@@ -13,6 +13,8 @@ COPY packages/auth-service/package.json packages/auth-service/
 COPY packages/billing-service/package.json packages/billing-service/
 COPY packages/sync-service/package.json packages/sync-service/
 COPY frontend/package.json frontend/
+COPY packages/admin-server/package.json packages/admin-server/
+COPY admin-frontend/package.json admin-frontend/
 
 RUN npm ci
 

@@ -200,7 +200,7 @@ function renderBillingForm(
       },
       [
         el('div', { class: 'plan-card-name' }, [plan.name]),
-        el('div', { class: 'plan-card-price' }, [`\u00A5${plan.price.toLocaleString()}`]),
+        el('div', { class: 'plan-card-price' }, [`\u00A5${plan.price.toLocaleString()}（税抜）`]),
         el('div', { class: 'plan-card-interval' }, ['/月']),
         el(
           'ul',

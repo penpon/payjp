@@ -12,7 +12,10 @@ export function buildCookieAttributes(name: CookieName, maxAge: number): CookieA
   };
 }
 
-/** CookieAttributes を Set-Cookie ヘッダ文字列にシリアライズする */
+/**
+ * CookieAttributes を Set-Cookie ヘッダ文字列にシリアライズする。
+ * `value` は `;` `=` や制御文字を含まないこと（未エスケープ）。現状のセッション値は hex のみ。
+ */
 export function serializeCookieAttributes(attrs: CookieAttributes, value: string): string {
   const parts: string[] = [`${attrs.name}=${value}`];
   if (attrs.maxAge !== undefined) parts.push(`Max-Age=${attrs.maxAge}`);

@@ -6,6 +6,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Member } from '@hayane/shared';
 import {
+  accessGateSessionTokenHash,
   buildSubscriptionMetadata,
   buildSubscriptionResponse,
   calculateTrialEnd,
@@ -143,7 +144,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 5: Existing subscription check
+    // Step 5: Existing subscription check (before gate — users who already have entitlement need not re-enter passcode)
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
       const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
@@ -152,6 +153,31 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         data: response,
         ...(memberSessionToken !== undefined ? { memberSessionToken } : {}),
       };
+    }
+
+    // `subscribeGateCode` is normalized at process startup (`main.ts`); empty means gate off.
+    const gateCode = config.subscribeGateCode ?? '';
+    const gateEnforced = gateCode.length > 0;
+    if (gateEnforced) {
+      const rawGate = req.accessGateSessionToken?.trim() ?? '';
+      if (!rawGate) {
+        return {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'GATE_REQUIRED',
+          message: 'Valid access gate session is required',
+        };
+      }
+      const gateHash = accessGateSessionTokenHash(rawGate);
+      const gateOk = await db.findAccessGateSessionByTokenHash(gateHash, now);
+      if (!gateOk) {
+        return {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'INVALID_GATE_SESSION',
+          message: 'Invalid or expired access gate session',
+        };
+      }
     }
 
     // Step 6: Persist operationId BEFORE any PAY.JP write (incl. selected plan for recovery)
@@ -504,6 +530,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       planId: req.planId,
       subscriptionId: subscription.id,
     });
+
     return {
       ok: true,
       data: buildSubscriptionResponse(memberForResponse),

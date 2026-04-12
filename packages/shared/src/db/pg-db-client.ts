@@ -29,6 +29,8 @@ export interface DbClient {
     expiresAt: Date;
   }): Promise<MemberSessionRecord>;
   findMemberSession(tokenHash: string): Promise<MemberSessionRecord | null>;
+  insertAccessGateSession(record: { accessGateSessionTokenHash: string; expiresAt: Date }): Promise<void>;
+  findAccessGateSessionByTokenHash(tokenHash: string, now: Date): Promise<boolean>;
   setInflightOperation(
     memberId: string,
     operationId: string,
@@ -271,6 +273,25 @@ async function queryConsumeCancelFormToken(q: Queryable, tokenId: string, now: D
   if ((result.rowCount ?? 0) === 0) {
     throw new Error('Cancel form token not found, already consumed, or expired');
   }
+}
+
+async function queryInsertAccessGateSession(
+  q: Queryable,
+  record: { accessGateSessionTokenHash: string; expiresAt: Date },
+): Promise<void> {
+  await q.query(
+    `INSERT INTO access_gate_sessions (access_gate_session_token_hash, expires_at)
+     VALUES ($1, $2)`,
+    [record.accessGateSessionTokenHash, record.expiresAt],
+  );
+}
+
+async function queryFindAccessGateSessionByTokenHash(q: Queryable, tokenHash: string, now: Date): Promise<boolean> {
+  const result = await q.query(
+    `SELECT 1 FROM access_gate_sessions WHERE access_gate_session_token_hash = $1 AND expires_at > $2 LIMIT 1`,
+    [tokenHash, now],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 async function querySetInflightOperation(
@@ -631,6 +652,14 @@ export class PgDbClient implements DbClient {
       tokenHash,
     ]);
     return result.rows[0] ? toMemberSession(result.rows[0] as Record<string, unknown>) : null;
+  }
+
+  async insertAccessGateSession(record: { accessGateSessionTokenHash: string; expiresAt: Date }): Promise<void> {
+    return queryInsertAccessGateSession(this.pool, record);
+  }
+
+  async findAccessGateSessionByTokenHash(tokenHash: string, now: Date): Promise<boolean> {
+    return queryFindAccessGateSessionByTokenHash(this.pool, tokenHash, now);
   }
 
   // --- payjp_events ---

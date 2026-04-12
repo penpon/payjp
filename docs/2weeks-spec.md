@@ -38,7 +38,7 @@
 MVP（〜2026-04-20）では、以下は実装しない。
 
 1. 認証/会員基盤の拡張（会員ポータル、多端末セッション管理、本人確認/KYC）
-2. 運用UI/管理機能（管理画面、read-only検索API、監視ダッシュボード）
+2. 運用UI/管理機能（会員ポータル、**write 系**管理操作UI、監視ダッシュボード）。**read-only 管理画面（Phase A）と共有パスコードによる購読ゲートは CR-010/CR-011 によりスコープへ取り込む**（副作用API・一括操作・DLQ 等は従来どおり非スコープ）。
 3. 請求/プラン高度化（クーポン、高度な請求管理、プラン変更API、独自grace period）
 4. 通知/自動化の追加（課金失敗通知、ロール剥奪通知、Alert自動通知）
 5. Webhook/再処理の高度化（PAY.JP `event.id` 再取得照合、DLQ、再生ツール、厳密ドリフト補正）
@@ -105,7 +105,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 7. Google Apps Script はフォーム送信を受けてアプリの専用退会APIを呼び、定期請求停止を即時反映し、サービス利用とDiscord有料ロールは `current_period_end`（`members.access_end_at`）まで維持する。
 8. 以後はWebhookイベントと日次再同期で状態を維持する。
 
-**料金（税込・月額・代表）**: スターター **20,000円** / ビジネス **50,000円** / エンタープライズ **70,000円**（`PAYJP_PLAN_IDS` および公開ページと一致させる）。
+**料金（税抜・月額・代表）**: スターター **20,000円（税抜）** / ビジネス **50,000円（税抜）** / エンタープライズ **70,000円（税抜）**（決済時は消費税等を加算した税込請求。`PAYJP_PLAN_IDS` および公開ページと一致させる）。
 
 ## 6. 機能仕様
 
@@ -659,7 +659,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 ## 15. 将来拡張（リリース後）
 
 1. プロダクト機能拡張（会員ポータル、プラン変更、プラン別ロール、独自grace period）
-2. 運用UI/管理機能（管理画面、会員状態検索、手動修復補助）。**導入境界・認証・段階ロールアウトの正本は `docs/admin-console-boundary.md` とする（CR-005, CR-006）。MVP Go-Live までに実装しない。**
+2. 運用UI/管理機能（**write 系**管理画面、会員ポータル、手動修復補助の高度化）。**read-only 管理 Phase A と招待制は CR-010 で実装済み**。導入境界・認証・段階ロールアウトの正本は `docs/admin-console-boundary.md`（CR-005 / CR-006 / CR-010）。
 3. 課金API堅牢化（`Idempotency-Key` 厳密検証、レスポンス再返却）
 4. Webhook高度化（`event.id` 再取得照合、厳密時刻補正、補償upsert、DLQ）
 5. 同期/ジョブ基盤拡張（ロール同期の非同期化、期限切れデータ掃除ジョブ）
@@ -752,3 +752,21 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: 商材を **法人向け SES コミュニティ参加権** に明文化。ユーザーフローを **課金 → `member_session` → Discord OAuth（`identify`+`guilds.join`）→ `guilds.join` 自動参加** に変更。`POST /v1/subscriptions` から **`__Host-link_session` 必須**および**課金前 Discord ギルド検証**を削除。初回無料判定を **メールに紐づく `members` 行**基準で維持。税込月額の代表値を **20,000 / 50,000 / 70,000 円** に更新（環境変数・公開ページと同期）。
 - 理由: 審査・公開法務・実装のストーリーを一致させ、案件/人材仲介と誤認されないようにするため
 - 影響範囲: `docs/2weeks-spec.md` §2・§5・§6・§16、`docs/implementation-design-mvp.md`、`docs/tdd-acceptance-matrix-mvp.md`、`packages/billing-service/src/shell/subscribe.ts`、`frontend/src/main.ts`、`frontend/public/*.html`、E2E `subscribe.test.ts`
+
+### CR-010: 共有パスコードゲート + 管理画面 Phase A（read-only）
+
+- 日付: 2026-04-12（CR-011 で招待URL方式から共有ゲートへ差し替え）
+- 起票: 購読導線の限定公開と運用可視化（`docs/admin-console-boundary.md` Phase A 整合）
+- 変更内容:
+  1. **共有パスコードゲート（任意）**: `SUBSCRIBE_GATE_CODE` が非空のときのみ、`GET /v1/access-gate/session` でフロントがロック状態を確認し、`POST /v1/access-gate/verify` で共有コード検証後 `__Host-access_gate` を発行する。`POST /v1/subscriptions` は **新規購読** に限り有効なゲートセッション（DB にハッシュが存在し未失効）を必須とする。コード未設定時はゲートなし。旧 `GET /v1/invites/accept` はフロントオリジンへリダイレクトのみ（互換）。詳細は `docs/ops/access-gate.md`。
+  2. **管理画面 Phase A**: `admin.and--line.com` 向けに **別プロセス** `@hayane/admin-server`（Fastify、**GET のみ**）と静的 `admin-frontend` を追加。会員一覧・検索・詳細・概要（未解決影響件数・inflight 件数）を PostgreSQL 正から read-only 表示。前段は Cloudflare Access 前提（アプリは `CF-Access-Authenticated-User-Email` / `X-Admin-Audit-Actor` を監査ログ用に参照しうる）。
+- 理由: 公開ポータル（`service.html` 等）と購読フォームのリスクを分離し、運用が会員状態を安全に俯瞰できるようにするため
+- 影響範囲: `packages/shared`（`access_gate_sessions` DDL、レガシー `invite_*` はマイグレーション互換のみ）、`packages/billing-service`、`packages/server`（access-gate/billing routes、cleanup）、`frontend`（`index.html` SPA のみゲート）、`packages/admin-server`、`admin-frontend`、`nginx/nginx.conf`、`docker-compose.yml`、`docs/ops/*`、`docs/admin-console-boundary.md` §2 ロールアウト表、`docs/implementation-design-mvp.md`、`docs/tdd-acceptance-matrix-mvp.md`
+
+### CR-011: 署名付き招待URLから共有パスコードゲートへ移行
+
+- 日付: 2026-04-12
+- 起票: 運用負荷とオンボーディング簡素化（単一URL + ローテーション可能な共有コード）
+- 変更内容: `INVITE_*` / `invite-cli` / per-user 署名URL / 購読成功時の `invite_tokens` 消費を廃止し、**`SUBSCRIBE_GATE_CODE` + `ACCESS_GATE_SESSION_TTL_SECONDS` + `access_gate_sessions`** に一本化。API は `GET/POST /v1/access-gate/*`、Cookie は `__Host-access_gate`。
+- 理由: MVP 公開範囲のサーバ強制は維持しつつ、発行CLIと1回限りトークン運用を避けるため
+- 影響範囲: `packages/server`、`packages/billing-service`、`packages/shared`、`frontend`、E2E、`.env.example`、`docs/ops/access-gate.md`（`docs/ops/invite-urls.md` 置換）

@@ -105,6 +105,31 @@ describe('ui', () => {
     });
   });
 
+  describe('gate_locked state', () => {
+    it('should show gate message and passcode field', () => {
+      renderState(container, 'gate_locked', onConnect, {
+        gateLock: { onSubmit: vi.fn() },
+      });
+
+      expect(container.querySelector('.heading')?.textContent).toBe('アクセス確認');
+      expect(container.querySelector('.info-badge')).not.toBeNull();
+      expect(container.textContent).toContain('共有パスコード');
+      expect(container.querySelector('input[type="password"]')).not.toBeNull();
+    });
+
+    it('should call onSubmit with passcode when 続ける is clicked', () => {
+      const onSubmit = vi.fn();
+      renderState(container, 'gate_locked', onConnect, {
+        gateLock: { onSubmit },
+      });
+
+      const input = container.querySelector('input[type="password"]') as HTMLInputElement;
+      input.value = 'secret';
+      container.querySelector<HTMLButtonElement>('.submit-button')?.click();
+      expect(onSubmit).toHaveBeenCalledWith('secret');
+    });
+  });
+
   describe('state transitions', () => {
     it('should replace previous content on state change', () => {
       renderState(container, 'loading', onConnect);

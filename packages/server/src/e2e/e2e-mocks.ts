@@ -37,6 +37,7 @@ export const E2E_BILLING_CONFIG: BillingConfig = {
   googleFormCancelTokenSecret: 'e2e-google-token-secret',
   googleFormCancelTokenTtlSeconds: 900,
   cancelNoticeCycles: 1,
+  accessGateSessionTtlSeconds: 86400,
 };
 
 export const E2E_WEBHOOK_TOKEN = 'whsec_e2e_test_token';

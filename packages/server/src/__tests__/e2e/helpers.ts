@@ -39,7 +39,7 @@ export const TEST_DB_URL = process.env.DATABASE_URL_TEST ?? process.env.DATABASE
 
 /** TRUNCATE 順: FK 依存順（member_impact_logs は members を参照するため先に消す） */
 const TRUNCATE_SQL = `
-  TRUNCATE member_impact_logs, cancel_form_tokens, member_sessions, payjp_events, discord_link_sessions, oauth_states, members
+  TRUNCATE member_impact_logs, cancel_form_tokens, member_sessions, payjp_events, discord_link_sessions, oauth_states, access_gate_sessions, invite_sessions, invite_tokens, members
   CASCADE
 `;
 

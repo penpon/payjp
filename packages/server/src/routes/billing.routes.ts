@@ -25,12 +25,14 @@ function extractRequestContext(request: FastifyRequest): {
   origin: string;
   linkSessionToken: string;
   memberSessionToken: string;
+  accessGateSessionToken: string;
 } {
   return {
     body: request.body as Record<string, unknown> | null,
     origin: typeof request.headers.origin === 'string' ? request.headers.origin : '',
     linkSessionToken: request.cookies['__Host-link_session'] ?? '',
     memberSessionToken: request.cookies['__Host-member_session'] ?? '',
+    accessGateSessionToken: request.cookies['__Host-access_gate'] ?? '',
   };
 }
 
@@ -79,7 +81,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       },
     },
     async (request, reply) => {
-      const { body, origin, linkSessionToken } = extractRequestContext(request);
+      const { body, origin, linkSessionToken, accessGateSessionToken } = extractRequestContext(request);
 
       const req: SubscribeRequest = {
         origin,
@@ -88,6 +90,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         planId: typeof body?.planId === 'string' ? body.planId : '',
         privacyConsented: body?.privacyConsented === true,
         linkSessionToken,
+        accessGateSessionToken,
       };
 
       try {

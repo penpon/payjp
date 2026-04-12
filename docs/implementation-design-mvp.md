@@ -20,7 +20,7 @@
 
 ### 明確な非スコープ（固定）
 
-- 管理画面、会員ポータル、Webhook再生/DLQ、高度監視、通知自動化は追加しない
+- 会員ポータル、**write 系**管理画面、Webhook再生/DLQ、高度監視、通知自動化は追加しない（**read-only 管理 Phase A と招待制は CR-010 で追加**）
 - `inflight_operation_*` の解除は手動再同期CLIのみ（日次ジョブでは解除しない）
 
 ### `deep-research-report.md` 反映の固定前提（2026-03-28版）
@@ -253,16 +253,30 @@
 - Go-Live受け入れ前に運用文書「再同期CLI手順」「手動ロール剥奪手順」を最終化し、証跡へ紐づける
 - Go-Live受け入れ前に `deep-research-report.md` の未確定事項3件（課金失敗時イベント遅延/Dunning、長時間5xxフェイルセーフ、トークン移管手順）の回答ソースと採用判断を証跡化する（実装着手のブロッカーにはしない）
 
-## 9. 将来拡張（管理画面）— CR-005 / CR-006
+## 9. 管理画面・共有パスコードゲート（CR-005 / CR-006 / CR-010 / CR-011）
 
-MVP の明確な非スコープ（§ 明確な非スコープ）に従い、**2026-04-20 まで管理画面は追加しない**。リリース後に運用UIを実装する場合の **API・認証・配置の境界** は `docs/admin-console-boundary.md` を正とする。
+**API・認証・配置の境界** は `docs/admin-console-boundary.md` を正とする。実装は **CR-010 / CR-011** により次を追加する（write 系は Phase B 以降）。
 
-要点のみここに固定する:
+### 9.1 公開API（`packages/server`）— 共有パスコードゲート
 
-1. **ホスト名**: 管理画面は `admin.and--line.com` に固定する。利用者向け `www.and--line.com` / `api.and--line.com` と **オリジンを分離** し、導線・CORS 許可・Cookie 共有を行わない。
-2. **認証**: Cloudflare Access を前段に置き、**外部IdP + MFA** を主とする。許可対象は明示ユーザまたは管理者グループに限定し、default deny とする。HTTP Basic は補助に留める。
-3. **ランタイム**: **同一VPS** を使うが、公開系とは **別プロセス/別コンテナ/別ポート** に分離する。必要に応じて第2段階で別VPS化を検討する。
-4. **実装**: ブラウザから DB / PAY.JP / Discord へ直接アクセスしない。管理用バックエンド経由で、既存の CLI 相当・コア整合ルール（`inflight_operation_*`、fail-close）を踏襲する。
-5. **段階導入**: Phase A は **read-only**（会員検索・一覧・詳細・未解決影響確認）。Phase B は **単一会員中心の緊急操作**（再同期・ロール調整・課金停止相当）を限定追加する。`--all` 相当の一括操作は初期UIに含めない。
+| メソッド | パス | 概要 |
+|---|---|---|
+| GET | `/v1/access-gate/session` | `gateEnforced` / `unlocked` を返す（常に 200）。`SUBSCRIBE_GATE_CODE` 未設定時は `gateEnforced: false`。 |
+| POST | `/v1/access-gate/verify` | Body `{ passcode }` を検証し、成功時 `__Host-access_gate` を発行（`access_gate_sessions` にハッシュ保存）。ゲート未設定時は 404。 |
+| GET | `/v1/invites/accept` | **互換**: `FRONTEND_BASE_URL/?gate=renewed` へ 302（旧招待リンクの案内用）。 |
+| POST | `/v1/subscriptions` | `SUBSCRIBE_GATE_CODE` 設定時は **新規購読** に `__Host-access_gate` に対応する有効セッション必須（失効コード: `GATE_REQUIRED` / `INVALID_GATE_SESSION`）。 |
 
-Change Request 履歴: `2weeks-spec.md` の **CR-005 / CR-006** を参照。
+運用: `docs/ops/access-gate.md`（コードローテーション・TTL・レート制限方針）。
+
+### 9.2 管理API（`@hayane/admin-server`、別ポート）
+
+| メソッド | パス | 概要 |
+|---|---|---|
+| GET | `/admin/overview` | 会員ステータス件数集計、未解決 `member_impact_logs` 件数、`inflight` 会員件数。 |
+| GET | `/admin/members` | ページング・検索（`q`, `subscription_status`, `role_state`, `has_inflight`）。 |
+| GET | `/admin/members/:memberId` | 会員詳細（識別子・課金・inflight・時刻）。 |
+| GET | `/admin/members/:memberId/impact-logs` | `resolved`=`unresolved`（省略時）/ `all` / `true`。 |
+
+環境変数: `DATABASE_URL`, `ADMIN_FRONTEND_ORIGIN`, `PORT`（既定 3011）。**GET/HEAD/OPTIONS のみ**（それ以外は 405）。
+
+Change Request 履歴: `2weeks-spec.md` の **CR-005 / CR-006 / CR-010 / CR-011** を参照。

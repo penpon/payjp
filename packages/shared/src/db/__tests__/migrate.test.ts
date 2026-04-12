@@ -27,7 +27,7 @@ afterAll(async () => {
 });
 
 describe('runMigrations', () => {
-  it('creates all 7 tables', async () => {
+  it('creates all core tables including access gate and legacy invite DDL', async () => {
     await runMigrations(pool);
 
     const result = await pool.query(`
@@ -40,7 +40,10 @@ describe('runMigrations', () => {
         'discord_link_sessions',
         'cancel_form_tokens',
         'member_sessions',
-        'member_impact_logs'
+        'member_impact_logs',
+        'invite_tokens',
+        'invite_sessions',
+        'access_gate_sessions'
       )
       ORDER BY table_name
     `);
@@ -53,6 +56,9 @@ describe('runMigrations', () => {
     expect(tables).toContain('cancel_form_tokens');
     expect(tables).toContain('member_sessions');
     expect(tables).toContain('member_impact_logs');
+    expect(tables).toContain('invite_tokens');
+    expect(tables).toContain('invite_sessions');
+    expect(tables).toContain('access_gate_sessions');
   });
 
   it('is idempotent (running twice does not error)', async () => {

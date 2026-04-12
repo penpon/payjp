@@ -1,6 +1,6 @@
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
-import { linkSessionTokenHash } from '@hayane/billing-service';
+import { accessGateSessionTokenHash, linkSessionTokenHash } from '@hayane/billing-service';
 import type { CancelFormTokenRecord, LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
 import type { InjectOptions } from 'light-my-request';
 import { describe, expect, it, vi } from 'vitest';
@@ -107,6 +107,7 @@ function makeConfig(): BillingConfig {
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
     cancelNoticeCycles: 1,
+    accessGateSessionTtlSeconds: 86400,
   };
 }
 
@@ -187,6 +188,8 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
       created_at: new Date(),
     }),
     findMemberSession: vi.fn().mockResolvedValue(makeMemberSession()),
+    insertAccessGateSession: vi.fn().mockResolvedValue(undefined),
+    findAccessGateSessionByTokenHash: vi.fn().mockResolvedValue(false),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -319,6 +322,34 @@ describe('POST /v1/subscriptions', () => {
     const setCookie = res.headers['set-cookie'];
     expect(setCookie).toBeDefined();
     expect(String(setCookie)).toContain('__Host-member_session=');
+  });
+
+  it('returns 403 GATE_REQUIRED when gate is enforced and access_gate cookie is missing', async () => {
+    const deps = makeMockDeps();
+    deps.config.subscribeGateCode = 'gate-test-secret';
+    const app = createApp(deps);
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
+    expect(res.statusCode).toBe(403);
+    const body = res.json();
+    expect(body.errorCode).toBe('GATE_REQUIRED');
+  });
+
+  it('returns 200 when gate is enforced and access_gate cookie is valid', async () => {
+    const rawGate = 'gate-raw-token-for-test';
+    const deps = makeMockDeps();
+    deps.config.subscribeGateCode = 'gate-test-secret';
+    deps.db.findAccessGateSessionByTokenHash = vi
+      .fn()
+      .mockImplementation((h: string) => Promise.resolve(h === accessGateSessionTokenHash(rawGate)));
+    const app = createApp(deps);
+    const res = await app.inject({
+      ...subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()),
+      cookies: {
+        '__Host-link_session': LINK_SESSION_TOKEN,
+        '__Host-access_gate': rawGate,
+      },
+    });
+    expect(res.statusCode).toBe(200);
   });
 
   it('returns 403 for invalid origin', async () => {
