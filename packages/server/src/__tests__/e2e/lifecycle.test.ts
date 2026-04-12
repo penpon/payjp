@@ -47,19 +47,14 @@ const E2E_PLAN_ROLE_ID = E2E_PLAN_ROLE_MAPPING[E2E_BILLING_CONFIG.allowedPlanIds
 // ユーティリティ
 // ---------------------------------------------------------------------------
 
-/** POST /v1/subscriptions を送信する */
-async function postSubscribe(
-  app: ReturnType<typeof buildE2EApp>,
-  linkToken: string,
-  opts: { planId?: string; email?: string } = {},
-) {
+/** POST /v1/subscriptions を送信する（CR-009: link_session 不要） */
+async function postSubscribe(app: ReturnType<typeof buildE2EApp>, opts: { planId?: string; email?: string } = {}) {
   const planId = opts.planId ?? E2E_BILLING_CONFIG.allowedPlanIds[0];
   const email = opts.email ?? 'lifecycle-test@e2e-test.example.com';
   return app.inject({
     method: 'POST',
     url: '/v1/subscriptions',
     headers: { 'content-type': 'application/json', origin: 'https://example.com' },
-    cookies: { '__Host-link_session': linkToken },
     body: JSON.stringify({
       planId,
       email,
@@ -100,6 +95,12 @@ async function getMember(pool: pg.Pool, discordUserId: string): Promise<Record<s
   return res.rows[0] as Record<string, unknown> | undefined;
 }
 
+/** メール起点購読直後は discord_user_id が NULL のため、email で参照する */
+async function getMemberByEmail(pool: pg.Pool, email: string): Promise<Record<string, unknown> | undefined> {
+  const res = await pool.query('SELECT * FROM members WHERE email = $1', [email.toLowerCase()]);
+  return res.rows[0] as Record<string, unknown> | undefined;
+}
+
 // ---------------------------------------------------------------------------
 // テストスイート
 // ---------------------------------------------------------------------------
@@ -127,20 +128,21 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
   // =========================================================================
   it('シナリオ 1: フルライフサイクル — trial 購読 → active → Cancel → 期限切れ → ロール剥奪', async () => {
     const discordUserId = `lc-full-${randomUUID().slice(0, 8)}`;
+    const testEmail = `${discordUserId}@e2e-test.example.com`;
     const syncRole = vi.fn().mockResolvedValue(undefined);
     const payjpMock = makeMockPayjpClient();
     const discordMock = makeMockDiscordClient();
     const syncDeps = buildSyncDepsForE2E(pool, syncRole);
     const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock, syncDeps });
 
-    // Step 1: Subscribe (trial)
-    const { rawToken: token1 } = await insertLinkedSession(pgDb, discordUserId);
-    const subRes = await postSubscribe(app, token1);
+    // Step 1: Subscribe (trial) — メール起点。Webhook / Cancel で Discord ID が必要になるまでに DB で紐付け
+    const subRes = await postSubscribe(app, { email: testEmail });
     expect(subRes.statusCode).toBe(200);
     const subBody = subRes.json<{ ok: boolean; trialApplied: boolean; subscriptionStatus: string }>();
     expect(subBody.ok).toBe(true);
     expect(subBody.trialApplied).toBe(true);
     expect(subBody.subscriptionStatus).toBe('trial');
+    await pool.query('UPDATE members SET discord_user_id = $1 WHERE email = $2', [discordUserId, testEmail]);
 
     // Step 2: Webhook subscription.updated → active でメンバーが active になる
     const webhookActiveEventId = `evnt_active_${randomUUID().slice(0, 8)}`;
@@ -166,7 +168,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_ID);
     syncRole.mockClear();
 
-    // Step 3: Cancel リクエスト（新しい link_session が必要）
+    // Step 3: Cancel リクエスト（link_session は Discord 紐付け済みユーザ向け）
     const { rawToken: token2 } = await insertLinkedSession(pgDb, discordUserId);
     const cancelRes = await postCancel(app, token2);
     expect(cancelRes.statusCode).toBe(200);
@@ -205,19 +207,19 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
   // =========================================================================
   it('シナリオ 2: 退会後再加入 — 2 回目は trial 非適用 (trialApplied=false)', async () => {
     const discordUserId = `lc-rejoin-${randomUUID().slice(0, 8)}`;
+    const testEmail = `${discordUserId}@e2e-test.example.com`;
     const payjpMock = makeMockPayjpClient();
     const discordMock = makeMockDiscordClient();
     const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
     // Step 1: 初回 Subscribe → trial
-    const { rawToken: token1 } = await insertLinkedSession(pgDb, discordUserId);
-    const firstSubRes = await postSubscribe(app, token1);
+    const firstSubRes = await postSubscribe(app, { email: testEmail });
     expect(firstSubRes.statusCode).toBe(200);
     const firstBody = firstSubRes.json<{ trialApplied: boolean }>();
     expect(firstBody.trialApplied).toBe(true);
 
     // first_trial_granted_at が設定されていることを確認
-    const memberAfterFirst = await getMember(pool, discordUserId);
+    const memberAfterFirst = await getMemberByEmail(pool, testEmail);
     expect(memberAfterFirst!.first_trial_granted_at).not.toBeNull();
     expect(payjpMock.createCharge).toHaveBeenCalledOnce();
 
@@ -227,8 +229,8 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
          SET subscription_status = 'canceled',
              cancel_requested_at = NOW() - INTERVAL '35 days',
              access_end_at = NOW() - INTERVAL '1 day'
-       WHERE discord_user_id = $1`,
-      [discordUserId],
+       WHERE email = $1`,
+      [testEmail],
     );
 
     // Step 3: 再加入用の mock 設定（trial_end なし）
@@ -244,8 +246,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     vi.mocked(payjpMock.createCharge).mockClear();
 
     // Step 4: 再加入 Subscribe
-    const { rawToken: token2 } = await insertLinkedSession(pgDb, discordUserId);
-    const secondSubRes = await postSubscribe(app, token2);
+    const secondSubRes = await postSubscribe(app, { email: testEmail });
     expect(secondSubRes.statusCode).toBe(200);
     const secondBody = secondSubRes.json<{ trialApplied: boolean }>();
     expect(secondBody.trialApplied).toBe(false);
@@ -263,6 +264,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
   // =========================================================================
   it('シナリオ 3: 503 リカバリ → Cancel — inflight なし・cancel_requested_at セット', async () => {
     const discordUserId = `lc-503-${randomUUID().slice(0, 8)}`;
+    const testEmail = `${discordUserId}@e2e-test.example.com`;
     const payjpMock = makeMockPayjpClient();
     const discordMock = makeMockDiscordClient();
 
@@ -273,15 +275,14 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
     // Step 1: Subscribe → 503 + operationId
-    const { rawToken: token1 } = await insertLinkedSession(pgDb, discordUserId);
-    const res503 = await postSubscribe(app, token1);
+    const res503 = await postSubscribe(app, { email: testEmail });
     expect(res503.statusCode).toBe(503);
     const { operationId } = res503.json<{ operationId: string }>();
     expect(typeof operationId).toBe('string');
     expect(operationId.length).toBeGreaterThan(0);
 
     // DB に inflight が設定されていることを確認
-    const memberAfter503 = await getMember(pool, discordUserId);
+    const memberAfter503 = await getMemberByEmail(pool, testEmail);
     expect(memberAfter503!.inflight_operation_id).toBe(operationId);
     expect(memberAfter503!.inflight_operation_type).toBe('subscribe');
 
@@ -307,15 +308,15 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(cliOutput.exitCode).toBe(0);
 
     // inflight がクリアされていることを確認
-    const memberAfterCli = await getMember(pool, discordUserId);
+    const memberAfterCli = await getMemberByEmail(pool, testEmail);
     expect(memberAfterCli!.inflight_operation_id).toBeNull();
     expect(memberAfterCli!.inflight_operation_type).toBeNull();
     expect(memberAfterCli!.payjp_subscription_id).toBe('sub_recovered');
 
-    // Step 3: access_end_at を将来に設定して cancel が通るようにする
+    // Step 3: access_end_at を将来に設定して cancel が通るようにする（Cancel は link_session → Discord ID で会員を引く）
     await pool.query(
-      "UPDATE members SET subscription_status = 'active', access_end_at = NOW() + INTERVAL '15 days' WHERE discord_user_id = $1",
-      [discordUserId],
+      "UPDATE members SET subscription_status = 'active', access_end_at = NOW() + INTERVAL '15 days', discord_user_id = $2 WHERE email = $1",
+      [testEmail, discordUserId],
     );
 
     // Step 4: Cancel
@@ -522,13 +523,16 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
   // =========================================================================
   it('シナリオ 7: プラン変更 — plan_e2e → plan_e2e_standard', async () => {
     const discordUserId = `lc-planchange-${randomUUID().slice(0, 8)}`;
+    const testEmail = `${discordUserId}@e2e-test.example.com`;
     const payjpMock = makeMockPayjpClient();
     const discordMock = makeMockDiscordClient();
     const app = buildE2EApp(pgDb, { payjp: payjpMock, discord: discordMock });
 
     // Step 1: 初回 Subscribe (plan_e2e)
-    const { rawToken: token1 } = await insertLinkedSession(pgDb, discordUserId);
-    const firstSubRes = await postSubscribe(app, token1, { planId: E2E_BILLING_CONFIG.allowedPlanIds[0] });
+    const firstSubRes = await postSubscribe(app, {
+      planId: E2E_BILLING_CONFIG.allowedPlanIds[0],
+      email: testEmail,
+    });
     expect(firstSubRes.statusCode).toBe(200);
 
     // Step 2: 退会完了状態にする
@@ -537,8 +541,8 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
          SET subscription_status = 'canceled',
              cancel_requested_at = NOW() - INTERVAL '35 days',
              access_end_at = NOW() - INTERVAL '1 day'
-       WHERE discord_user_id = $1`,
-      [discordUserId],
+       WHERE email = $1`,
+      [testEmail],
     );
 
     // Step 3: 再加入用 mock 設定（別プラン、trial_end なし）
@@ -552,12 +556,11 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     });
 
     // Step 4: 再加入 Subscribe (plan_e2e_standard)
-    const { rawToken: token2 } = await insertLinkedSession(pgDb, discordUserId);
-    const secondSubRes = await postSubscribe(app, token2, { planId: 'plan_e2e_standard' });
+    const secondSubRes = await postSubscribe(app, { planId: 'plan_e2e_standard', email: testEmail });
     expect(secondSubRes.statusCode).toBe(200);
 
     // members.payjp_plan_id が新プランになっていることを確認
-    const member = await getMember(pool, discordUserId);
+    const member = await getMemberByEmail(pool, testEmail);
     expect(member!.payjp_plan_id).toBe('plan_e2e_standard');
   });
 
@@ -745,8 +748,6 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     const statusCodes: number[] = [];
 
     for (let i = 0; i < 6; i++) {
-      const discordUserId = `lc-rate-${i}-${randomUUID().slice(0, 8)}`;
-      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
       // payjpMock の mock を毎回セット（重複呼び出しに備える）
       (payjpMock.createCustomer as ReturnType<typeof vi.fn>).mockResolvedValue({
         id: `cus_rate_${i}`,
@@ -766,7 +767,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
         plan: { id: E2E_BILLING_CONFIG.allowedPlanIds[0], interval: 'month' },
         metadata: {},
       });
-      const res = await postSubscribe(app, rawToken, { email: `rate${i}@e2e-test.example.com` });
+      const res = await postSubscribe(app, { email: `rate${i}@e2e-test.example.com` });
       statusCodes.push(res.statusCode);
     }
 
