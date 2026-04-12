@@ -1,3 +1,4 @@
+import './payment-page.css';
 import {
   checkSession,
   createCancelFormLink,

@@ -1,11 +1,20 @@
 # 決済ページ監視・改ざん対応（11.6.1 相当の補償的統制）
 
 **目的**: PCI DSS 11.6.1（決済ページの改ざん検知等）を、**現行の `payjp.js iframe` + CSP** のまま、審査で説明可能な形にする。  
-完全自動の改ざん検知エンジンは MVP では導入しない。代わりに **手順・責任・頻度** を固定する。
+ブラウザからの CSP レポート自動集約は未実装だが、**リポジトリと CI 上の静的検証**でスクリプト許可リスト・CSP 二重定義の整合を毎 PR 確認する。
 
 **関連**: [pci-payment-page-script-register.md](pci-payment-page-script-register.md)、[pci-incident-response-plan.md](pci-incident-response-plan.md)、[pci-readiness-gap-matrix.md](pci-readiness-gap-matrix.md)
 
 最終更新: 2026-04-12
+
+## 0. 自動チェック（静的 + 任意の本番）
+
+| コマンド | 内容 |
+|----------|------|
+| `npm run check:payment-security` | `frontend/index.html` / `frontend/dist/index.html` のスクリプト許可、`frontend/public/*.html` の Google Fonts 禁止、`_headers` と nginx の CSP 一致、`EXPECTED_CSP` との一致 |
+| `PAYMENT_PAGE_URL=https://…/ npm run check:payment-security:live` | 本番 HTTPS 取得でヘッダ（CSP / HSTS / XFO）と HTML 許可リストを検証（PR CI では実行しない） |
+
+実装: [`scripts/check-payment-page-security.ts`](../scripts/check-payment-page-security.ts)。`EXPECTED_CSP` は `_headers` / nginx と同期すること。
 
 ## 1. 監視対象
 
@@ -13,8 +22,8 @@
 |------|----------|
 | リポジトリ上の `frontend/index.html` | 追加の `<script src>` がないこと。`pay.js` の URL が `https://js.pay.jp/v2/pay.js` のみであること |
 | ビルド設定・エントリ | 新たな第三者スクリプトの注入がないこと（`package.json` / Vite 設定の変更レビュー） |
-| CSP 定義 | [frontend/public/_headers](../frontend/public/_headers) と [nginx/security-headers.conf](../nginx/security-headers.conf) が一致していること |
-| 本番応答ヘッダ | デプロイ後、実ブラウザまたは `curl -I` で CSP・HSTS 等が期待どおりであること |
+| CSP 定義 | [frontend/public/_headers](../frontend/public/_headers) と [nginx/security-headers.conf](../nginx/security-headers.conf) が一致していること（CI の `npm run check:payment-security` でも検証） |
+| 本番応答ヘッダ | デプロイ後、`npm run check:payment-security:live`、または実ブラウザ / `curl -I` で CSP・HSTS 等が期待どおりであること |
 
 ## 2. 検知シナリオと対応
 

@@ -38,6 +38,8 @@ jobs:
         run: npm run build:frontend
         env:
           VITE_PAYJP_PUBLIC_KEY: pk_test_placeholder
+      - name: Payment page security checks
+        run: npm run check:payment-security
       - name: Tests
         run: npm test
         env:

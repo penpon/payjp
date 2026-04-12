@@ -25,21 +25,28 @@ nginx (`security-headers.conf`) および Cloudflare Pages (`_headers`) で適�
 Content-Security-Policy:
   default-src 'self';
   script-src 'self' https://js.pay.jp;
-  style-src 'self' 'unsafe-inline';
+  style-src 'self';
   font-src 'self';
   connect-src 'self' https://api.pay.jp;
   frame-src https://js.pay.jp;
+  frame-ancestors 'none';
+  base-uri 'none';
+  object-src 'none';
+  form-action 'self';
   img-src 'self' data:
 ```
 
-（2026-04-12 時点）決済ページから **Google Fonts 等の第三者スタイル・フォント読込を削除**し、`style-src` / `font-src` を上記のとおり自オリジン中心に整理している。実体は [frontend/public/_headers](../frontend/public/_headers) および [nginx/security-headers.conf](../nginx/security-headers.conf) と一致させる。
+スタイルは Vite ビルドで出力される **外部 CSS**（`frontend/dist/assets/index-*.css`）のみを読み込み、`index.html` および法務系静的ページに **インライン `<style>` は置かない**。実体は [frontend/public/_headers](../frontend/public/_headers) および [nginx/security-headers.conf](../nginx/security-headers.conf) と一致させる。整合は CI で [`scripts/check-payment-page-security.ts`](../scripts/check-payment-page-security.ts) が検証する。
 
 **効果:**
 - `script-src 'self' https://js.pay.jp` — 許可されたドメイン以外のスクリプト実行をブロック
 - `frame-src https://js.pay.jp` — iframeの差し替え攻撃を防止
+- `frame-ancestors 'none'` — 当該レスポンスのフレーム埋め込みを禁止（`X-Frame-Options: DENY` と併用）
+- `base-uri 'none'` / `object-src 'none'` — base タグ・object/embed の悪用を抑制
+- `form-action 'self'` — フォーム送信先を同一オリジンに制限（静的ページのフォームがない場合も将来の誤追加を抑制）
 - `connect-src 'self' https://api.pay.jp` — 外部へのデータ送信を制限（本番 API オリジンに合わせる）
-- `style-src 'unsafe-inline'` — `index.html` 内の `<style>` ブロック用。インライン**スクリプト**は `script-src` で**許可していない**
-- `font-src 'self'` — 外部フォント CDN を決済ページから排除
+- `style-src 'self'` — スタイルは自オリジンの CSS のみ（インライン**スクリプト**は `script-src` で**許可していない**）
+- `font-src 'self'` — 外部フォント CDN をサイトから排除
 
 ### 2.2 Subresource Integrity（SRI）
 
@@ -94,7 +101,6 @@ Content-Security-Policy:
 
 **残存課題:**
 - `pay.js` のSRI未対応（PAY.JPがハッシュを公開した場合に対応予定）。独自のハッシュを捏造しない。
-- `style-src 'unsafe-inline'` の将来的な除去検討（インライン CSS をビルド成果物へ寄せる場合）
-- ブラウザからの **CSP 違反レポート自動集約**は MVP では未実装。手動レビュー・運用手順は [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) を参照。
+- ブラウザからの **CSP 違反レポート自動集約**は未実装。手動レビュー・運用手順は [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) を参照。
 
 **結論: SAQ A v4.0.1 r1 の適格基準を満たす。**
