@@ -289,14 +289,14 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
 
       expect(res.statusCode).toBe(200);
 
-      // DB の status は更新されていること（role sync 失敗はトランザクション後の best-effort）
-      const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
-        discordUserId,
-      ]);
+      // DB の subscription_status は paused に更新されていること（トランザクション内で先に実施）
+      const member = await pool.query(
+        'SELECT subscription_status, role_state FROM members WHERE discord_user_id = $1',
+        [discordUserId],
+      );
       expect(member.rows[0].subscription_status).toBe('paused');
-
       // role_state は 'unknown' にフォールバックされる（webhook.ts の attemptRoleSync）
-      expect(member.rows[0]).toMatchObject({ subscription_status: 'paused' });
+      expect(member.rows[0].role_state).toBe('unknown');
     });
   });
 
