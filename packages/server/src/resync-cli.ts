@@ -52,15 +52,24 @@ async function main(): Promise<void> {
   const planRoleMapping: Record<string, string> = Object.fromEntries(
     allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
   );
-  const planParts = env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS.split(',')
+  const planInitialChargeParts = env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS.split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  if (planParts.length !== allowedPlanIds.length) {
-    process.stderr.write('[resync-cli] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS length must match PAYJP_PLAN_IDS\n');
+  if (planInitialChargeParts.length !== allowedPlanIds.length) {
+    process.stderr.write(
+      `[resync-cli] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must have the same number of comma-separated integers as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${planInitialChargeParts.length})\n`,
+    );
+    process.exit(1);
+  }
+  const planInitialChargeAmountsParsed = planInitialChargeParts.map((s) => Number.parseInt(s, 10));
+  if (planInitialChargeAmountsParsed.some((n) => !Number.isInteger(n) || n <= 0)) {
+    process.stderr.write(
+      `[resync-cli] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must be positive integers: ${env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS}\n`,
+    );
     process.exit(1);
   }
   const planInitialChargeAmounts: Record<string, number> = Object.fromEntries(
-    allowedPlanIds.map((pid, i) => [pid, Number.parseInt(planParts[i] as string, 10)]),
+    allowedPlanIds.map((pid, i) => [pid, planInitialChargeAmountsParsed[i] as number]),
   );
 
   const { REST } = await import('@discordjs/rest');
