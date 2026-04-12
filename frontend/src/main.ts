@@ -223,6 +223,20 @@ function startBillingFlow(app: HTMLElement): void {
           privacyConsented: data.privacyConsented,
         };
 
+        if (!data.privacyConsented) {
+          update({
+            step: 'form',
+            selectedPlanId: data.planId,
+            email: data.email,
+            cardholderName: data.cardholderName,
+            error: {
+              kind: 'server_error',
+              message: '個人情報の取り扱いへの同意が必要です。チェックを入れて再度お試しください。',
+            },
+          });
+          return;
+        }
+
         const submitBtn = app.querySelector('.submit-button') as HTMLButtonElement | null;
         if (submitBtn) {
           submitBtn.setAttribute('disabled', 'true');
