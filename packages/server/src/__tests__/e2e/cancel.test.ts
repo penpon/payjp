@@ -820,7 +820,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       expect(res.statusCode).toBe(200);
 
       // Discord ロール剥奪は呼ばれない
-      expect(discordMock.assignRole).not.toHaveBeenCalled();
+      expect(discordMock.removeRole).not.toHaveBeenCalled();
     });
   });
 
