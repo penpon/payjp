@@ -44,6 +44,11 @@ export interface AdminImpactLogRow {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Escape `%`, `_`, and `\` for use in a PostgreSQL LIKE/ILIKE pattern with `ESCAPE '\\'`. */
+export function escapePgLikePattern(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 export function isUuid(s: string): boolean {
   return UUID_RE.test(s);
 }
@@ -95,10 +100,11 @@ export async function queryMembersList(
 
   if (opts.q?.trim()) {
     const t = opts.q.trim();
+    const likePattern = `%${escapePgLikePattern(t)}%`;
     where.push(
-      `(m.email ILIKE $${next} OR m.id::text = $${next + 1} OR m.discord_user_id = $${next + 2} OR m.payjp_customer_id = $${next + 3} OR m.payjp_subscription_id = $${next + 4} OR m.inflight_operation_id = $${next + 5})`,
+      `(m.email ILIKE $${next} ESCAPE '\\' OR m.id::text = $${next + 1} OR m.discord_user_id = $${next + 2} OR m.payjp_customer_id = $${next + 3} OR m.payjp_subscription_id = $${next + 4} OR m.inflight_operation_id = $${next + 5})`,
     );
-    params.push(`%${t}%`, t, t, t, t, t);
+    params.push(likePattern, t, t, t, t, t);
     next += 6;
   }
   if (opts.subscriptionStatus?.trim()) {
