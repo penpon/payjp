@@ -3,6 +3,7 @@
  *
  * Usage (from repo root): `npm run invalidate-access-gate` with `DATABASE_URL` set.
  */
+import './load-env.js';
 import pg from 'pg';
 
 async function main(): Promise<void> {

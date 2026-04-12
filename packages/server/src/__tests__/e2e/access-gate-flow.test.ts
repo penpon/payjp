@@ -123,10 +123,12 @@ describe.skipIf(!hasTestDb)('E2E — access gate enforcement', () => {
     expect(m).not.toBeNull();
     const gateRaw = m![1];
     const hash = accessGateSessionTokenHash(gateRaw);
-    await pool.query(
-      `UPDATE access_gate_sessions SET expires_at = NOW() - INTERVAL '1 hour' WHERE access_gate_session_token_hash = $1`,
-      [hash],
-    );
+    // Must use the same timeline as buildE2EApp's clock() — SQL NOW() is real wall time and would leave expires_at > E2E_NOW in CI.
+    const expiredAt = new Date(E2E_NOW.getTime() - 3_600_000);
+    await pool.query(`UPDATE access_gate_sessions SET expires_at = $1 WHERE access_gate_session_token_hash = $2`, [
+      expiredAt,
+      hash,
+    ]);
 
     const discordUserId = `e2e-expired-gate-${randomUUID().slice(0, 8)}`;
     const { rawToken: linkRaw } = await insertLinkedSession(pgDb, discordUserId, undefined, 3600_000, () => E2E_NOW);

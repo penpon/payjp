@@ -7,6 +7,7 @@
  * 任意: `E2E_API_PORT` (default `3999`)
  */
 
+import './load-env.js';
 import { closePool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
 import { buildE2EAppPlain, buildSyncDepsForE2EPlain } from './e2e/e2e-mocks.js';

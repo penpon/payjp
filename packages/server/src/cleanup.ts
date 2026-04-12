@@ -1,3 +1,4 @@
+import './load-env.js';
 import { createPgPool } from '@hayane/shared';
 import pg from 'pg';
 

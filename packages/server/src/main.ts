@@ -1,3 +1,4 @@
+import './load-env.js';
 import { randomUUID } from 'node:crypto';
 import { REST, RequestMethod } from '@discordjs/rest';
 import type { AddGuildMemberResult, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';

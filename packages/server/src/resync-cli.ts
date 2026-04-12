@@ -5,6 +5,7 @@
  * Required env: DATABASE_URL, PAYJP_SECRET_KEY, PAYJP_LIVEMODE, PAYJP_PLAN_IDS, DISCORD_PLAN_ROLE_IDS,
  * DISCORD_GUILD_ID, DISCORD_BOT_TOKEN, PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS
  */
+import './load-env.js';
 import { REST } from '@discordjs/rest';
 import { createPgPool, createPool, runMigrations } from '@hayane/shared';
 import { runResyncCli } from '@hayane/sync-service';
