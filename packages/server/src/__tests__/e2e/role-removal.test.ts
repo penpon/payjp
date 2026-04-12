@@ -22,6 +22,7 @@ import {
   closePool,
   createPgPool,
   createTestDb,
+  E2E_PLAN_ROLE_MAPPING,
   E2E_WEBHOOK_TOKEN,
   makeCliDeps,
   makeWebhookEvent,
@@ -145,7 +146,7 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       const output = await runResyncCli(['--all'], cliDeps);
 
       expect(output.exitCode).toBe(0);
-      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenLastCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
 
     it('2. Webhook subscription.paused → syncRole("revoke") が即時呼ばれる', async () => {
@@ -169,7 +170,7 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       const res = await postWebhook(app, event);
 
       expect(res.statusCode).toBe(200);
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
     });
 
     it('3. Webhook subscription.deleted → syncRole("revoke") が即時呼ばれる', async () => {
@@ -194,7 +195,7 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       const res = await postWebhook(app, event);
 
       expect(res.statusCode).toBe(200);
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
 
       // DB の subscription_status が deleted に更新されていること
       const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
@@ -218,7 +219,7 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       const output = await runResyncCli(['--discord-user-id', discordUserId], cliDeps);
 
       expect(output.exitCode).toBe(0);
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke');
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
 
       const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
         discordUserId,
@@ -438,9 +439,9 @@ describe.skipIf(!hasTestDb)('E2E ロール削除シナリオ (Issue #41, T-P0-06
       expect(output.exitCode).toBe(0);
       expect(output.result.processed_count).toBe(2);
       const lastCallFor = (userId: string) =>
-        syncRole.mock.calls.filter((c) => c[0] === userId).at(-1) as [string, string] | undefined;
-      expect(lastCallFor(user1)).toEqual([user1, 'revoke']);
-      expect(lastCallFor(user2)).toEqual([user2, 'revoke']);
+        syncRole.mock.calls.filter((c) => c[0] === userId).at(-1) as [string, string, string] | undefined;
+      expect(lastCallFor(user1)).toEqual([user1, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e]);
+      expect(lastCallFor(user2)).toEqual([user2, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e]);
     });
 
     it('11. syncRole が常に失敗 → exitCode=2, failed_count > 0', async () => {
