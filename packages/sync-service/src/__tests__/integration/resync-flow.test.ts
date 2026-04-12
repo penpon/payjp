@@ -36,6 +36,8 @@ function createMockDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     cancelPayjpSubscription: vi.fn(async () => ({ id: 'sub_1', status: 'canceled' })),
     syncRole: vi.fn(async () => {}),
     planRoleMapping: { plan_1: 'role_1' },
+    planInitialChargeAmounts: { plan_1: 1000 },
+    initialChargeCurrency: 'jpy',
     log: vi.fn(),
     now: () => new Date('2026-04-06T12:00:00Z'),
     _queryResults: queryResults,
@@ -55,6 +57,8 @@ const MEMBER_WITH_INFLIGHT_SUBSCRIBE = {
   inflight_operation_id: 'op_1',
   inflight_operation_type: 'subscribe',
   inflight_operation_started_at: new Date('2026-04-06T11:00:00Z'),
+  inflight_subscribe_plan_id: 'plan_1',
+  first_trial_granted_at: null,
   last_payjp_event_created_at: 500,
   access_end_at: new Date('2026-07-06T12:00:00Z'),
 };

@@ -53,6 +53,9 @@ export interface CliDeps {
   cancelPayjpSubscription: (subscriptionId: string) => Promise<Record<string, unknown>>;
   syncRole: (userId: string, action: 'grant' | 'revoke', roleId: string) => Promise<void>;
   planRoleMapping: PlanRoleMapping;
+  /** Initial charge amounts (JPY) keyed by PAY.JP plan id — subscribe recovery. */
+  planInitialChargeAmounts: Record<string, number>;
+  initialChargeCurrency: string;
   log: (entry: LogEntry) => void;
   now: () => Date;
 }
@@ -193,6 +196,18 @@ async function handleOperationRecovery(
   return { success: false };
 }
 
+/** REQ-BILL-013 trial end: UTC +3 calendar months (aligned with billing-service calculateTrialEnd). */
+function calculateTrialEndUnixSeconds(now: Date): number {
+  const result = new Date(now);
+  const targetMonth = result.getUTCMonth() + 3;
+  const originalDay = result.getUTCDate();
+  result.setUTCMonth(targetMonth);
+  if (result.getUTCDate() !== originalDay) {
+    result.setUTCDate(0);
+  }
+  return Math.floor(result.getTime() / 1000);
+}
+
 async function handleSubscribeRecovery(
   member: Record<string, unknown>,
   operationId: string,
@@ -202,6 +217,18 @@ async function handleSubscribeRecovery(
   const customerId = member.payjp_customer_id as string | null;
   const memberId = member.id as string;
   const discordUserId = member.discord_user_id as string;
+
+  const planId = (member.inflight_subscribe_plan_id as string | null) ?? (member.payjp_plan_id as string | null);
+  if (!planId) {
+    await insertImpactLog(deps.db, memberId, 'subscribe_recovery_no_plan', operationId);
+    return { success: false };
+  }
+
+  const metaBase = {
+    discord_user_id: discordUserId,
+    operation_id: operationId,
+    member_id: memberId,
+  } as const;
 
   // REQ-SYNC-019 step 1: customer_id NULL → fail-close
   if (!customerId) {
@@ -248,10 +275,13 @@ async function handleSubscribeRecovery(
         memberId,
       ]);
     } else {
-      // proceed: create charge
+      // proceed: create charge (plan-based amount)
+      const amount = deps.planInitialChargeAmounts[planId] ?? 1000;
       const charge = await deps.createPayjpCharge({
         customer: customerId,
-        metadata: { discord_user_id: discordUserId, operation_id: operationId },
+        amount,
+        currency: deps.initialChargeCurrency,
+        metadata: { ...metaBase },
       });
       chargeId = charge.id;
       await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
@@ -261,18 +291,50 @@ async function handleSubscribeRecovery(
     }
   }
 
-  // Step 4: Check subscription existence
+  // Step 4: Check subscription existence (search PAY.JP first — idempotent recovery)
   let subscriptionId = member.payjp_subscription_id as string | null;
   if (!subscriptionId) {
-    const sub = await deps.createPayjpSubscription({
-      customer: customerId,
-      metadata: { discord_user_id: discordUserId, operation_id: operationId },
-    });
-    subscriptionId = sub.id;
-    await deps.db.query(
-      'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
-      [subscriptionId, sub.status, memberId],
-    );
+    let found: SubscriptionCandidate | undefined;
+    let subOffset = 0;
+    while (subOffset <= 900) {
+      const result = await deps.listPayjpSubscriptions(customerId, subOffset);
+      for (const sub of result.data) {
+        const mid = sub.metadata?.member_id;
+        const oid = sub.metadata?.operation_id;
+        if (mid === memberId || oid === operationId) {
+          found = sub;
+          break;
+        }
+      }
+      if (found) break;
+      if (!result.has_more) break;
+      subOffset += 100;
+      if (subOffset > 900 && result.has_more) break;
+    }
+
+    if (found) {
+      subscriptionId = found.id;
+      await deps.db.query(
+        'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
+        [subscriptionId, found.status, memberId],
+      );
+    } else {
+      const isFirstTime = member.first_trial_granted_at == null;
+      const subParams: Record<string, unknown> = {
+        customer: customerId,
+        plan: planId,
+        metadata: { ...metaBase },
+      };
+      if (isFirstTime) {
+        subParams.trial_end = calculateTrialEndUnixSeconds(deps.now());
+      }
+      const sub = await deps.createPayjpSubscription(subParams);
+      subscriptionId = sub.id;
+      await deps.db.query(
+        'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
+        [subscriptionId, sub.status, memberId],
+      );
+    }
   }
 
   // Step 5: Update member, sync role, clear inflight
@@ -470,9 +532,9 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
   const subscriptionId = member.payjp_subscription_id as string | null;
   const planId = member.payjp_plan_id as string | null;
 
-  // Skip members with inflight operations — these must be resolved via --operation-id
+  // Skip members with inflight operations — these must be resolved via --operation-id (count as failure for --all)
   if (member.inflight_operation_id) {
-    return { success: true };
+    return { success: false };
   }
 
   let discordSyncAttempted = false;
@@ -523,6 +585,7 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
           member_id: memberId,
           payjp_plan_id: planId ?? 'null',
         });
+        discordSyncAllOk = false;
       }
       for (const roleId of roleIds) {
         discordSyncAttempted = true;
@@ -552,7 +615,7 @@ async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): 
     await resolveImpactLog(deps.db, memberId, ROLE_SYNC_FAILED_WEBHOOK);
   }
 
-  return { success: true };
+  return { success: !discordSyncAttempted || discordSyncAllOk };
 }
 
 // --- Role helpers ---

@@ -37,18 +37,26 @@ function renderLoading(): HTMLDivElement {
   ]);
 }
 
-function renderError(message?: string): HTMLDivElement {
+function renderError(message?: string, onDiscordConnect?: () => void): HTMLDivElement {
   const reloadBtn = el('button', { type: 'button', class: 'submit-button' }, ['再読み込み']);
   reloadBtn.addEventListener('click', () => {
     window.location.reload();
   });
-  return createCard([
+  const children: Node[] = [
     el('h1', { class: 'heading' }, ['エラー']),
     el('div', { class: 'badge error-badge', role: 'alert' }, [
       message ?? '状態の確認に失敗しました。再度お試しください。',
     ]),
-    reloadBtn,
-  ]);
+  ];
+  if (onDiscordConnect) {
+    children.push(
+      createDiscordButton(() => {
+        onDiscordConnect();
+      }),
+    );
+  }
+  children.push(reloadBtn);
+  return createCard(children);
 }
 
 // --- Billing context (optional, for billing state) ---
@@ -76,6 +84,8 @@ export function renderState(
     billing?: BillingContext;
     subscribed?: SubscribedContext;
     errorMessage?: string;
+    /** When set, show “Discordと連携する” before reload (e.g. billing requires link_session). */
+    onDiscordConnect?: () => void;
     registerComplete?: {
       result: SubscribeResponse;
       plans: PlanDef[];
@@ -107,7 +117,7 @@ export function renderState(
       }
       break;
     case 'error':
-      container.appendChild(renderError(extra?.errorMessage));
+      container.appendChild(renderError(extra?.errorMessage, extra?.onDiscordConnect));
       break;
     case 'billing':
       if (extra?.billing) {

@@ -83,6 +83,11 @@ async function main(): Promise<void> {
       frontendBaseUrl: E2E_FRONTEND_BASE_URL,
       allowedPlanIds: [...E2E_BROWSER_PLAN_IDS],
       planRoleMapping: E2E_BROWSER_PLAN_ROLES,
+      planInitialChargeAmounts: {
+        plan_starter: 25000,
+        plan_business: 50000,
+        plan_enterprise: 100000,
+      },
     },
     syncDeps: buildSyncDepsForE2EPlain(pool),
   });

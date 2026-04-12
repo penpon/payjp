@@ -91,6 +91,7 @@ describe('main init()', () => {
 
   it('should show billing form when getMember returns null (no member session)', async () => {
     vi.mocked(getMember).mockResolvedValue(null);
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
 
     await runInit();
 
@@ -297,6 +298,7 @@ describe('main init()', () => {
 
   it('initializes PAY.JP with threeDSecureWorkflow iframe when SDK is available', async () => {
     vi.mocked(getMember).mockResolvedValue(null);
+    vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
     vi.stubEnv('VITE_PAYJP_PUBLIC_KEY', 'pk_test_0123456789012345');
 
     const mockPayjp = vi.fn((_pk: string, opts?: { threeDSecureWorkflow?: string }) => {

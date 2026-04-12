@@ -23,6 +23,11 @@ export const E2E_BILLING_CONFIG: BillingConfig = {
   allowedPlanIds: ['plan_e2e', 'plan_e2e_standard', 'plan_e2e_premium'],
   discordGuildId: 'guild-e2e-test',
   planRoleMapping: E2E_PLAN_ROLE_MAPPING,
+  planInitialChargeAmounts: {
+    plan_e2e: 1000,
+    plan_e2e_standard: 2000,
+    plan_e2e_premium: 3000,
+  },
   initialChargeAmount: 1000,
   initialChargeAmountCurrency: 'jpy',
   googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/e2e-test-form/viewform',

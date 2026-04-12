@@ -281,6 +281,12 @@ export function makeWebhookEvent(
 export function makeCliDeps(pool: pg.Pool, overrides: Partial<CliDeps> = {}): CliDeps {
   return {
     db: createPgPool(pool),
+    planInitialChargeAmounts: {
+      plan_e2e: 1000,
+      plan_e2e_standard: 2000,
+      plan_e2e_premium: 3000,
+    },
+    initialChargeCurrency: 'jpy',
     getPayjpSubscription: vi.fn().mockResolvedValue({
       id: 'sub_test_e2e',
       status: 'active',

@@ -9,6 +9,7 @@
 
 import type { Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { linkSessionTokenHash } from '../../core/index.js';
 import { handleSubscribe } from '../../shell/subscribe.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
@@ -49,6 +50,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     role_state: 'unknown',
     last_synced_at: NOW,
     last_payjp_event_created_at: null,
+    inflight_subscribe_plan_id: null,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,
@@ -91,7 +93,8 @@ function makeConfig(): BillingConfig {
     frontendBaseUrl: 'https://frontend.example.com',
     allowedPlanIds: [PLAN_ID],
     discordGuildId: 'guild-001',
-    planRoleMapping: { plan_test: 'role-001' },
+    planRoleMapping: { [PLAN_ID]: 'role-plan-001' },
+    planInitialChargeAmounts: { [PLAN_ID]: 1000 },
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     googleFormCancelBaseUrl: 'https://docs.google.com/forms/d/e/test-form/viewform',
@@ -128,6 +131,20 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
 // モック依存セットアップ
 // -------------------------------------------------------------------------
 
+const DEFAULT_LINK_RAW = 'link-raw-token-default';
+
+function linkSessionRecordForHash(hash: string) {
+  return {
+    id: 'ls-1',
+    link_session_token_hash: hash,
+    discord_user_id: DISCORD_USER_ID,
+    discord_access_token_encrypted: null,
+    expires_at: new Date(NOW.getTime() + 3600_000),
+    used_at: null,
+    created_at: NOW,
+  };
+}
+
 function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   const member = makeMember(memberOverrides);
   const updatedMember = makeUpdatedMemberAfterSubscribe(member);
@@ -138,7 +155,11 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
     upsertProvisionalMember: vi.fn().mockResolvedValue(member),
     upsertProvisionalMemberByEmail: vi.fn().mockResolvedValue(member),
     updateMemberDiscordUserId: vi.fn().mockResolvedValue(member),
-    findLinkSession: vi.fn().mockResolvedValue(null),
+    findLinkSession: vi
+      .fn()
+      .mockImplementation((h: string) =>
+        Promise.resolve(h === linkSessionTokenHash(DEFAULT_LINK_RAW) ? linkSessionRecordForHash(h) : null),
+      ),
     consumeLinkSession: vi.fn().mockResolvedValue(undefined),
     insertCancelFormToken: vi.fn().mockResolvedValue(undefined as never),
     findCancelFormToken: vi.fn().mockResolvedValue(null),
@@ -200,6 +221,7 @@ function makeSubscribeRequest(overrides: Record<string, unknown> = {}) {
     payjpToken: PAYJP_TOKEN_ID,
     planId: PLAN_ID,
     privacyConsented: true,
+    linkSessionToken: DEFAULT_LINK_RAW,
     ...overrides,
   };
 }
@@ -305,10 +327,10 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-024: Provisional member row
   // -------------------------------------------------------------------------
   describe('PROP-BILL-024: Provisional member', () => {
-    it('creates provisional member row by email when none exists', async () => {
+    it('creates provisional member row bound to Discord when none exists', async () => {
       const deps = makeSuccessfulDeps();
       await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(deps.db.upsertProvisionalMemberByEmail).toHaveBeenCalledWith(EMAIL);
+      expect(deps.db.upsertProvisionalMember).toHaveBeenCalledWith(DISCORD_USER_ID, EMAIL);
     });
   });
 
@@ -346,7 +368,7 @@ describe('POST /v1/subscriptions — Integration', () => {
         first_trial_granted_at: new Date('2025-01-01T00:00:00Z'),
       });
       const deps = makeSuccessfulDeps();
-      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(activeMember);
+      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockResolvedValue(activeMember);
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -366,7 +388,7 @@ describe('POST /v1/subscriptions — Integration', () => {
         first_trial_granted_at: NOW,
       });
       const deps = makeSuccessfulDeps();
-      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(trialMember);
+      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockResolvedValue(trialMember);
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
     });
@@ -381,7 +403,7 @@ describe('POST /v1/subscriptions — Integration', () => {
         cancel_requested_at: NOW,
       });
       const deps = makeSuccessfulDeps();
-      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(canceledMember);
+      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockResolvedValue(canceledMember);
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
     });
@@ -709,12 +731,16 @@ describe('POST /v1/subscriptions — Integration', () => {
         callOrder.push('acquireAdvisoryLock');
         return Promise.resolve(true);
       });
-      (deps.db.upsertProvisionalMemberByEmail as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        callOrder.push('upsertProvisionalMemberByEmail');
+      (deps.db.upsertProvisionalMember as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callOrder.push('upsertProvisionalMember');
         return Promise.resolve(makeMember());
       });
       (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockImplementation(() => {
         callOrder.push('setInflightOperation');
+        return Promise.resolve();
+      });
+      (deps.db.consumeLinkSession as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callOrder.push('consumeLinkSession');
         return Promise.resolve();
       });
       (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -750,8 +776,9 @@ describe('POST /v1/subscriptions — Integration', () => {
 
       // 重要なステップが正しい順序で呼ばれていること
       const idxLock = callOrder.indexOf('acquireAdvisoryLock');
-      const idxProvisional = callOrder.indexOf('upsertProvisionalMemberByEmail');
+      const idxProvisional = callOrder.indexOf('upsertProvisionalMember');
       const idxInflight = callOrder.indexOf('setInflightOperation');
+      const idxConsume = callOrder.indexOf('consumeLinkSession');
       const idxFetchToken = callOrder.indexOf('fetchToken');
       const idxCreateCustomer = callOrder.indexOf('createCustomer');
       const idxPersistCustomerId = callOrder.indexOf('updateMemberCustomerId');
@@ -760,10 +787,11 @@ describe('POST /v1/subscriptions — Integration', () => {
       const idxCreateSub = callOrder.indexOf('createSubscription');
       const idxUpdateMember = callOrder.indexOf('updateMemberAfterSubscribe');
 
-      // Lock → provisional → inflight (before PAY.JP) → fetchToken (3DS validation) → createCustomer → charge → sub → updateMember
+      // Lock → provisional → inflight → consume link_session → fetchToken (3DS) → createCustomer → …
       expect(idxLock).toBeLessThan(idxProvisional);
       expect(idxProvisional).toBeLessThan(idxInflight);
-      expect(idxInflight).toBeLessThan(idxFetchToken);
+      expect(idxInflight).toBeLessThan(idxConsume);
+      expect(idxConsume).toBeLessThan(idxFetchToken);
       expect(idxFetchToken).toBeLessThan(idxCreateCustomer);
       expect(idxCreateCustomer).toBeLessThan(idxPersistCustomerId);
       expect(idxPersistCustomerId).toBeLessThan(idxCreateCharge);

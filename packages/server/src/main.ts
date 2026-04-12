@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { REST, RequestMethod } from '@discordjs/rest';
 import type { AddGuildMemberResult, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
-import type { WebhookHandlerDeps } from '@hayane/sync-service';
+import type { CliDeps, WebhookHandlerDeps } from '@hayane/sync-service';
+import { runDailyResync } from '@hayane/sync-service';
+import { CronJob } from 'cron';
 import Payjp from 'payjp';
 import { buildApp } from './app.js';
 import type { SyncDeps } from './routes/sync.routes.js';
@@ -75,6 +77,9 @@ const REQUIRED_ENV = [
   'GOOGLE_FORM_CANCEL_SECRET',
   'GOOGLE_FORM_CANCEL_TOKEN_SECRET',
   'GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS',
+  'PAYJP_WEBHOOK_TOKEN',
+  'PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS',
+  'DAILY_RESYNC_CRON',
 ] as const;
 
 type RequiredEnvKey = (typeof REQUIRED_ENV)[number];
@@ -358,6 +363,100 @@ const planRoleMapping: Record<string, string> = Object.fromEntries(
   allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
 );
 
+const planInitialChargeParts = env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (planInitialChargeParts.length !== allowedPlanIds.length) {
+  process.stderr.write(
+    `[startup] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must have the same number of comma-separated integers as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${planInitialChargeParts.length})\n`,
+  );
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+const planInitialChargeAmountsParsed = planInitialChargeParts.map((s) => Number.parseInt(s, 10));
+if (planInitialChargeAmountsParsed.some((n) => !Number.isInteger(n) || n <= 0)) {
+  process.stderr.write(
+    `[startup] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must be positive integers: ${env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS}\n`,
+  );
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+const planInitialChargeAmounts: Record<string, number> = Object.fromEntries(
+  allowedPlanIds.map((pid, i) => [pid, planInitialChargeAmountsParsed[i] as number]),
+);
+
+const listPayjpCharges: CliDeps['listPayjpCharges'] = async (params, offset) => {
+  const r = (await payjpApi.charges.list({
+    customer: params.customer,
+    since: params.since,
+    until: params.until,
+    limit: params.limit,
+    offset,
+  })) as { data: Array<Record<string, unknown>>; has_more: boolean };
+  return {
+    data: r.data.map((ch) => ({
+      id: ch.id as string,
+      metadata: toMetadata(ch.metadata),
+    })),
+    has_more: r.has_more,
+  };
+};
+
+const listPayjpSubscriptions: CliDeps['listPayjpSubscriptions'] = async (customerId, offset) => {
+  const r = (await payjpApi.subscriptions.list({
+    customer: customerId,
+    limit: 100,
+    offset,
+  })) as { data: Array<Record<string, unknown>>; has_more: boolean };
+  return {
+    data: r.data.map((s) => ({
+      id: s.id as string,
+      status: s.status as string,
+      metadata: toMetadata(s.metadata),
+      current_period_end: s.current_period_end as number | undefined,
+    })),
+    has_more: r.has_more,
+  };
+};
+
+const createPayjpChargeCli: CliDeps['createPayjpCharge'] = async (params) => {
+  const ch = (await payjpApi.charges.create(params)) as Record<string, unknown>;
+  return { id: ch.id as string };
+};
+
+const createPayjpSubscriptionCli: CliDeps['createPayjpSubscription'] = async (params) => {
+  const s = (await payjpApi.subscriptions.create(params)) as Record<string, unknown>;
+  return { id: s.id as string, status: s.status as string };
+};
+
+const cancelPayjpSubscriptionCli: CliDeps['cancelPayjpSubscription'] = async (subscriptionId) => {
+  return (await payjpApi.subscriptions.cancel(subscriptionId)) as Record<string, unknown>;
+};
+
+const getPayjpSubscriptionCli: CliDeps['getPayjpSubscription'] = async (subscriptionId) => {
+  try {
+    return (await payjpApi.subscriptions.retrieve(subscriptionId)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+const cliDeps: CliDeps = {
+  db: dbPool,
+  getPayjpSubscription: getPayjpSubscriptionCli,
+  listPayjpCharges,
+  listPayjpSubscriptions,
+  createPayjpCharge: createPayjpChargeCli,
+  createPayjpSubscription: createPayjpSubscriptionCli,
+  cancelPayjpSubscription: cancelPayjpSubscriptionCli,
+  syncRole,
+  planRoleMapping,
+  planInitialChargeAmounts,
+  initialChargeCurrency: 'jpy',
+  log: (entry) => console.log(JSON.stringify(entry)),
+  now: () => new Date(),
+};
+
 const billingDeps: BillingDeps = {
   db: dbClient,
   payjp: payjpClient,
@@ -367,6 +466,7 @@ const billingDeps: BillingDeps = {
     allowedPlanIds,
     discordGuildId: env.DISCORD_GUILD_ID,
     planRoleMapping,
+    planInitialChargeAmounts,
     initialChargeAmount: 1000,
     initialChargeAmountCurrency: 'jpy',
     discordTokenEncryptionKey,
@@ -384,7 +484,7 @@ const billingDeps: BillingDeps = {
 
 const webhookDeps: WebhookHandlerDeps = {
   db: dbPool,
-  payjpWebhookToken: process.env.PAYJP_WEBHOOK_TOKEN ?? '',
+  payjpWebhookToken: env.PAYJP_WEBHOOK_TOKEN,
   expectedLivemode: env.PAYJP_LIVEMODE === 'true',
   discordGuildId: env.DISCORD_GUILD_ID,
   planRoleMapping,
@@ -409,9 +509,34 @@ const app = buildApp(
   syncDeps,
 );
 
+let dailyResyncCron: CronJob | null = null;
+try {
+  dailyResyncCron = new CronJob(
+    env.DAILY_RESYNC_CRON,
+    () => {
+      void runDailyResync({
+        cliDeps,
+        log: (entry) => console.log(JSON.stringify(entry)),
+      }).catch((err) => {
+        console.error(`[daily-resync] ${err instanceof Error ? err.message : String(err)}`);
+      });
+    },
+    null,
+    false,
+  );
+} catch (err) {
+  process.stderr.write(
+    `[startup] Invalid DAILY_RESYNC_CRON "${env.DAILY_RESYNC_CRON}": ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+
 try {
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`[startup] Server listening on port ${port}`);
+  dailyResyncCron?.start();
+  console.log(`[startup] Daily resync cron scheduled: ${env.DAILY_RESYNC_CRON}`);
 } catch (err) {
   console.error('[startup] Failed to start server:', err);
   await closePoolIgnoringStartupErrors();
@@ -421,6 +546,12 @@ try {
 // Graceful shutdown — always close the DB pool; surface partial failures via exit code
 async function shutdownGracefully(): Promise<void> {
   let exitCode = 0;
+  try {
+    dailyResyncCron?.stop();
+  } catch (err) {
+    console.error('[shutdown] Error stopping daily resync cron:', err);
+    exitCode = 1;
+  }
   try {
     await app.close();
   } catch (err) {
