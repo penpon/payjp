@@ -347,6 +347,15 @@ const { syncRole } = cliDeps;
 
 // ---- 4. Wire dependencies ----
 
+const subscribeGateCodeRaw = process.env.SUBSCRIBE_GATE_CODE?.trim();
+const subscribeGateCode = subscribeGateCodeRaw && subscribeGateCodeRaw.length > 0 ? subscribeGateCodeRaw : undefined;
+const accessGateSessionTtlSeconds = Number(process.env.ACCESS_GATE_SESSION_TTL_SECONDS ?? '86400');
+if (!Number.isInteger(accessGateSessionTtlSeconds) || accessGateSessionTtlSeconds <= 0) {
+  process.stderr.write(`[startup] ACCESS_GATE_SESSION_TTL_SECONDS must be a positive integer\n`);
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+
 const billingDeps: BillingDeps = {
   db: dbClient,
   payjp: payjpClient,
@@ -367,6 +376,8 @@ const billingDeps: BillingDeps = {
     googleFormCancelTokenSecret: env.GOOGLE_FORM_CANCEL_TOKEN_SECRET,
     googleFormCancelTokenTtlSeconds,
     cancelNoticeCycles,
+    subscribeGateCode,
+    accessGateSessionTtlSeconds,
   },
   clock: () => new Date(),
   generateOperationId: () => randomUUID(),

@@ -3,6 +3,7 @@ import {
   checkSession,
   createCancelFormLink,
   createSubscription,
+  fetchAccessGateSession,
   fetchSubscriptionStatus,
   getMember,
   linkDiscord,
@@ -10,6 +11,7 @@ import {
   SessionCheckError,
   SubscriptionStatusError,
   startOAuth,
+  verifyAccessGatePasscode,
 } from './api.js';
 import type { BillingCallbacks } from './billing-ui.js';
 import { showCancelConfirmModal } from './cancel-ui.js';
@@ -35,6 +37,42 @@ function consumeCancelSubmittedQuery(): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** When the server enforces the shared gate, block billing until `__Host-access_gate` is valid. */
+async function ensureGateForBilling(app: HTMLElement): Promise<boolean> {
+  try {
+    const session = await fetchAccessGateSession();
+    if (!session.gateEnforced || session.unlocked) {
+      return true;
+    }
+  } catch (err) {
+    console.error('[init] fetchAccessGateSession failed:', err);
+    renderState(app, 'error', startOAuth, {
+      errorMessage: 'アクセス確認に失敗しました。しばらく経ってから再度お試しください。',
+    });
+    return false;
+  }
+
+  return await new Promise((resolve) => {
+    const show = (errorMessage?: string) => {
+      renderState(app, 'gate_locked', startOAuth, {
+        gateLock: {
+          ...(errorMessage !== undefined ? { errorMessage } : {}),
+          onSubmit: async (passcode) => {
+            try {
+              await verifyAccessGatePasscode(passcode);
+              resolve(true);
+            } catch (e) {
+              console.warn('[init] verifyAccessGatePasscode:', e);
+              show('パスコードが正しくないか、確認に失敗しました。');
+            }
+          },
+        },
+      });
+    };
+    show();
+  });
 }
 
 /** Poll until backend reflects cancel (Google Form → Apps Script → google-submit) or timeout. */
@@ -466,11 +504,13 @@ async function init(): Promise<void> {
       }
 
       // 連携済みだが購読なし（退会後など）
+      if (!(await ensureGateForBilling(app))) return;
       startBillingFlow(app);
       return;
     }
 
     // member_session なし → 課金フォームを先に表示（支払完了後に Discord OAuth）
+    if (!(await ensureGateForBilling(app))) return;
     startBillingFlow(app);
   } catch (err) {
     console.error('[init] failed:', err);

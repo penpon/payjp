@@ -89,6 +89,7 @@ function makeConfig(): BillingConfig {
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
     cancelNoticeCycles: 1,
+    accessGateSessionTtlSeconds: 86400,
   };
 }
 
@@ -123,6 +124,8 @@ function makeDeps(
     consumeCancelFormToken: vi.fn().mockResolvedValue(undefined),
     insertMemberSession: vi.fn(),
     findMemberSession: vi.fn().mockResolvedValue(makeMemberSession()),
+    insertAccessGateSession: vi.fn(),
+    findAccessGateSessionByTokenHash: vi.fn().mockResolvedValue(false),
     setInflightOperation: vi.fn(),
     clearInflightOperation: vi.fn(),
     updateMemberCustomerId: vi.fn(),

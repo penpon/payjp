@@ -150,6 +150,25 @@ export function memberSessionTokenHash(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** Same digest as `memberSessionTokenHash`; use for `__Host-access_gate` rows only (clarity at call sites). */
+export function accessGateSessionTokenHash(token: string): string {
+  return memberSessionTokenHash(token);
+}
+
+/**
+ * Compare shared passcode to configured value without leaking length via early exit on `timingSafeEqual`.
+ * Uses SHA-256 digests (fixed 32 bytes) before constant-time comparison.
+ * Empty `expected` or `submitted` always yields false (misuse / no gate configured).
+ */
+export function verifySharedPasscode(submitted: string, expected: string): boolean {
+  if (expected.length === 0 || submitted.length === 0) {
+    return false;
+  }
+  const h1 = createHash('sha256').update(submitted, 'utf8').digest();
+  const h2 = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(h1, h2);
+}
+
 // PROP-BILL-010: REQ-BILL-016
 export function buildSubscriptionResponse(member: Member): SubscriptionResponse {
   if (!member.subscription_status || !member.payjp_plan_id || !member.access_end_at) {

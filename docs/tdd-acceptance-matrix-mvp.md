@@ -19,6 +19,15 @@
 | R8 | 日次再同期・手動再同期CLI | `T-P0-04`, `T-P0-06` |
 | R9 | 最低限の障害調査ログ | `T-P0-01`, `T-P0-02`, `T-P0-04`, `T-P0-05`, `T-P0-07` |
 
+## 1.1 CR-010 / CR-011（共有ゲート + 管理 read-only）— 追加テスト観点
+
+| 観点 | 主に担保するテスト |
+|---|---|
+| 共有パスコードの定数時間比較 | `packages/billing-service` pure-core（`verifySharedPasscode`） |
+| `access-gate` / subscribe 境界 | `packages/server` `access-gate-routes.test.ts` / `billing-routes.test.ts` / E2E `access-gate-flow.test.ts`（DB あり時） |
+| フロント課金フォーム非表示（ゲート時） | `frontend` `main.test.ts` / `api.test.ts` / `ui.test.ts` |
+| 管理API read-only | `packages/admin-server` `admin-routes.test.ts` |
+
 ## 2. P0優先順位（Go-Live必須）
 
 1. `T-P0-01` OAuth原子的検証

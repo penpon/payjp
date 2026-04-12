@@ -37,6 +37,52 @@ function renderLoading(): HTMLDivElement {
   ]);
 }
 
+function renderGateLocked(ctx: {
+  errorMessage?: string;
+  onSubmit: (passcode: string) => void | Promise<void>;
+}): HTMLDivElement {
+  const input = el('input', {
+    type: 'password',
+    class: 'text-input',
+    autocomplete: 'current-password',
+    'aria-label': 'アクセス用パスコード',
+    placeholder: 'パスコード',
+  }) as HTMLInputElement;
+  const err = ctx.errorMessage;
+  const submitBtn = el('button', { type: 'button', class: 'submit-button' }, ['続ける']);
+  const defaultLabel = '続ける';
+  const runSubmit = async () => {
+    submitBtn.disabled = true;
+    input.disabled = true;
+    submitBtn.textContent = '確認中...';
+    try {
+      await Promise.resolve(ctx.onSubmit(input.value));
+    } finally {
+      submitBtn.disabled = false;
+      input.disabled = false;
+      submitBtn.textContent = defaultLabel;
+    }
+  };
+  submitBtn.addEventListener('click', () => {
+    void runSubmit();
+  });
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') void runSubmit();
+  });
+  const children: Node[] = [
+    el('h1', { class: 'heading' }, ['アクセス確認']),
+    el('div', { class: 'badge info-badge', role: 'status' }, [
+      'このサイトの購読フォームは共有パスコードで保護されています。運営から案内されたコードを入力してください。',
+    ]),
+    input,
+  ];
+  if (err) {
+    children.push(el('div', { class: 'badge error-badge', role: 'alert' }, [err]));
+  }
+  children.push(submitBtn);
+  return createCard(children);
+}
+
 function renderError(message?: string, onDiscordConnect?: () => void): HTMLDivElement {
   const reloadBtn = el('button', { type: 'button', class: 'submit-button' }, ['再読み込み']);
   reloadBtn.addEventListener('click', () => {
@@ -96,6 +142,7 @@ export function renderState(
     linkComplete?: { roleGranted: boolean; onBackToTop: () => void };
     cancelComplete?: { result: CancelResponse };
     cancelError?: CancelUIError;
+    gateLock?: { errorMessage?: string; onSubmit: (passcode: string) => void | Promise<void> };
   },
 ): void {
   container.replaceChildren();
@@ -130,6 +177,14 @@ export function renderState(
         );
       } else {
         console.error('[ui] renderState("billing") called without billing context');
+        container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
+      }
+      break;
+    case 'gate_locked':
+      if (extra?.gateLock) {
+        container.appendChild(renderGateLocked(extra.gateLock));
+      } else {
+        console.error('[ui] renderState("gate_locked") called without gateLock context');
         container.appendChild(renderError('ページの表示に失敗しました。再読み込みしてください。'));
       }
       break;

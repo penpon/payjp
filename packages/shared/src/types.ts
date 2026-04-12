@@ -1,4 +1,8 @@
-export type CookieName = '__Host-oauth_session' | '__Host-link_session' | '__Host-member_session';
+export type CookieName =
+  | '__Host-oauth_session'
+  | '__Host-link_session'
+  | '__Host-member_session'
+  | '__Host-access_gate';
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
 

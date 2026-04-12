@@ -92,6 +92,7 @@ function makeConfig(): BillingConfig {
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
     cancelNoticeCycles: 1,
+    accessGateSessionTtlSeconds: 86400,
   };
 }
 
@@ -123,6 +124,8 @@ function makeSubscribeDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
       created_at: new Date(),
     }),
     findMemberSession: vi.fn().mockResolvedValue(null),
+    insertAccessGateSession: vi.fn().mockResolvedValue(undefined),
+    findAccessGateSessionByTokenHash: vi.fn().mockResolvedValue(false),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -203,6 +206,8 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
       created_at: new Date(),
     }),
     findMemberSession: vi.fn().mockResolvedValue(null),
+    insertAccessGateSession: vi.fn().mockResolvedValue(undefined),
+    findAccessGateSessionByTokenHash: vi.fn().mockResolvedValue(false),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),

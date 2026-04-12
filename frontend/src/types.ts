@@ -5,6 +5,7 @@ export type AppState =
   | 'linked'
   | 'error'
   | 'billing'
+  | 'gate_locked'
   | 'register_complete'
   | 'link_complete'
   | 'cancel_complete'

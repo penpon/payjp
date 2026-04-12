@@ -12,7 +12,7 @@ let dbAvailable = false;
 
 async function cleanDatabase() {
   await pool.query(
-    'TRUNCATE cancel_form_tokens, member_sessions, members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs CASCADE',
+    'TRUNCATE cancel_form_tokens, member_sessions, members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs, access_gate_sessions, invite_sessions, invite_tokens CASCADE',
   );
 }
 
@@ -196,6 +196,24 @@ describe('PgDbClient - cancel_form_tokens', () => {
     await expect(db.consumeCancelFormToken('00000000-0000-0000-0000-000000000124', new Date())).rejects.toThrow(
       'Cancel form token not found, already consumed, or expired',
     );
+  });
+});
+
+describe('PgDbClient - access_gate_sessions', () => {
+  it('insertAccessGateSession and findAccessGateSessionByTokenHash', async () => {
+    const now = new Date();
+    const rawSession = 'deadbeef'.repeat(8);
+    const { createHash } = await import('node:crypto');
+    const hash = createHash('sha256').update(rawSession).digest('hex');
+    const sessionExpires = new Date(now.getTime() + 86_400_000);
+    await db.insertAccessGateSession({
+      accessGateSessionTokenHash: hash,
+      expiresAt: sessionExpires,
+    });
+
+    expect(await db.findAccessGateSessionByTokenHash(hash, now)).toBe(true);
+    const past = new Date(sessionExpires.getTime() + 1000);
+    expect(await db.findAccessGateSessionByTokenHash(hash, past)).toBe(false);
   });
 });
 

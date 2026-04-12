@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { checkSession, SessionCheckError, startOAuth } from '../api.js';
+import { checkSession, fetchAccessGateSession, SessionCheckError, startOAuth } from '../api.js';
 
 describe('api', () => {
   const originalFetch = globalThis.fetch;
@@ -87,6 +87,40 @@ describe('api', () => {
       vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(null), { status: 200 }));
 
       await expect(checkSession()).rejects.toThrow('Invalid session response');
+    });
+  });
+
+  describe('fetchAccessGateSession', () => {
+    it('should call /v1/access-gate/session with credentials: include', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(JSON.stringify({ gateEnforced: true, unlocked: false }), { status: 200 }),
+      );
+
+      await fetchAccessGateSession();
+
+      expect(globalThis.fetch).toHaveBeenCalledWith('/v1/access-gate/session', {
+        credentials: 'include',
+      });
+    });
+
+    it('should return parsed body on 200', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(JSON.stringify({ gateEnforced: false, unlocked: true }), { status: 200 }),
+      );
+
+      await expect(fetchAccessGateSession()).resolves.toEqual({ gateEnforced: false, unlocked: true });
+    });
+
+    it('should throw on non-200', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 503 }));
+
+      await expect(fetchAccessGateSession()).rejects.toThrow('Access gate session check failed: 503');
+    });
+
+    it('should throw on invalid JSON shape', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ foo: 1 }), { status: 200 }));
+
+      await expect(fetchAccessGateSession()).rejects.toThrow('Invalid access gate session response');
     });
   });
 

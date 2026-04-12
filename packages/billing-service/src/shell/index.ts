@@ -1,4 +1,5 @@
 export {
+  accessGateSessionTokenHash,
   calculateTrialEnd,
   formatRfc3339Utc,
   hasActiveSubscription,
@@ -6,6 +7,7 @@ export {
   isSameOrigin,
   linkSessionTokenHash,
   memberSessionTokenHash,
+  verifySharedPasscode,
 } from '../core/index.js';
 export {
   handleCancel,

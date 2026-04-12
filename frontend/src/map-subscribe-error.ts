@@ -67,6 +67,12 @@ export function mapSubscribeError(err: unknown): BillingError {
         kind: 'server_error',
         message: '選択したプランが無効です。別のプランを選び直して再度お試しください。',
       };
+    case 'GATE_REQUIRED':
+    case 'INVALID_GATE_SESSION':
+      return {
+        kind: 'server_error',
+        message: 'アクセス確認が必要です。ページを再読み込みし、パスコードを入力してください。',
+      };
     default:
       if (err.status === 409) return { kind: 'already_subscribed', message: 'すでに購読済みです。' };
       if (err.status === 422)

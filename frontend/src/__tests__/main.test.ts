@@ -6,6 +6,8 @@ vi.mock('../api.js', () => ({
   getMember: vi.fn(),
   linkDiscord: vi.fn(),
   fetchSubscriptionStatus: vi.fn(),
+  fetchAccessGateSession: vi.fn(),
+  verifyAccessGatePasscode: vi.fn(),
   createSubscription: vi.fn(),
   startOAuth: vi.fn(),
   SessionCheckError: class SessionCheckError extends Error {
@@ -49,12 +51,14 @@ vi.mock('../api.js', () => ({
 import {
   checkSession,
   createCancelFormLink,
+  fetchAccessGateSession,
   fetchSubscriptionStatus,
   getMember,
   linkDiscord,
   MemberFetchError,
   SessionCheckError,
   SubscriptionStatusError,
+  verifyAccessGatePasscode,
 } from '../api.js';
 
 describe('main init()', () => {
@@ -68,6 +72,7 @@ describe('main init()', () => {
     document.body.appendChild(appDiv);
     vi.resetModules();
     window.history.replaceState({}, '', '/');
+    vi.mocked(fetchAccessGateSession).mockResolvedValue({ gateEnforced: false, unlocked: true });
   });
 
   afterEach(() => {
@@ -77,6 +82,8 @@ describe('main init()', () => {
     vi.mocked(linkDiscord).mockReset();
     vi.mocked(fetchSubscriptionStatus).mockReset();
     vi.mocked(createCancelFormLink).mockReset();
+    vi.mocked(fetchAccessGateSession).mockReset();
+    vi.mocked(verifyAccessGatePasscode).mockReset();
     sessionStorage.clear();
     consoleSpy.mockClear();
   });
@@ -92,12 +99,43 @@ describe('main init()', () => {
   it('should show billing form when getMember returns null (no member session)', async () => {
     vi.mocked(getMember).mockResolvedValue(null);
     vi.mocked(checkSession).mockResolvedValue({ linked: true, discordUserId: 'discord-test-user' });
+    vi.mocked(fetchAccessGateSession).mockResolvedValue({ gateEnforced: false, unlocked: true });
 
     await runInit();
 
     expect(getMember).toHaveBeenCalled();
     // billing state renders the billing form UI (not discord button or subscribed status)
     // Since PAY.JP SDK is not loaded in test, it falls back to error about card input
+    expect(appDiv.textContent).toContain('カード入力機能を読み込めませんでした');
+  });
+
+  it('should show gate locked when gate is enforced and user has no valid gate session', async () => {
+    vi.mocked(getMember).mockResolvedValue(null);
+    vi.mocked(fetchAccessGateSession).mockResolvedValue({ gateEnforced: true, unlocked: false });
+
+    await runInit();
+
+    expect(fetchAccessGateSession).toHaveBeenCalled();
+    expect(appDiv.textContent).toContain('共有パスコード');
+    expect(appDiv.textContent).not.toContain('カード入力機能を読み込めませんでした');
+  });
+
+  it('should continue to billing after successful passcode verify', async () => {
+    vi.mocked(getMember).mockResolvedValue(null);
+    vi.mocked(fetchAccessGateSession).mockResolvedValue({ gateEnforced: true, unlocked: false });
+    vi.mocked(verifyAccessGatePasscode).mockResolvedValue(undefined);
+
+    await runInit();
+
+    const input = appDiv.querySelector('input[type="password"]') as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    input!.value = 'test-code';
+    appDiv.querySelector<HTMLButtonElement>('.submit-button')?.click();
+
+    await vi.dynamicImportSettled();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(verifyAccessGatePasscode).toHaveBeenCalledWith('test-code');
     expect(appDiv.textContent).toContain('カード入力機能を読み込めませんでした');
   });
 

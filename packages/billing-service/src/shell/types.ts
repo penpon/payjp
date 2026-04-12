@@ -110,6 +110,13 @@ export interface BillingConfig {
   googleFormCancelTokenTtlSeconds: number;
   /** Months of notice before `access_end_at` (JST calendar) when self-serve cancel opens; MVP fixed to 1. */
   cancelNoticeCycles: number;
+  /**
+   * When set (non-empty), new checkouts require a valid `__Host-access_gate` session (shared passcode flow).
+   * Normalized at API startup (trimmed; empty disables the gate). Do not rely on whitespace-only values.
+   */
+  subscribeGateCode?: string;
+  /** TTL (seconds) for `__Host-access_gate` after successful `POST /v1/access-gate/verify`. */
+  accessGateSessionTtlSeconds: number;
 }
 
 export interface BillingDeps {
@@ -131,6 +138,8 @@ export interface SubscribeRequest {
   privacyConsented: boolean;
   /** 未使用（後方互換）。購読はメール起点。OAuth 後の `__Host-link_session` は link-discord 用。 */
   linkSessionToken?: string;
+  /** Raw `__Host-access_gate` cookie value when subscribe gate is enabled. */
+  accessGateSessionToken?: string;
 }
 
 export interface CancelRequest {

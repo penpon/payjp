@@ -30,6 +30,34 @@ function isSessionResponse(data: unknown): data is SessionResponse {
   return true;
 }
 
+// --- Access gate (shared passcode → __Host-access_gate) ---
+
+export type AccessGateSessionResponse = {
+  gateEnforced: boolean;
+  unlocked: boolean;
+};
+
+function isAccessGateSessionResponse(data: unknown): data is AccessGateSessionResponse {
+  if (typeof data !== 'object' || data === null) return false;
+  const o = data as Record<string, unknown>;
+  return typeof o.gateEnforced === 'boolean' && typeof o.unlocked === 'boolean';
+}
+
+/** GET /v1/access-gate/session — always 200; when `gateEnforced` and not `unlocked`, billing UI must stay hidden. */
+export async function fetchAccessGateSession(): Promise<AccessGateSessionResponse> {
+  const res = await fetch('/v1/access-gate/session', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Access gate session check failed: ${res.status}`);
+  }
+  const data: unknown = await res.json();
+  if (!isAccessGateSessionResponse(data)) {
+    throw new Error('Invalid access gate session response');
+  }
+  return data;
+}
+
 export async function checkSession(): Promise<SessionResponse> {
   const res = await fetch('/v1/auth/discord/session', {
     credentials: 'include',
@@ -119,6 +147,31 @@ async function parseErrorBody(res: Response): Promise<ParsedErrorBody> {
     operationId: typeof obj.operationId === 'string' ? obj.operationId : undefined,
     message: typeof obj.message === 'string' ? obj.message : undefined,
   };
+}
+
+export class AccessGateVerifyError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly errorCode: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AccessGateVerifyError';
+  }
+}
+
+/** POST /v1/access-gate/verify — sets HttpOnly gate cookie on success. */
+export async function verifyAccessGatePasscode(passcode: string): Promise<void> {
+  const res = await fetch('/v1/access-gate/verify', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passcode }),
+  });
+  if (!res.ok) {
+    const parsed = await parseErrorBody(res);
+    throw new AccessGateVerifyError(res.status, parsed.errorCode, parsed.message ?? `Verify failed: ${res.status}`);
+  }
 }
 
 // --- Subscribe ---

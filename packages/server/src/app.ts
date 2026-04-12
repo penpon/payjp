@@ -4,6 +4,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import type { AuthConfig } from '@hayane/auth-service';
 import type { BillingDeps } from '@hayane/billing-service';
 import Fastify, { type FastifyError } from 'fastify';
+import { accessGateRoutes } from './routes/access-gate.routes.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { billingRoutes } from './routes/billing.routes.js';
 import { memberRoutes } from './routes/member.routes.js';
@@ -96,6 +97,7 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
   app.register(authRoutes, { config });
 
   if (billingDeps) {
+    app.register(accessGateRoutes, { billingDeps });
     app.register(billingRoutes, { billingDeps });
     app.register(memberRoutes, { billingDeps });
   }

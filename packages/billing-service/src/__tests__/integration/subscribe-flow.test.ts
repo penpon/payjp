@@ -9,6 +9,7 @@
 
 import type { Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { accessGateSessionTokenHash } from '../../core/index.js';
 import { handleSubscribe } from '../../shell/subscribe.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
@@ -102,6 +103,7 @@ function makeConfig(): BillingConfig {
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
     cancelNoticeCycles: 1,
+    accessGateSessionTtlSeconds: 86400,
   };
 }
 
@@ -152,6 +154,8 @@ function makeSuccessfulDeps(memberOverrides: Partial<Member> = {}): BillingDeps 
       created_at: new Date(),
     }),
     findMemberSession: vi.fn().mockResolvedValue(null),
+    insertAccessGateSession: vi.fn().mockResolvedValue(undefined),
+    findAccessGateSessionByTokenHash: vi.fn().mockResolvedValue(false),
     setInflightOperation: vi.fn().mockResolvedValue(undefined),
     clearInflightOperation: vi.fn().mockResolvedValue(undefined),
     updateMemberCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -271,6 +275,50 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.statusCode).toBe(422);
         expect(result.errorCode).toBe('INVALID_PLAN_ID');
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Access gate (shared passcode session)
+  // -------------------------------------------------------------------------
+  describe('Access gate enforcement', () => {
+    const GATE_CODE = 'gate-secret-integration';
+    const GATE_RAW = 'raw-gate-token-integration';
+
+    it('returns GATE_REQUIRED when gate is set and accessGateSessionToken is missing', async () => {
+      const deps = makeSuccessfulDeps();
+      deps.config = { ...makeConfig(), subscribeGateCode: GATE_CODE };
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(403);
+        expect(result.errorCode).toBe('GATE_REQUIRED');
+      }
+      expect(deps.payjp.fetchToken).not.toHaveBeenCalled();
+    });
+
+    it('returns INVALID_GATE_SESSION when gate token does not match DB', async () => {
+      const deps = makeSuccessfulDeps();
+      deps.config = { ...makeConfig(), subscribeGateCode: GATE_CODE };
+      const result = await handleSubscribe(makeSubscribeRequest({ accessGateSessionToken: 'invalid-token' }), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(403);
+        expect(result.errorCode).toBe('INVALID_GATE_SESSION');
+      }
+      expect(deps.payjp.fetchToken).not.toHaveBeenCalled();
+    });
+
+    it('continues subscribe when gate session hash is valid', async () => {
+      const deps = makeSuccessfulDeps();
+      deps.config = { ...makeConfig(), subscribeGateCode: GATE_CODE };
+      (deps.db.findAccessGateSessionByTokenHash as ReturnType<typeof vi.fn>).mockImplementation((hash: string) =>
+        Promise.resolve(hash === accessGateSessionTokenHash(GATE_RAW)),
+      );
+      const result = await handleSubscribe(makeSubscribeRequest({ accessGateSessionToken: GATE_RAW }), deps);
+      expect(result.ok).toBe(true);
+      expect(deps.db.findAccessGateSessionByTokenHash).toHaveBeenCalled();
+      expect(deps.payjp.fetchToken).toHaveBeenCalled();
     });
   });
 

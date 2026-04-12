@@ -37,7 +37,7 @@
 
 ## 6. 審査員向け公開ページ
 
-- **ログイン不要**: [frontend/public/service.html](../frontend/public/service.html) で商材・税込月額（20,000 / 50,000 / 70,000 円）・申込〜解約の流れを静的に提示。
+- **ログイン不要**: [frontend/public/service.html](../frontend/public/service.html) で商材・税抜月額（20,000 / 50,000 / 70,000 円）・申込〜解約の流れを静的に提示。
 - **トップ**: [frontend/index.html](../frontend/index.html) に **サービス案内・法務リンク** を常時表示。
 
 ## 7. 提出用セット（別紙として用意）

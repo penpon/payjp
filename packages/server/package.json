@@ -9,7 +9,8 @@
     "test:watch": "vitest",
     "start": "tsx src/main.ts",
     "e2e:serve": "tsx src/e2e-serve.ts",
-    "resync": "tsx src/resync-cli.ts"
+    "resync": "tsx src/resync-cli.ts",
+    "invalidate-access-gate": "tsx src/invalidate-access-gate-sessions-cli.ts"
   },
   "dependencies": {
     "@discordjs/rest": "^2.4.3",

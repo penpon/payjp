@@ -114,3 +114,34 @@ CREATE INDEX IF NOT EXISTS member_impact_logs_resolved_at_idx ON member_impact_l
 CREATE UNIQUE INDEX IF NOT EXISTS member_impact_logs_member_issue_unresolved_idx
   ON member_impact_logs (member_id, issue_code)
   WHERE resolved_at IS NULL;
+
+-- Table 8: invite_tokens — 署名付き招待URLのワンタイム消費（購読成功まで used_at は NULL）
+CREATE TABLE IF NOT EXISTS invite_tokens (
+  id              UUID PRIMARY KEY,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  used_at         TIMESTAMPTZ,
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS invite_tokens_expires_at_idx ON invite_tokens (expires_at);
+
+-- Table 9: invite_sessions — 招待受理後の __Host-invite_session 用（DB はハッシュのみ保持）
+CREATE TABLE IF NOT EXISTS invite_sessions (
+  invite_session_token_hash TEXT PRIMARY KEY,
+  invite_token_id           UUID NOT NULL REFERENCES invite_tokens(id) ON DELETE CASCADE,
+  expires_at                TIMESTAMPTZ NOT NULL,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS invite_sessions_expires_at_idx ON invite_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS invite_sessions_invite_token_id_idx ON invite_sessions (invite_token_id);
+
+-- Table 10: access_gate_sessions — 共有パスコード検証後の __Host-access_gate 用（DB はハッシュのみ保持）
+CREATE TABLE IF NOT EXISTS access_gate_sessions (
+  access_gate_session_token_hash TEXT PRIMARY KEY,
+  expires_at                      TIMESTAMPTZ NOT NULL,
+  created_at                      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS access_gate_sessions_expires_at_idx ON access_gate_sessions (expires_at);

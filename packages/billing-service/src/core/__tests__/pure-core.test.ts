@@ -9,6 +9,7 @@ import type { Member } from '@hayane/shared';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+  accessGateSessionTokenHash,
   buildCancelFormLinkResponse,
   buildCancelResponse,
   buildGoogleFormPrefillUrl,
@@ -27,12 +28,14 @@ import {
   isSameOrigin,
   isThreeDSecureVerified,
   maskSensitiveLogFields,
+  memberSessionTokenHash,
   normalizeEmail,
   shouldGrantRole,
   validateFixedEnvVars,
   validateFrontendBaseUrl,
   validatePlanId,
   validateRequiredEnvVars,
+  verifySharedPasscode,
   verifySignedCancelFormToken,
 } from '../index.js';
 
@@ -584,5 +587,29 @@ describe('Cancel acceptance window (JST)', () => {
     const accessEnd = new Date('2025-03-31T00:00:00Z');
     expect(isCancelAcceptanceWindowOpen(new Date('2025-02-28T00:00:00+09:00'), accessEnd, cycles)).toBe(true);
     expect(isCancelAcceptanceWindowOpen(new Date('2025-02-27T00:00:00+09:00'), accessEnd, cycles)).toBe(false);
+  });
+});
+
+describe('Shared passcode verify', () => {
+  it('accepts exact match', () => {
+    expect(verifySharedPasscode('secret-code', 'secret-code')).toBe(true);
+  });
+
+  it('rejects mismatch', () => {
+    expect(verifySharedPasscode('wrong', 'secret-code')).toBe(false);
+  });
+
+  it('rejects when either side is empty', () => {
+    expect(verifySharedPasscode('', 'secret-code')).toBe(false);
+    expect(verifySharedPasscode('secret-code', '')).toBe(false);
+    expect(verifySharedPasscode('', '')).toBe(false);
+  });
+
+  it('memberSessionTokenHash matches SHA-256 hex of raw token', () => {
+    expect(memberSessionTokenHash('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
+
+  it('accessGateSessionTokenHash matches memberSessionTokenHash for the same token', () => {
+    expect(accessGateSessionTokenHash('raw')).toBe(memberSessionTokenHash('raw'));
   });
 });
