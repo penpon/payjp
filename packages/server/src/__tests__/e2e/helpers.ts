@@ -135,13 +135,16 @@ export async function insertLinkedSession(
   discordUserId: string,
   rawToken?: string,
   expiresIn = 3600_000,
+  /** Handler と同じ基準時刻に揃える（E2E の固定 clock と一致させる） */
+  clock: () => Date = () => new Date(),
 ): Promise<{ rawToken: string; tokenHash: string }> {
   const token = rawToken ?? `e2e-link-${randomUUID()}`;
   const tokenHash = createHash('sha256').update(token).digest('hex');
+  const now = clock();
   await pgDb.insertDiscordLinkSession({
     linkSessionTokenHash: tokenHash,
     discordUserId,
-    expiresAt: new Date(Date.now() + expiresIn),
+    expiresAt: new Date(now.getTime() + expiresIn),
   });
   return { rawToken: token, tokenHash };
 }

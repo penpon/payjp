@@ -190,6 +190,11 @@ async function queryFindMemberByDiscordUserId(q: Queryable, discordUserId: strin
   return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
 }
 
+async function queryFindMemberById(q: Queryable, memberId: string): Promise<Member | null> {
+  const result = await q.query('SELECT * FROM members WHERE id = $1', [memberId]);
+  return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
+}
+
 async function queryUpsertProvisionalMember(q: Queryable, discordUserId: string, email: string): Promise<Member> {
   const result = await q.query(
     `INSERT INTO members (discord_user_id, email, role_state, last_synced_at)
@@ -200,11 +205,6 @@ async function queryUpsertProvisionalMember(q: Queryable, discordUserId: string,
     [discordUserId, email],
   );
   return toMember(result.rows[0] as Record<string, unknown>);
-}
-
-async function queryFindMemberById(q: Queryable, memberId: string): Promise<Member | null> {
-  const result = await q.query('SELECT * FROM members WHERE id = $1', [memberId]);
-  return result.rows[0] ? toMember(result.rows[0] as Record<string, unknown>) : null;
 }
 
 async function queryUpsertProvisionalMemberByEmail(q: Queryable, email: string): Promise<Member> {

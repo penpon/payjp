@@ -14,6 +14,7 @@ import {
   createSignedCancelFormToken,
   hasCancelableSubscription,
   hasInflightOperation,
+  isCancelAcceptanceWindowOpen,
   isSameOrigin,
   linkSessionTokenHash,
   memberSessionTokenHash,
@@ -99,6 +100,24 @@ async function applyImmediateCancelState(
       statusCode: 409,
       errorCode: 'NO_PAYJP_SUBSCRIPTION',
       message: 'payjp_subscription_id is null',
+    };
+  }
+
+  if (member.access_end_at === null) {
+    return {
+      ok: false,
+      statusCode: 409,
+      errorCode: 'NO_ACCESS_END',
+      message: 'access_end_at is not set',
+    };
+  }
+
+  if (!isCancelAcceptanceWindowOpen(now, member.access_end_at, deps.config.cancelNoticeCycles)) {
+    return {
+      ok: false,
+      statusCode: 409,
+      errorCode: 'CANCEL_OUTSIDE_WINDOW',
+      message: 'Cancel acceptance window is not open',
     };
   }
 
@@ -465,12 +484,12 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
 
-    await deps.db.consumeLinkSession(tokenHash, now);
-
     const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
     if ('ok' in cancelState) {
       return cancelState;
     }
+
+    await deps.db.consumeLinkSession(tokenHash, now);
 
     return finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'browser',

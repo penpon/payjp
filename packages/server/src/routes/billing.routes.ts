@@ -79,7 +79,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       },
     },
     async (request, reply) => {
-      const { body, origin } = extractRequestContext(request);
+      const { body, origin, linkSessionToken } = extractRequestContext(request);
 
       const req: SubscribeRequest = {
         origin,
@@ -87,6 +87,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         payjpToken: typeof body?.payjpToken === 'string' ? body.payjpToken : '',
         planId: typeof body?.planId === 'string' ? body.planId : '',
         privacyConsented: body?.privacyConsented === true,
+        linkSessionToken,
       };
 
       try {

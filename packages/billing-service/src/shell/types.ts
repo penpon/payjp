@@ -105,6 +105,8 @@ export interface BillingConfig {
   googleFormCancelSecret: string;
   googleFormCancelTokenSecret: string;
   googleFormCancelTokenTtlSeconds: number;
+  /** Months of notice before `access_end_at` (JST calendar) when self-serve cancel opens; MVP fixed to 1. */
+  cancelNoticeCycles: number;
 }
 
 export interface BillingDeps {
@@ -124,6 +126,8 @@ export interface SubscribeRequest {
   payjpToken: string;
   planId: string;
   privacyConsented: boolean;
+  /** When set (e.g. __Host-link_session), lock and member resolution use Discord identity. */
+  linkSessionToken?: string;
 }
 
 export interface CancelRequest {

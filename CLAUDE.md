@@ -51,6 +51,8 @@ HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは Git
 
 詳細なワークフロー手順・ツール選択マトリクス・Issue別推奨モデルは `.claude/rules/workflow.md` を参照。
 
+E2E（Playwright）の書き方・正本との整合・手動確認との役割分担は `.claude/rules/e2e.md` を参照。
+
 ## ツール使い分け
 
 - セマンティックコード操作: mcp-serena（シンボル検索・編集）

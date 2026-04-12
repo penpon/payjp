@@ -16,6 +16,11 @@
 
 フロントエンド実装・修正時は `/ui-ux-pro-max` + `/frontend-design` を**併用必須**。
 
+## E2E（Playwright）
+
+- 方針・仕様との対応・セレクタの考え方: **`.claude/rules/e2e.md`**
+- 実行コマンド・タイムアウト・webServer・ローカル Cookie 前提: ルートの **`playwright.config.ts`**
+
 ## レビューフェーズ — 実装完了後に必ず順次実行
 
 1. `/code-review` — コード品質・バグ・ロジックエラーの検出

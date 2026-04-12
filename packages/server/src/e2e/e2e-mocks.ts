@@ -31,6 +31,7 @@ export const E2E_BILLING_CONFIG: BillingConfig = {
   googleFormCancelSecret: 'e2e-google-secret',
   googleFormCancelTokenSecret: 'e2e-google-token-secret',
   googleFormCancelTokenTtlSeconds: 900,
+  cancelNoticeCycles: 1,
 };
 
 export const E2E_WEBHOOK_TOKEN = 'whsec_e2e_test_token';
@@ -83,7 +84,9 @@ export function makePlainPayjpClient(): PayjpClient {
       return {
         id: subscriptionId,
         status: 'canceled',
-        current_period_end: Math.floor(Date.now() / 1000),
+        // Keep cancel responses aligned with the active subscription window so tests
+        // don't accidentally shrink access_end_at to "now".
+        current_period_end: trialEnd,
         trial_end: null,
         plan: { id: 'plan_e2e', interval: 'month' },
         metadata: {},
