@@ -67,6 +67,18 @@ describe('PgDbClient - members CRUD', () => {
     expect(found).toBeNull();
   });
 
+  it('findMemberById returns member', async () => {
+    const inserted = await db.upsertProvisionalMember('discord-by-id', 'byid@example.com');
+    const found = await db.findMemberById(inserted.id);
+    expect(found).not.toBeNull();
+    expect(found!.email).toBe('byid@example.com');
+  });
+
+  it('findMemberById returns null for missing member', async () => {
+    const found = await db.findMemberById('00000000-0000-0000-0000-000000000000');
+    expect(found).toBeNull();
+  });
+
   it('updateMemberCustomerId sets payjp_customer_id', async () => {
     const member = await db.upsertProvisionalMember('discord-004', 'cust@example.com');
     await db.updateMemberCustomerId(member.id, 'cus_test123');
