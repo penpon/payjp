@@ -25,18 +25,21 @@ nginx (`security-headers.conf`) および Cloudflare Pages (`_headers`) で適�
 Content-Security-Policy:
   default-src 'self';
   script-src 'self' https://js.pay.jp;
-  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  font-src 'self' https://fonts.gstatic.com;
+  style-src 'self' 'unsafe-inline';
+  font-src 'self';
   connect-src 'self' https://api.pay.jp;
   frame-src https://js.pay.jp;
   img-src 'self' data:
 ```
 
+（2026-04-12 時点）決済ページから **Google Fonts 等の第三者スタイル・フォント読込を削除**し、`style-src` / `font-src` を上記のとおり自オリジン中心に整理している。実体は [frontend/public/_headers](../frontend/public/_headers) および [nginx/security-headers.conf](../nginx/security-headers.conf) と一致させる。
+
 **効果:**
 - `script-src 'self' https://js.pay.jp` — 許可されたドメイン以外のスクリプト実行をブロック
 - `frame-src https://js.pay.jp` — iframeの差し替え攻撃を防止
-- `connect-src 'self' https://api.pay.jp` — 外部へのデータ送信を制限
-- インラインスクリプト（`'unsafe-inline'`）はscript-srcで**許可していない**
+- `connect-src 'self' https://api.pay.jp` — 外部へのデータ送信を制限（本番 API オリジンに合わせる）
+- `style-src 'unsafe-inline'` — `index.html` 内の `<style>` ブロック用。インライン**スクリプト**は `script-src` で**許可していない**
+- `font-src 'self'` — 外部フォント CDN を決済ページから排除
 
 ### 2.2 Subresource Integrity（SRI）
 
@@ -66,7 +69,14 @@ Content-Security-Policy:
 | `/src/main.ts`（ビルド済み） | 自サービス | SPA アプリケーション | Git + CI/CD |
 | `https://js.pay.jp/v2/pay.js` | PAY.JP | カード入力iframe + トークン化 | PAY.JP管理（バージョン固定なし） |
 
-第三者スクリプト（広告・アナリティクス等）: **なし**
+**制御境界の明示:**
+
+- 許可するスクリプトは上記 **2つのみ**。CSP の `script-src` は `'self'` と `https://js.pay.jp` のみを許可する。
+- `pay.js` は **SRI を付与できない**（PAY.JP が整合性ハッシュを公開していない）。残存リスクは [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) の補償的統制（変更検知・レビュー）で説明する。
+- バックエンド JSON API（別ホスト想定）のレスポンスヘッダは [packages/server/src/app.ts](../packages/server/src/app.ts) で `default-src 'none'` 等としており、**購読 UI の HTML とは別オリジン・別ポリシー**である。
+
+第三者スクリプト（広告・アナリティクス・タグマネージャ等）: **なし**  
+（過去に使用していた Web フォント用の第三者読込は削除済み。）
 
 ## 4. リスク評価
 
@@ -83,7 +93,8 @@ Content-Security-Policy:
 上記の保護措置により、本サイトはスクリプト攻撃に対して適切に保護されていることを確認する。
 
 **残存課題:**
-- `pay.js` のSRI未対応（PAY.JPがハッシュを公開した場合に対応予定）
-- `style-src 'unsafe-inline'` の将来的な除去検討
+- `pay.js` のSRI未対応（PAY.JPがハッシュを公開した場合に対応予定）。独自のハッシュを捏造しない。
+- `style-src 'unsafe-inline'` の将来的な除去検討（インライン CSS をビルド成果物へ寄せる場合）
+- ブラウザからの **CSP 違反レポート自動集約**は MVP では未実装。手動レビュー・運用手順は [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) を参照。
 
 **結論: SAQ A v4.0.1 r1 の適格基準を満たす。**

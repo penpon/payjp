@@ -30,12 +30,12 @@
 
 ### Go-Live前（2026-04-20）
 
-1. **PAY.JPへの確認（記録必須）**: 加盟店として **ASVスキャンの提出が必須か**、非保持化（PAY.JP.js / iframe）構成での扱い、推奨ベンダー有無を **サポートまたは加盟店向け案内** で確認する。回答内容・日付・担当者は `docs/evidence/` にメモを残す（例: `YYYYMMDD-asv-payjp-inquiry.md`）。
+1. **PAY.JPへの確認（記録必須）**: 加盟店として **ASVスキャンの提出が必須か**、非保持化（PAY.JP.js / iframe）構成での扱い、推奨ベンダー有無を **サポートまたは加盟店向け案内** で確認する。回答内容・日付・担当者は **`docs/evidence/`** にメモを残す（例: `YYYYMMDD-asv-payjp-inquiry.md`）。テンプレートは [docs/evidence/README.md](evidence/README.md) の「ASV / PAY.JP 問い合わせ」を参照。
 2. **ASV選定**: 自社インフラに外部公開エンドポイントがあるため、**PCI SSC認定ASV** から選定する（例）
    - Qualys（PCI SSC認定ASV）
    - Tenable / Nessus
    - Rapid7 InsightVM
-3. **初回スキャン実施**: Go-Live前に **パスしたスキャン** を取得し、レポートを社内保管（リポジトリにはコミットしない）。
+3. **初回スキャン実施**: Go-Live前に **パスしたスキャン** を取得し、レポートを **社内保管**（リポジトリにはコミットしない）。実施事実を Git 側に残す場合は `docs/evidence/YYYYMMDD-asv-summary.md` に **実施日・ベンダー名・Pass/Fail・レポート保管パス（社内）** のみ記載する。
 
 ### 運用開始後
 

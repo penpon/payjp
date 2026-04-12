@@ -37,8 +37,11 @@
 | nginx アクセスログ | 異常な4xx/5xxスパイク | 通常の10倍以上 |
 | アプリケーションログ | `payjp_events.processing_result = 'failed'` | 連続3件以上 |
 | `member_impact_logs` | `resolved_at IS NULL` の件数 | 5件以上 |
+| 決済ページ整合性（補償的統制） | `frontend/index.html` のスクリプトタグ、CSP 定義、本番ヘッダ | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) の頻度・手順に従う |
 | 手動確認 | PAY.JP ダッシュボード、Discordサーバー | 日次確認 |
 | 外部通知 | ユーザーからの報告 | 随時 |
+
+決済ページの改ざん・スクリプト混入に関する **許可リスト・監視頻度** は [pci-payment-page-script-register.md](pci-payment-page-script-register.md) および上記 `pci-payment-page-monitoring.md` を正とする。
 
 ## 4. インシデント対応手順
 

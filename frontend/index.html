@@ -4,9 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>購読管理 — PAY.JP</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <!-- 決済ページの第三者依存を最小化するため、Webフォント（Google Fonts）は使用しない。 -->
   <style>
     :root {
       --color-primary: #533afd;
@@ -33,8 +31,8 @@
       --shadow-elevated: rgba(50,50,93,0.25) 0px 30px 45px -30px, rgba(0,0,0,0.1) 0px 18px 36px -18px;
       --shadow-button: rgba(50,50,93,0.25) 0px 6px 12px -2px, rgba(0,0,0,0.1) 0px 3px 7px -3px;
       --shadow-modal: rgba(50,50,93,0.25) 0px 50px 100px -20px, rgba(0,0,0,0.3) 0px 30px 60px -30px;
-      --font-sans: Inter, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', Meiryo, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
     }
 
     *, *::before, *::after {
@@ -277,7 +275,7 @@
     }
 
     .plan-card-name {
-      font-family: 'Noto Sans JP', sans-serif;
+      font-family: var(--font-sans);
       font-size: 16px;
       font-weight: 300;
       color: var(--color-heading);
@@ -285,7 +283,7 @@
     }
 
     .plan-card-price {
-      font-family: Inter, sans-serif;
+      font-family: var(--font-sans);
       font-size: 32px;
       font-weight: 300;
       color: var(--color-heading);
@@ -602,7 +600,7 @@
     }
 
     .success-heading {
-      font-family: 'Noto Sans JP', sans-serif;
+      font-family: var(--font-sans);
       font-size: 26px;
       font-weight: 300;
       color: var(--color-heading);
@@ -656,7 +654,7 @@
     }
 
     .subscribed-plan-name {
-      font-family: 'Noto Sans JP', sans-serif;
+      font-family: var(--font-sans);
       font-size: 22px;
       font-weight: 300;
       color: var(--color-heading);
@@ -771,7 +769,7 @@
     }
 
     .modal-title {
-      font-family: 'Noto Sans JP', sans-serif;
+      font-family: var(--font-sans);
       font-size: 20px;
       font-weight: 500;
       color: var(--color-heading);

@@ -3,6 +3,13 @@
 **目的**: PAY.JP 本番利用申請・Go-Live 前に、技術・運用・法務の観点で確認する。  
 実施日と担当者を記入し、証跡は [docs/evidence/](../evidence/) に保存する。
 
+**証跡の置き場（早見）**
+
+| 区分 | 置き場 | テンプレート例 |
+|------|--------|------------------|
+| Git 管理可（要約・Pass-Fail） | [docs/evidence/](../evidence/) | [TEMPLATE.md](../evidence/TEMPLATE.md)、[TEMPLATE-pci-payment-page-review.md](../evidence/TEMPLATE-pci-payment-page-review.md) 等 |
+| Git 管理外（スキャン全文・画面キャプチャ） | 社内ストレージ / 1Password | [TEMPLATE-mfa-check.md](../evidence/TEMPLATE-mfa-check.md) 参照 |
+
 ---
 
 ## 1. 公開 URL・閲覧性
@@ -16,6 +23,7 @@
   - [ ] [返金・キャンセル](../../frontend/public/refund.html)
   - [ ] [お問い合わせ](../../frontend/public/contact.html)
 - [ ] フッターから各法的ページへ到達できる（`frontend/index.html` の `site-footer`）
+- [ ] 法務ページの本番値一致を記録した（[TEMPLATE-legal-page-verification.md](../evidence/TEMPLATE-legal-page-verification.md)）
 
 ## 2. HTTPS / TLS
 
@@ -35,10 +43,14 @@
 - [ ] プラン ID（`PAYJP_PLAN_IDS`）がダッシュボードと一致
 - [ ] 管理アカウントの **メール認証** 済み、**MFA（TOTP）** 有効化（推奨どおり）
 
+**証跡**: MFA の実確認は [TEMPLATE-mfa-check.md](../evidence/TEMPLATE-mfa-check.md)。詳細キャプチャはリポジトリ外。
+
 ## 5. 決済フロー（3DS・非保持）
 
 - [ ] 実機またはステージングで **3DS `verified`** のみ課金されることを確認（モックではなくテストモード可）
 - [ ] カード番号が自サーバに保存されない（PAY.JP.js + トークンのみ）
+
+**証跡**: T-P0 または Day10 スモーク記録（[docs/evidence/README.md](../evidence/README.md)）。
 
 ## 6. 運用
 
@@ -51,6 +63,12 @@
 
 - [ ] 特商法の **所在地・事業者名** が、登記・開業届・PAY.JP 登録と一致
 - [ ] **お支払い方法** に、実際に提供する手段を列挙（本サービスはクレジットカード中心）
+
+## 8. PCI 補助（決済ページ・ASV・TPSP）
+
+- [ ] 決済ページのスクリプト台帳・監視手順を確認した（[pci-payment-page-script-register.md](../pci-payment-page-script-register.md)、[pci-payment-page-monitoring.md](../pci-payment-page-monitoring.md)）
+- [ ] ASV 方針・PAY.JP 問い合わせ記録欄を埋めた（[pci-asv-scan-policy.md](../pci-asv-scan-policy.md)、証跡 `docs/evidence/YYYYMMDD-asv-payjp-inquiry.md`）
+- [ ] TPSP 規約・AOC 記録欄を更新した（[pci-tpsp-management.md](../pci-tpsp-management.md)。機密は社外保管）
 
 ---
 
