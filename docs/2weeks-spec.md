@@ -2,7 +2,8 @@
 
 - 作成日: 2026-03-28
 - 更新日: 2026-04-12
-- 対象: 日本向け有料Discordコミュニティ（約150名）
+- 商材: **法人向け SES コミュニティ参加権**（Discord 上の限定コミュニティへのアクセス・ロール付与）。案件紹介・職業斡旋・求人仲介そのものの対価ではない。
+- 対象: 日本国内の法人（決済・契約は法人名義を想定）
 - 体制: 1名
 - リリース目標: 2026-04-20（当初2週間目安: 2026-04-15 から変更）
 - 方針: 要件を満たす最小実装（フロント最小、バックエンド最小）
@@ -22,7 +23,7 @@
 
 2週間で実装する範囲は以下に限定する。
 
-1. Discord OAuth Lite（`identify` スコープのみ）を実装する。
+1. Discord OAuth（`identify` + `guilds.join`）を実装する（課金完了後の連携でサーバー自動参加に用いる）。
 2. PAY.JPで3つの提供プランから1つを選択して定期課金を開始できる。
 3. 初回ユーザー（人間単位）は「1か月目課金 + 2か月目/3か月目無料」を適用できる。
 4. 4か月目以降は月次課金（毎月）で継続できる。
@@ -93,19 +94,18 @@ MVP（〜2026-04-20）では、以下は実装しない。
 
 ## 5. ユーザーフロー（MVP）
 
-本MVPにおけるユーザー価値の中心は **購読（定期課金）の開始と維持** である。Discord OAuth・サーバー参加・ロール付与可否の検証は、**PAY.JP API による書き込みより前**に行う前提条件であり、課金より「Discord を優先する」という意味ではない。俗称の「Discord-first」等は **検証順序（課金API前に Discord を検証する）** を指す表現として扱い、本文では上記の順序で記述する。
+本MVPにおけるユーザー価値の中心は **購読（定期課金）の開始と維持** である。**課金（PAY.JP 書き込み）はメール起点で開始し、Discord への OAuth・サーバー参加・ロール付与は、課金成功後の導線で行う**（支払後招待型）。旧来の俗称「Discord-first」（課金API前に Discord を前提とする順序）は **本リリースでは採用しない**。
 
-1. ユーザーが `/` で「Discord連携」を押す。
-2. `GET /v1/auth/discord/start` からDiscord認可画面へ遷移する。
-3. `GET /v1/auth/discord/callback` で `state` を検証し、`discord_user_id` を取得する。
-4. バックエンドは短期有効な `__Host-link_session` Cookie（ワンタイム）を発行し、フロントへ戻す。
-5. ユーザーがプラン・メール・カード名義・カード情報を入力して登録する。
-6. フロントは `PAY.JP.js createToken` で `three_d_secure: true` と `card.name`（カード名義）+ `card.email`（または `card.phone`）を指定して `payjpToken` を生成し、`{ planId, email, payjpToken }` を `POST /v1/subscriptions` へ送信する（`__Host-link_session` はCookie送信）。
-7. バックエンドは課金前に「Discordサーバー参加済み + Botが対象ロールを付与可能」を検証する（未参加/権限不足は課金前に失敗）。
-8. 条件を満たす場合のみPAY.JPで購読作成し、初回ユーザーは「1か月目課金 + 2か月目/3か月目無料（trial）」を付与してDiscordロール同期を実行する。
-9. 退会申請ユーザーは、購読状況画面の「退会する」から署名付きトークン付きGoogle Formへ遷移し、名前・メールアドレス・退会理由を送信する。
-10. Google Apps Script はフォーム送信を受けてアプリの専用退会APIを呼び、定期請求停止を即時反映し、サービス利用とDiscord有料ロールは `current_period_end`（`members.access_end_at`）まで維持する。
-11. 以後はWebhookイベントと日次再同期で状態を維持する。
+1. ユーザーが `/` でプラン・法人担当者メール・カード名義・カード情報を入力し、`PAY.JP.js` で 3DS 完了済み `payjpToken` を得る。
+2. フロントは `{ planId, email, payjpToken, privacyConsented }` を `POST /v1/subscriptions` へ送信する（**`__Host-link_session` は不要**）。
+3. バックエンドはメールで仮 `members` 行を確定し、PAY.JP で購読を作成する（課金前に Discord 参加や `link_session` を要求しない）。
+4. 初回ユーザーは「1か月目課金 + 2か月目/3か月目無料（trial）」を付与する。成功時に `__Host-member_session` を発行する。
+5. ユーザーはサンクス画面から `GET /v1/auth/discord/start` により OAuth（`identify` + `guilds.join`）を行い、`POST /v1/members/link-discord` で `guilds.join` による自動参加とプランに応じたロール付与を受ける（詳細は server の member ルート）。
+6. 退会申請ユーザーは、購読状況画面の「退会する」から署名付きトークン付きGoogle Formへ遷移し、名前・メールアドレス・退会理由を送信する。
+7. Google Apps Script はフォーム送信を受けてアプリの専用退会APIを呼び、定期請求停止を即時反映し、サービス利用とDiscord有料ロールは `current_period_end`（`members.access_end_at`）まで維持する。
+8. 以後はWebhookイベントと日次再同期で状態を維持する。
+
+**料金（税込・月額・代表）**: スターター **20,000円** / ビジネス **50,000円** / エンタープライズ **70,000円**（`PAYJP_PLAN_IDS` および公開ページと一致させる）。
 
 ## 6. 機能仕様
 
@@ -157,7 +157,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
   - ランダム `state` を生成
   - `__Host-oauth_session` Cookie を発行する（`Secure; Path=/; Domainなし; HttpOnly; SameSite=Lax; Max-Age=10m`）
   - `oauth_states` に `state_hash` と `oauth_session_hash` を保存する（TTL 10分）
-  - Discord認可URLの `scope` は `identify` 固定とする（OAuth Lite）
+  - Discord認可URLの `scope` は `identify guilds.join` とする（課金後の自動参加に必要）
   - Discord認可URLへ302リダイレクト
 
 3. `GET /v1/auth/discord/callback`
@@ -179,38 +179,33 @@ MVP（〜2026-04-20）では、以下は実装しない。
 
 5. `POST /v1/subscriptions`
 - 目的: 初回購読作成
-- 入力: `{ planId, email, payjpToken }`
+- 入力: `{ planId, email, payjpToken, privacyConsented }`（`__Host-link_session` は不要）
 - 処理:
   - `Origin == FRONTEND_BASE_URL` を必須検証する（比較は `scheme+host+port` 正規化で実施し、`FRONTEND_BASE_URL` はオリジン形式のみ許可。不一致/欠落/`Origin: null` は `403`）
-  - `__Host-link_session` Cookie を検証し、失効/不正/消費済みは `401` で拒否して再OAuthを要求する
   - `planId` が `PAYJP_PLAN_IDS` の許可リスト内であることを検証
-  - ユーザー単位の排他制御として `pg_advisory_lock(discord_user_id::bigint)` を取得する
-  - `members` 行が存在しない場合は `discord_user_id` と `email` で仮行を作成する（購読作成中状態の永続化に利用）
+  - `email` 正規化（小文字）後に `members` を `upsertProvisionalMemberByEmail` により確定する（この時点で `discord_user_id` は未設定でもよい）
+  - ユーザー単位の排他制御として `pg_try_advisory_lock(hashtext('member:' || members.id))` 相当のキーでロックを取得する
   - `members.inflight_operation_id` が存在する場合は既存契約有無に関わらず新規課金処理を開始せず `503` を返す（既存 `operationId` を返却。解除はPAY.JP状態確認後の再同期CLIのみ）
-  - ロック後に `members` を参照し、既存 `active/trial`、または `canceled` かつ `access_end_at > now()` の契約がある場合は新規作成せず既存結果を返す
-  - `discord_user_id` が `DISCORD_GUILD_ID` のメンバーであることを検証（未参加は409）
-  - Botに `Manage Roles` 権限があり、`DISCORD_PAID_ROLE_ID` を付与可能な序列であることを検証（不可は503）
+  - ロック後に `members` を参照し、既存 `active/trial`、または `canceled` かつ `access_end_at > now()` の契約がある場合は新規作成せず既存結果を返す（成功時は `__Host-member_session` 発行可）
+  - **課金前の Discord ギルド参加検証・ロール付与可能性検証は行わない**（支払完了後の `POST /v1/members/link-discord` で処理）
   - `payjpToken` をPAY.JP APIで再取得し、`used=false` かつ `card.three_d_secure_status = verified` を検証する（MVPの完全認証方針として `attempted` / `failed` / `error` / `unverified` / `null` は422）
   - PAY.JP API呼び出しは公式SDKまたは `application/x-www-form-urlencoded` で実行する（JSON POSTしない）
-  - 初回無料判定は `discord_user_id`（人間単位）で行う。`members.first_trial_granted_at IS NULL` の場合のみ初回ユーザーとして扱う
+  - 初回無料判定は **`members` 行の `first_trial_granted_at`** で行う。`IS NULL` の場合のみ初回ユーザーとして扱う（メール単位の仮行に紐づく）
   - PAY.JP書き込み（customer/charge/subscription）開始前に `operationId` を生成し、`members.inflight_operation_id` / `members.inflight_operation_type=subscribe` / `members.inflight_operation_started_at` を保存する
-  - 認証前提検証（`Origin` / `__Host-link_session` / `planId` / Discord参加・権限）を通過した時点で `__Host-link_session` を消費する（以後は成功/失敗に関わらず再利用不可）
   - PAY.JPでcustomer作成（既存あれば再利用）
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
   - 初回ユーザーは「入会時に選択プランの1か月分を `charge` で即時課金」してから、月次subscriptionを `trial_end = now + 3か月` で作成する（2か月目/3か月目無料）
-  - 初回ユーザーの `charge` 作成時は `metadata.discord_user_id` と `metadata.operation_id`（=`operationId`）を必須で保存する
+  - 初回ユーザーの `charge` / `subscription` の `metadata` には **`member_id` と `operation_id` を必須**とし、**`discord_user_id` は OAuth 連携済みの場合のみ**付与する（未連携時は省略可）
   - 初回ユーザーの `charge` 成功時点で `charge.id` を `members.payjp_initial_charge_id` に即時保存し、`members.initial_charge_paid_at` も更新する
   - 非初回ユーザーは月次subscriptionを通常作成する（`trial_end` なし）
-  - subscription作成時は `metadata.discord_user_id` と `metadata.operation_id`（=`operationId`）を保存する
   - subscription作成成功時点で `subscription.id` を `members.payjp_subscription_id` に即時保存する
-  - `members` をupsert
   - `subscription.current_period_end` を trial適用有無に関係なく `members.next_billing_at` と `members.access_end_at` に保存する
   - 初回無料を適用した場合は `members.first_trial_granted_at` を保存する（一度保存したら解除しない）
-  - 初回ロール同期を実行する（最大3回、短時間同期リトライ）
-  - 成功時は `members.inflight_operation_*` をクリアする
+  - Discord ロール付与は **`discord_user_id` 確定後**（link-discord または Webhook/再同期経路）に行う。購読作成直後は未連携の場合がある
+  - 成功時は `members.inflight_operation_*` をクリアし、成功レスポンスとあわせ **`__Host-member_session`**（24h 想定）を発行する
 - 失敗時ポリシー:
   - customer/subscription/charge 作成系APIは自動再試行しない（重複作成リスク回避）
-- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする。`__Host-link_session` は再利用不可のため再OAuth必須）
+- タイムアウト等の不確定失敗時は `503` を返す（`operationId` を返却し、`members.inflight_operation_*` は保持する。クライアント自動再試行は禁止し、再試行は運用CLIのみとする）
   - PAY.JP書き込み前の確定失敗（バリデーション/事前検証失敗）では `members.inflight_operation_*` をクリアして失敗を返す
   - PAY.JP書き込み開始後の確定失敗はPAY.JP現状態を再取得し、`members` 反映と整合確認できた場合のみ `members.inflight_operation_*` をクリアする。整合不能時は `503`（`operationId` 返却）で保持する
   - `operationId` 必須記録はPAY.JP書き込み実行時および不確定失敗時に適用し、API応答ログ・失敗ログに記録する
@@ -554,10 +549,10 @@ MVP（〜2026-04-20）では、以下は実装しない。
 4. Day 4（2026-04-09）
 - `POST /v1/subscriptions` コア実装（3プラン選択でPAY.JP顧客/購読作成）
 - `planId` 許可リスト検証実装
-- 初回「1か月目課金 + 2か月目/3か月目無料」判定（`discord_user_id` 単位）実装
+- 初回「1か月目課金 + 2か月目/3か月目無料」判定（同一メールに紐づく `members` 行の `first_trial_granted_at` 基準）実装
 - ユーザー単位ロック（advisory lock）+ 既存有効契約ガード（既存 `active/trial`、または `canceled && access_end_at > now` は新規作成拒否）
 - `members` 仮行作成 + `inflight_operation_*` 保存/クリアを実装
-- `__Host-link_session` の認証前提検証後消費を実装
+- `POST /v1/subscriptions` は `link_session` なしで受理する（メール・同意・PAY.JP トークンのみ）。`__Host-link_session` の消費は課金後の `POST /v1/members/link-discord` 側で行う
 - P0テスト（代表1プランE2E、残り2プラン設定整合、並列登録、既存契約ガード）を実装
 
 5. Day 5（2026-04-10）
@@ -572,12 +567,12 @@ MVP（〜2026-04-20）では、以下は実装しない。
 ## Week 2
 
 1. Day 6（2026-04-13）
-- `POST /v1/subscriptions` 仕上げ（課金前Discord参加チェック + ロール付与可能性チェック + 初回ロール同期）
+- `POST /v1/subscriptions` 仕上げ（課金前の Discord ギルド参加・ロール可否検証は行わない。初回 trial 判定・並列ロック・冪等）。初回ロール同期は Webhook / `link-discord` 経路（§6.2）で完結させる
 - `POST /v1/subscriptions/cancel` 実装（請求停止 + 終了日までロール維持 + `cancel_requested_at` 冪等成功）
 - 作成系PAY.JP APIの「自動再試行しない」失敗ハンドリング実装
 - 退会受付の「1か月前同日 00:00 JST（存在しない日は月末繰上げ）」判定を実装
 - P0テスト（退会後再加入時の trial 再適用なし）を実装
-- P0テスト（課金前Discord未参加/権限不足拒否、cancel境界・冪等）を実装
+- P0テスト（subscribe で Discord 事前検証なし、cancel境界・冪等）を実装
 
 2. Day 7（2026-04-14）
 - Webhook受信 + 冪等化
@@ -627,7 +622,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 ### 12.1 P0（Go-Live必須: 7件）
 
 1. OAuthは `state + __Host-oauth_session + 未使用 + TTL内` の原子的検証/消費が行われる。代表失敗ケース（`state` 不一致）で認可失敗し、callback/session で `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を返す。`GET /v1/auth/discord/start` の認可URL `scope` が `identify` 固定であることを確認する。
-2. `POST /v1/subscriptions` は `PAYJP_PLAN_IDS` 3プランに対応し、代表1プランで実課金E2E成功、残り2プランは設定整合テスト（実課金不要）で登録成功を確認する。`members.payjp_plan_id` / `members.payjp_subscription_id` 保存とロール付与が行われ、初回ユーザーでは `members.payjp_initial_charge_id` も保存されることを確認する。退会後再加入時は `first_trial_granted_at` が保持され trial 再適用なしとなる。初回は `trial_end=登録時点+3か月`、非初回は `trial_endなし`、課金intervalは `month` であることを確認する。Discord未参加時は `409`、Bot権限不足またはロール序列不足時は `503` で課金前に失敗する（いずれもPAY.JP APIは呼ばれない）。`Origin` 欠落/不一致/`Origin: null` は `403` で拒否され、`__Host-link_session` は認証前提検証通過後に消費され再利用不可であることを確認する。3Dセキュア失敗/中断/タイムアウト時は `POST /v1/subscriptions` が呼ばれないことを確認する。3Dセキュアに伴う個人情報取り扱い同意が無い場合は `createToken` を開始せず、`POST /v1/subscriptions` も送信されないことを確認する。初回 `charge` とsubscriptionの双方について、PAY.JPから取得したオブジェクトに `metadata.discord_user_id` と `metadata.operation_id`（=`operationId`）が保存されていることを確認する。あわせて成功レスポンスが `{ ok: true, memberId: uuid文字列, subscriptionStatus: enum, planId: string, trialApplied: boolean, accessEndAt: RFC3339 UTC文字列 }` を満たすことを確認する。
+2. `POST /v1/subscriptions` は `PAYJP_PLAN_IDS` 3プランに対応し、代表1プランで実課金E2E成功、残り2プランは設定整合テスト（実課金不要）で登録成功を確認する。`members.payjp_plan_id` / `members.payjp_subscription_id` 保存が行われ、初回ユーザーでは `members.payjp_initial_charge_id` も保存されることを確認する。退会後再加入時は `first_trial_granted_at` が保持され trial 再適用なしとなる。初回は `trial_end=登録時点+3か月`、非初回は `trial_endなし`、課金intervalは `month` であることを確認する。**subscribe では課金前の Discord ギルド検証を行わない**（CR-009）。`Origin` 欠落/不一致/`Origin: null` は `403` で拒否されることを確認する。3Dセキュア失敗/中断/タイムアウト時は `POST /v1/subscriptions` が呼ばれないことを確認する。3Dセキュアに伴う個人情報取り扱い同意が無い場合は `createToken` を開始せず、`POST /v1/subscriptions` も送信されないことを確認する。初回 `charge` とsubscriptionの双方について、PAY.JPから取得したオブジェクトに `metadata.member_id` と `metadata.operation_id`（=`operationId`）が保存されていることを確認する（`metadata.discord_user_id` は連携後に付与されうる）。あわせて成功レスポンスが `{ ok: true, memberId: uuid文字列, subscriptionStatus: enum, planId: string, trialApplied: boolean, accessEndAt: RFC3339 UTC文字列 }` を満たすことを確認する。
 3. 同一 `discord_user_id` への並列 `POST /v1/subscriptions` で二重購読が作成されず、`charge=1` / `subscription=1` が保たれる。既存 `active/trial` または `canceled && access_end_at > now` の契約では新規作成されない。
 4. 不確定失敗（`503`）の代表ケース（`charge` 後の `subscription` 不確定）を、テスト用注入経路で決定的に再現して検証する。運用CLIで `members.payjp_initial_charge_id` または `metadata.operation_id=operationId` を決定キーに既存課金を検知しつつ `charge=1` / `subscription=1` を維持し、`operationId` で追跡できる。検証では `members.payjp_initial_charge_id` が欠落している場合でも `metadata.operation_id=operationId` により既存課金を検知して復旧できることを必須とする（この検索は `GET /v1/charges` を `limit=100`・`offset` ページングで `has_more=false` まで走査した結果であることを必須とし、`offset<=900` 上限到達時に `has_more=true` の場合は確定不能として fail-close・再課金禁止とする。検索の `since/until` は `members.inflight_operation_started_at` をUTCとしてUnix秒化（整数）した `inflight_operation_started_at_unix` を用いる。`members.payjp_customer_id IS NULL` の場合は即 fail-close とし復旧を続行しない）。手動再同期CLIの引数相互排他（`--operation-id` / `--discord-user-id` / `--all`）、1行JSON出力（`mode,target,processed_count,succeeded_count,failed_count,started_at,finished_at,duration_ms`）、終了コード（`0/2/1`）を満たすことを確認する。
 5. Google Form退会では `POST /v1/subscriptions/cancel/google-form-link` が署名付きワンタイムトークン付きのGoogle Form URLを返し、Apps Script からの `POST /v1/subscriptions/cancel/google-submit` がPAY.JP cancel APIを1回実行して `200` 成功となることを確認する。`cancel_requested_at` 既存時はPAY.JP再呼び出しなしで冪等成功（200）となること、Discordロール剥奪失敗時は `503` と `role_state=unknown` が残り、再試行または再同期で整合回復できることを確認する。`payjp_subscription_id` 未設定時も `409` で再同期要求になり、再同期CLIの再構築手順では `GET /v1/customers/:id/subscriptions` を `limit=100`・`offset=0,100,200,...` で `has_more=false` まで走査し（`offset<=900` 上限、`offset=900` 到達時点で `has_more=true` は確定不能fail-close）、`status in (active,trial,canceled,paused)` かつ `metadata.discord_user_id` 一致で1件確定した場合のみ補正できることを確認する。`metadata.discord_user_id` 欠落時は `status` 条件の候補が1件のみの場合に限り補正できること（かつ `next_billing_at_unix = floor(extract(epoch from members.next_billing_at))`（UTC・整数秒）を用いて `subscription.current_period_end == next_billing_at_unix` の完全一致の場合に限る）、0件または複数件（または `members.next_billing_at` が `NULL` / 時刻整合不一致）はfail-closeで停止することを確認する。通信エラーやJSON欠落で走査を完了できない場合も fail-close として停止することを確認する。あわせて `members.payjp_customer_id IS NULL` の場合は fail-close とし cancel 復旧を続行しないことを確認する。成功レスポンスが `{ ok: true, memberId: uuid文字列, cancelEffectiveAt: RFC3339 UTC文字列, roleRemovalAt: RFC3339 UTC文字列 }` を満たすことを確認する。
@@ -681,8 +676,8 @@ MVP（〜2026-04-20）では、以下は実装しない。
 3. 本文の用語は「3Dセキュア」に統一する。
 4. 月の表記は「1か月/2か月目」の形式に統一する。
 5. `*_unix` はDBの `timestamptz` をUTCとして Unix 秒（整数）へ変換した値を指す（例: `inflight_operation_started_at_unix = floor(extract(epoch from members.inflight_operation_started_at))`、`access_end_at_unix = floor(extract(epoch from members.access_end_at))`）。PAY.JP APIの `since/until/current_period_end` との比較・送信はUTCのUnix秒（整数）で行い、JSTはログ/運用表示のみに用いる。
-6. **購読（課金）** と **Discord 事前検証** の関係: ユーザー価値の主目的は購読の開始・維持である。Discord 連携済みであること・ギルド参加・ロール付与可能性は、`POST /v1/subscriptions` において **PAY.JP 書き込み前** に満たすこと（§5 step7、§6.2 item5）。
-7. 俗称「Discord-first」は **課金APIより前に Discord 側前提を検証する** 順序を指す。課金より Discord を価値上優先する、という解釈は用いない。
+6. **購読（課金）** と **Discord** の関係: ユーザー価値の主目的は購読の開始・維持である。`POST /v1/subscriptions` では **Discord を課金前提にしない**。OAuth・`guilds.join`・ロール付与は **課金成功後**（§5、§6.2 item5、`POST /v1/members/link-discord`）。
+7. 旧称「Discord-first」（課金API前に Discord を検証する順序）は **本リリースの正本フローでは用いない**（CR-009）。
 
 ## Change Request 履歴
 
@@ -749,3 +744,11 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: §5 冒頭および §16 に、**ユーザー価値の中心は購読（課金）**であり、Discord 検証は **PAY.JP 書き込み前の前提** であること、俗称「Discord-first」が **検証順序** を指すこと（課金より Discord を価値上優先する意味ではないこと）を明記する。`docs/implementation-design-mvp.md` §5.0 を追加し、`docs/tdd-acceptance-matrix-mvp.md` に参照一行を追加する。
 - 理由: 実装・レビューで「Discord-first」と略した際に、主目的の取り違えが起きないようにするため
 - 影響範囲: `docs/2weeks-spec.md` §5・§16、`docs/implementation-design-mvp.md` §5.0、`docs/tdd-acceptance-matrix-mvp.md` 冒頭、`課金先行` / `billing-first` 等の誤解を招くコメントの置換（挙動変更なし）
+
+### CR-009: B2B 支払後 Discord 連携（メール起点購読）と料金表
+
+- 日付: 2026-04-12
+- 起票: PAY.JP B2B 審査整合（企業向けコミュニティ参加権・支払後招待）
+- 変更内容: 商材を **法人向け SES コミュニティ参加権** に明文化。ユーザーフローを **課金 → `member_session` → Discord OAuth（`identify`+`guilds.join`）→ `guilds.join` 自動参加** に変更。`POST /v1/subscriptions` から **`__Host-link_session` 必須**および**課金前 Discord ギルド検証**を削除。初回無料判定を **メールに紐づく `members` 行**基準で維持。税込月額の代表値を **20,000 / 50,000 / 70,000 円** に更新（環境変数・公開ページと同期）。
+- 理由: 審査・公開法務・実装のストーリーを一致させ、案件/人材仲介と誤認されないようにするため
+- 影響範囲: `docs/2weeks-spec.md` §2・§5・§6・§16、`docs/implementation-design-mvp.md`、`docs/tdd-acceptance-matrix-mvp.md`、`packages/billing-service/src/shell/subscribe.ts`、`frontend/src/main.ts`、`frontend/public/*.html`、E2E `subscribe.test.ts`

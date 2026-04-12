@@ -38,5 +38,6 @@
 
 - **リポジトリ内**: 決済ページ表面の最小化、スクリプト台帳・監視手順、証跡テンプレート整備（本リリースのドキュメント群）。
 - **リポジトリ外**: MFA、ASV、PAY.JP 問い合わせ、法務ページ・規約の実確認と記録保管。
+- **審査申請前**: `external_evidence_needed` の実施順・テンプレ対応表は [docs/evidence/SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md](evidence/SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md)。審査説明メモは [docs/payjp-screening-review-brief.md](payjp-screening-review-brief.md)。
 
 総合サマリは [pci-readiness-summary.md](pci-readiness-summary.md) を参照。

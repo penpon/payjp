@@ -3,7 +3,7 @@
 - 正本仕様: `2weeks-spec.md`
 - 採番ルール: `2. スコープ` の9項目を `R1-R9` として扱う
 - TDD方針: t_wada式 `Red -> Green -> Refactor` を最小粒度で固定する
-- 用語: ユーザー価値の中心は **購読（課金）** である。Discord 事前検証は **PAY.JP 書き込み前** の前提（`2weeks-spec.md` §5・§16 item6、CR-008）。Red 列の「Discord未参加でもPAY.JPが呼ばれる」は **不具合があるべきでない状態** を指す否定テスト観点である。
+- 用語: ユーザー価値の中心は **購読（課金）** である。`POST /v1/subscriptions` では **課金前に Discord を検証しない**（`2weeks-spec.md` §5・§16、CR-009）。Red 列の「Discord未参加でもPAY.JPが呼ばれる」は **今回の正本では許容される**（メール起点購読）ため、**課金前に guild 検証が残っている**ことを指す否定テストに読み替える。
 
 ## 1. R1-R9 -> テストID 対応表
 
@@ -83,7 +83,7 @@
   - `Origin` 欠落/不一致/`null` を拒否できない
   - `Origin` 正規化比較（`scheme+host+port`）が崩れ、port違いを誤って通す
   - `FRONTEND_BASE_URL` が origin形式でない（path/末尾slash付き）設定を起動時に拒否できない
-  - Discord未参加/ロール付与不可でもPAY.JP APIが呼ばれる
+  - 課金前に `checkMembership` 等の Discord 検証が残っている（正本では subscribe で呼ばない）
   - 初回無料判定が `discord_user_id` 単位で固定されない
   - 非初回ユーザーでも `charge` が実行される
   - 退会後再加入で `first_trial_granted_at` が保持されず、trialが再適用される
@@ -104,9 +104,9 @@
   - 3Dセキュア実施に伴う個人情報取り扱い同意が無い場合は `createToken` を開始しないことを検証する
   - フロントの `PAY.JP.js createToken` で `three_d_secure: true` + `card.name` + `card.email`（または `card.phone`）を必須化し、欠落時は `POST /v1/subscriptions` を送信しないことを検証する
   - `Origin` は `scheme+host+port` 正規化で比較し、`FRONTEND_BASE_URL` はorigin形式のみ許可
-  - 事前Discord検証を課金前に実行
-  - `inflight_operation_id` 既存時は `503 + 既存operationId` を返し、`__Host-link_session` 未消費かつPAY.JP書き込み0回を検証する
-  - 認証前提検証通過時点で `__Host-link_session` を消費し、再送は `401`（PAY.JP API未呼び出し）
+  - subscribe で Discord API を課金前に呼ばない
+  - `inflight_operation_id` 既存時は `503 + 既存operationId` を返し、PAY.JP書き込み0回を検証する
+  - `__Host-link_session` は subscribe 必須ではない（課金後 link-discord 用）
   - `members` 行が無い場合は `discord_user_id + email` で仮行を作成する
   - customer作成/再利用の確定時点で `members.payjp_customer_id` を即時保存する
   - 初回 `charge` 成功時点で `members.payjp_initial_charge_id` を即時保存する

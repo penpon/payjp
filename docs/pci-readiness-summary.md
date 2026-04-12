@@ -7,7 +7,7 @@
 
 - **カード非保持・3DS・operationId 失敗クローズ・ヘッダ基本統制** はコードと文書で説明可能。
 - **11.6.1 完全自動化**（CSP レポート集約等）は未実装。一方 **CI の静的検証**（[`scripts/check-payment-page-security.ts`](../scripts/check-payment-page-security.ts)）でスクリプト許可・CSP 整合を毎 PR 確認する。運用手順・台帳は [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)・[pci-payment-page-script-register.md](pci-payment-page-script-register.md)。
-- **MFA・ASV・法務本番値・TPSP 証跡の実物** は Git 外作業。一覧は [pci-readiness-gap-matrix.md](pci-readiness-gap-matrix.md)。
+- **MFA・ASV・法務本番値・TPSP 証跡の実物** は Git 外作業。一覧は [pci-readiness-gap-matrix.md](pci-readiness-gap-matrix.md)。申請前の実施順は [docs/evidence/SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md](evidence/SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md)。
 
 ## 論点別ラベル
 

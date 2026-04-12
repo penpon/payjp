@@ -12,6 +12,7 @@ PCI / 本番準備用の記録は [pci-readiness-gap-matrix.md](../pci-readiness
 | P0 | 決済ページ・スクリプトレビュー | [TEMPLATE-pci-payment-page-review.md](./TEMPLATE-pci-payment-page-review.md) | [pci-payment-page-monitoring.md](../pci-payment-page-monitoring.md) と対 |
 | P1 | PAY.JP MFA 確認 | [TEMPLATE-mfa-check.md](./TEMPLATE-mfa-check.md) | スクリーンショットはリポジトリ外 |
 | P1 | 法務ページ本番値 | [TEMPLATE-legal-page-verification.md](./TEMPLATE-legal-page-verification.md) | [production-readiness-checklist.md](../ops/production-readiness-checklist.md) §1, §7 |
+| P1 | 審査用・外部証跡の実施順（一覧） | [SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md](./SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md) | [pci-readiness-gap-matrix.md](../pci-readiness-gap-matrix.md) の external_evidence_needed と対応 |
 | P1 | ASV / PAY.JP 問い合わせ | `YYYYMMDD-asv-payjp-inquiry.md` | [pci-asv-scan-policy.md](../pci-asv-scan-policy.md) |
 | P2 | 503 復旧 CLI リハーサル | `YYYYMMDD-cli-recovery-rehearsal.md` | |
 | P2 | cancel 事前検証 | `YYYYMMDD-cancel-precheck.md` | |
@@ -23,6 +24,8 @@ YYYYMMDD-<topic>.md
 ```
 
 例: `20260416-T-P0-02.md`、`20260418-pci-payment-page-review.md`
+
+2026-04-12 時点で、審査用の記録枠として [2026-04-12-legal-page-verification.md](./2026-04-12-legal-page-verification.md)、[2026-04-12-mfa-check.md](./2026-04-12-mfa-check.md)、[2026-04-12-pci-payment-page-review.md](./2026-04-12-pci-payment-page-review.md)、[2026-04-12-asv-payjp-inquiry.md](./2026-04-12-asv-payjp-inquiry.md) を追加（本番 URL・実施者は未記入のプレースホルダ）。
 
 ## 汎用テンプレート
 

@@ -129,7 +129,7 @@ export interface SubscribeRequest {
   payjpToken: string;
   planId: string;
   privacyConsented: boolean;
-  /** When set (e.g. __Host-link_session), lock and member resolution use Discord identity. */
+  /** 未使用（後方互換）。購読はメール起点。OAuth 後の `__Host-link_session` は link-discord 用。 */
   linkSessionToken?: string;
 }
 

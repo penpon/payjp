@@ -90,6 +90,56 @@ body {
   color: var(--color-primary-hover);
 }
 
+/* --- Public site chrome（審査員向け静的導線・ログイン不要） --- */
+
+.site-header {
+  flex-shrink: 0;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-header__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-heading);
+  margin: 0 0 12px;
+}
+
+.site-header__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.site-header__nav a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-header__nav a:hover {
+  color: var(--color-primary-hover);
+}
+
+.site-header__nav-sep {
+  color: var(--color-border);
+  user-select: none;
+}
+
+.noscript-hint {
+  margin: 0 0 16px;
+  color: var(--color-body);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.noscript-hint a {
+  color: var(--color-primary);
+}
+
 /* --- Card --- */
 
 .card {

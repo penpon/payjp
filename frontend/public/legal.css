@@ -78,3 +78,31 @@ body.legal-page {
 .legal-page .back-home:hover {
   text-decoration: underline;
 }
+
+/* 事業者情報の差し替え指示（本番は PAY.JP 登録と完全一致させる） */
+.legal-page .merchant-line {
+  font-size: 13px;
+  color: #64748d;
+  margin: 4px 0 12px;
+}
+
+.legal-page .service-plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 12px 0 24px;
+}
+
+.legal-page .service-plan-table th,
+.legal-page .service-plan-table td {
+  border: 1px solid #e5edf5;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-page .service-plan-table th {
+  background: #f6f9fc;
+  font-weight: 500;
+  color: #061b31;
+}

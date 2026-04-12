@@ -3,16 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>購読管理 — PAY.JP</title>
+  <title>SESコミュニティ参加権 — 購読（PAY.JP）</title>
+  <link rel="stylesheet" href="/src/payment-page.css" />
 </head>
 <body>
   <div class="page-wrapper">
+    <header class="site-header" aria-label="サイト案内">
+      <h1 class="site-header__title">法人向けコミュニティ参加権</h1>
+      <nav class="site-header__nav" aria-label="主要ナビゲーション">
+        <a href="/service.html">サービス案内（料金・流れ）</a>
+        <span class="site-header__nav-sep" aria-hidden="true">|</span>
+        <a href="/tokushou.html">特商法</a>
+        <a href="/terms.html">利用規約</a>
+        <a href="/privacy.html">プライバシーポリシー</a>
+        <a href="/refund.html">返金</a>
+        <a href="/contact.html">お問い合わせ</a>
+      </nav>
+    </header>
+    <noscript>
+      <p class="noscript-hint">
+        JavaScript を有効にすると購読手続きが行えます。ログイン不要の説明は
+        <a href="/service.html">サービス案内</a> をご覧ください。
+      </p>
+    </noscript>
     <div id="app"></div>
     <footer class="site-footer" aria-label="法的情報・ポリシー">
       <ul class="site-footer__links">
+        <li><a href="/service.html">サービス案内</a></li>
         <li><a href="/tokushou.html">特定商取引法に基づく表記</a></li>
         <li><a href="/terms.html">利用規約</a></li>
-        <li><a href="/privacy.html">プライバシー</a></li>
+        <li><a href="/privacy.html">プライバシーポリシー</a></li>
         <li><a href="/refund.html">返金・キャンセル</a></li>
         <li><a href="/contact.html">お問い合わせ</a></li>
       </ul>

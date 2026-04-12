@@ -251,7 +251,7 @@ function cancelPayload() {
   return {};
 }
 
-/** Common inject options for subscribe endpoint (__Host-link_session required) */
+/** Common inject options for subscribe endpoint（`__Host-link_session` は後方互換のため付与しているが必須ではない） */
 function subscribeInjectOpts(url: string, payload: Record<string, unknown>, overrides: { origin?: string } = {}) {
   const { origin = FRONTEND_BASE_URL } = overrides;
   return {

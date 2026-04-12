@@ -14,3 +14,9 @@ test('legal static pages are served', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: '特定商取引法に基づく表記' })).toBeVisible();
 });
+
+test('public service overview page is served without login', async ({ page }) => {
+  await page.goto('/service.html');
+  await expect(page.getByRole('heading', { name: 'サービス案内' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'スタータープラン' })).toBeVisible();
+});

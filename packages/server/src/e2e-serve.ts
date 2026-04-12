@@ -84,9 +84,9 @@ async function main(): Promise<void> {
       allowedPlanIds: [...E2E_BROWSER_PLAN_IDS],
       planRoleMapping: E2E_BROWSER_PLAN_ROLES,
       planInitialChargeAmounts: {
-        plan_starter: 25000,
+        plan_starter: 20000,
         plan_business: 50000,
-        plan_enterprise: 100000,
+        plan_enterprise: 70000,
       },
     },
     syncDeps: buildSyncDepsForE2EPlain(pool),

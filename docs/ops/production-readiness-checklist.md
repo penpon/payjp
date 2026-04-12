@@ -16,7 +16,7 @@
 
 - [ ] 申請する **本番 URL** が確定している（ダミー・ローカル専用 URL ではない）
 - [ ] 審査員が **ログインなしで** 以下を閲覧できる
-  - [ ] トップ（購読 UI）
+  - [ ] トップ（購読 UI）および [サービス案内（料金・流れ）](../../frontend/public/service.html)
   - [ ] [特定商取引法に基づく表記](../../frontend/public/tokushou.html)（**運営者名・住所・問い合わせ先を本番値に更新済み**）
   - [ ] [プライバシーポリシー](../../frontend/public/privacy.html)
   - [ ] [利用規約](../../frontend/public/terms.html)
