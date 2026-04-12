@@ -2,11 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { REST, RequestMethod } from '@discordjs/rest';
 import type { AddGuildMemberResult, BillingDeps, DiscordClient, PayjpClient } from '@hayane/billing-service';
 import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
-import type { CliDeps, WebhookHandlerDeps } from '@hayane/sync-service';
+import type { WebhookHandlerDeps } from '@hayane/sync-service';
 import { runDailyResync } from '@hayane/sync-service';
 import { CronJob } from 'cron';
-import Payjp from 'payjp';
 import { buildApp } from './app.js';
+import {
+  buildCliDepsFromPayjpApi,
+  createPayjpApi,
+  parseSubscriptionPlanConfig,
+  toMetadata,
+} from './cli-deps-factory.js';
 import type { SyncDeps } from './routes/sync.routes.js';
 
 /** Discord permission bits (https://discord.com/developers/docs/topics/permissions) */
@@ -161,17 +166,20 @@ try {
 }
 console.log('[startup] DB migrations applied.');
 
+const dbClient = new PgDbClient(pool);
+const dbPool = createPgPool(pool);
+const planParse = parseSubscriptionPlanConfig(env, 'startup');
+if (!planParse.ok) {
+  process.stderr.write(planParse.message);
+  await closePoolIgnoringStartupErrors();
+  process.exit(1);
+}
+const { allowedPlanIds, planRoleMapping, planInitialChargeAmounts } = planParse;
+
 // ---- 3. Create clients ----
 
 // PAY.JP client (payjp uses export= pattern; cast required for ESM interop)
-const payjpApi = (
-  Payjp as unknown as (key: string) => Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>
-)(env.PAYJP_SECRET_KEY);
-
-function toMetadata(raw: unknown): Record<string, string> {
-  if (raw === null || raw === undefined || typeof raw !== 'object') return {};
-  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
-}
+const payjpApi = createPayjpApi(env.PAYJP_SECRET_KEY);
 
 function toSubscription(s: Record<string, unknown>) {
   const plan = s.plan as Record<string, unknown>;
@@ -327,135 +335,17 @@ const discordClient: DiscordClient = {
   },
 };
 
-async function syncRole(userId: string, action: 'grant' | 'revoke', roleId: string): Promise<void> {
-  const endpoint = `/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${roleId}` as const;
-  if (action === 'grant') {
-    await discordRest.put(endpoint);
-  } else {
-    await discordRest.delete(endpoint);
-  }
-}
-
-// ---- 4. Wire dependencies ----
-
-const dbClient = new PgDbClient(pool);
-const dbPool = createPgPool(pool);
-const allowedPlanIds = env.PAYJP_PLAN_IDS.split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-if (allowedPlanIds.length === 0) {
-  process.stderr.write('[startup] PAYJP_PLAN_IDS must contain at least one plan ID\n');
-  await closePoolIgnoringStartupErrors();
-  process.exit(1);
-}
-
-const discordPlanRoleIds = env.DISCORD_PLAN_ROLE_IDS.split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-if (discordPlanRoleIds.length !== allowedPlanIds.length) {
-  process.stderr.write(
-    `[startup] DISCORD_PLAN_ROLE_IDS must have the same number of comma-separated entries as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${discordPlanRoleIds.length})\n`,
-  );
-  await closePoolIgnoringStartupErrors();
-  process.exit(1);
-}
-const planRoleMapping: Record<string, string> = Object.fromEntries(
-  allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
-);
-
-const planInitialChargeParts = env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS.split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-if (planInitialChargeParts.length !== allowedPlanIds.length) {
-  process.stderr.write(
-    `[startup] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must have the same number of comma-separated integers as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${planInitialChargeParts.length})\n`,
-  );
-  await closePoolIgnoringStartupErrors();
-  process.exit(1);
-}
-const planInitialChargeAmountsParsed = planInitialChargeParts.map((s) => Number.parseInt(s, 10));
-if (planInitialChargeAmountsParsed.some((n) => !Number.isInteger(n) || n <= 0)) {
-  process.stderr.write(
-    `[startup] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must be positive integers: ${env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS}\n`,
-  );
-  await closePoolIgnoringStartupErrors();
-  process.exit(1);
-}
-const planInitialChargeAmounts: Record<string, number> = Object.fromEntries(
-  allowedPlanIds.map((pid, i) => [pid, planInitialChargeAmountsParsed[i] as number]),
-);
-
-const listPayjpCharges: CliDeps['listPayjpCharges'] = async (params, offset) => {
-  const r = (await payjpApi.charges.list({
-    customer: params.customer,
-    since: params.since,
-    until: params.until,
-    limit: params.limit,
-    offset,
-  })) as { data: Array<Record<string, unknown>>; has_more: boolean };
-  return {
-    data: r.data.map((ch) => ({
-      id: ch.id as string,
-      metadata: toMetadata(ch.metadata),
-    })),
-    has_more: r.has_more,
-  };
-};
-
-const listPayjpSubscriptions: CliDeps['listPayjpSubscriptions'] = async (customerId, offset) => {
-  const r = (await payjpApi.subscriptions.list({
-    customer: customerId,
-    limit: 100,
-    offset,
-  })) as { data: Array<Record<string, unknown>>; has_more: boolean };
-  return {
-    data: r.data.map((s) => ({
-      id: s.id as string,
-      status: s.status as string,
-      metadata: toMetadata(s.metadata),
-      current_period_end: s.current_period_end as number | undefined,
-    })),
-    has_more: r.has_more,
-  };
-};
-
-const createPayjpChargeCli: CliDeps['createPayjpCharge'] = async (params) => {
-  const ch = (await payjpApi.charges.create(params)) as Record<string, unknown>;
-  return { id: ch.id as string };
-};
-
-const createPayjpSubscriptionCli: CliDeps['createPayjpSubscription'] = async (params) => {
-  const s = (await payjpApi.subscriptions.create(params)) as Record<string, unknown>;
-  return { id: s.id as string, status: s.status as string };
-};
-
-const cancelPayjpSubscriptionCli: CliDeps['cancelPayjpSubscription'] = async (subscriptionId) => {
-  return (await payjpApi.subscriptions.cancel(subscriptionId)) as Record<string, unknown>;
-};
-
-const getPayjpSubscriptionCli: CliDeps['getPayjpSubscription'] = async (subscriptionId) => {
-  try {
-    return (await payjpApi.subscriptions.retrieve(subscriptionId)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
-const cliDeps: CliDeps = {
+const cliDeps = buildCliDepsFromPayjpApi({
   db: dbPool,
-  getPayjpSubscription: getPayjpSubscriptionCli,
-  listPayjpCharges,
-  listPayjpSubscriptions,
-  createPayjpCharge: createPayjpChargeCli,
-  createPayjpSubscription: createPayjpSubscriptionCli,
-  cancelPayjpSubscription: cancelPayjpSubscriptionCli,
-  syncRole,
+  payjpApi,
+  discordRest,
+  discordGuildId: env.DISCORD_GUILD_ID,
   planRoleMapping,
   planInitialChargeAmounts,
-  initialChargeCurrency: 'jpy',
-  log: (entry) => console.log(JSON.stringify(entry)),
-  now: () => new Date(),
-};
+});
+const { syncRole } = cliDeps;
+
+// ---- 4. Wire dependencies ----
 
 const billingDeps: BillingDeps = {
   db: dbClient,

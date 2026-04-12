@@ -5,10 +5,10 @@
  * Required env: DATABASE_URL, PAYJP_SECRET_KEY, PAYJP_LIVEMODE, PAYJP_PLAN_IDS, DISCORD_PLAN_ROLE_IDS,
  * DISCORD_GUILD_ID, DISCORD_BOT_TOKEN, PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS
  */
+import { REST } from '@discordjs/rest';
 import { createPgPool, createPool, runMigrations } from '@hayane/shared';
-import type { CliDeps } from '@hayane/sync-service';
 import { runResyncCli } from '@hayane/sync-service';
-import Payjp from 'payjp';
+import { buildCliDepsFromPayjpApi, createPayjpApi, parseSubscriptionPlanConfig } from './cli-deps-factory.js';
 
 const REQUIRED = [
   'DATABASE_URL',
@@ -20,11 +20,6 @@ const REQUIRED = [
   'DISCORD_BOT_TOKEN',
   'PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS',
 ] as const;
-
-function toMetadata(raw: unknown): Record<string, string> {
-  if (raw === null || raw === undefined || typeof raw !== 'object') return {};
-  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
-}
 
 async function main(): Promise<void> {
   const missing = REQUIRED.filter((k) => !process.env[k]);
@@ -39,113 +34,24 @@ async function main(): Promise<void> {
   await runMigrations(pool);
   const dbPool = createPgPool(pool);
 
-  const payjpApi = (
-    Payjp as unknown as (key: string) => Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>>
-  )(env.PAYJP_SECRET_KEY);
-
-  const allowedPlanIds = env.PAYJP_PLAN_IDS.split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const discordPlanRoleIds = env.DISCORD_PLAN_ROLE_IDS.split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const planRoleMapping: Record<string, string> = Object.fromEntries(
-    allowedPlanIds.map((pid, i) => [pid, discordPlanRoleIds[i] as string]),
-  );
-  const planInitialChargeParts = env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS.split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (planInitialChargeParts.length !== allowedPlanIds.length) {
-    process.stderr.write(
-      `[resync-cli] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must have the same number of comma-separated integers as PAYJP_PLAN_IDS (expected ${allowedPlanIds.length}, got ${planInitialChargeParts.length})\n`,
-    );
+  const planParse = parseSubscriptionPlanConfig(env, 'resync-cli');
+  if (!planParse.ok) {
+    process.stderr.write(planParse.message);
     process.exit(1);
   }
-  const planInitialChargeAmountsParsed = planInitialChargeParts.map((s) => Number.parseInt(s, 10));
-  if (planInitialChargeAmountsParsed.some((n) => !Number.isInteger(n) || n <= 0)) {
-    process.stderr.write(
-      `[resync-cli] PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS must be positive integers: ${env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS}\n`,
-    );
-    process.exit(1);
-  }
-  const planInitialChargeAmounts: Record<string, number> = Object.fromEntries(
-    allowedPlanIds.map((pid, i) => [pid, planInitialChargeAmountsParsed[i] as number]),
-  );
+  const { planRoleMapping, planInitialChargeAmounts } = planParse;
 
-  const { REST } = await import('@discordjs/rest');
+  const payjpApi = createPayjpApi(env.PAYJP_SECRET_KEY);
   const discordRest = new REST({ version: '10' }).setToken(env.DISCORD_BOT_TOKEN);
 
-  async function syncRole(userId: string, action: 'grant' | 'revoke', roleId: string): Promise<void> {
-    const endpoint = `/guilds/${env.DISCORD_GUILD_ID}/members/${userId}/roles/${roleId}` as const;
-    if (action === 'grant') {
-      await discordRest.put(endpoint);
-    } else {
-      await discordRest.delete(endpoint);
-    }
-  }
-
-  const listPayjpCharges: CliDeps['listPayjpCharges'] = async (params, offset) => {
-    const r = (await payjpApi.charges.list({
-      customer: params.customer,
-      since: params.since,
-      until: params.until,
-      limit: params.limit,
-      offset,
-    })) as { data: Array<Record<string, unknown>>; has_more: boolean };
-    return {
-      data: r.data.map((ch) => ({
-        id: ch.id as string,
-        metadata: toMetadata(ch.metadata),
-      })),
-      has_more: r.has_more,
-    };
-  };
-
-  const listPayjpSubscriptions: CliDeps['listPayjpSubscriptions'] = async (customerId, offset) => {
-    const r = (await payjpApi.subscriptions.list({
-      customer: customerId,
-      limit: 100,
-      offset,
-    })) as { data: Array<Record<string, unknown>>; has_more: boolean };
-    return {
-      data: r.data.map((s) => ({
-        id: s.id as string,
-        status: s.status as string,
-        metadata: toMetadata(s.metadata),
-        current_period_end: s.current_period_end as number | undefined,
-      })),
-      has_more: r.has_more,
-    };
-  };
-
-  const cliDeps: CliDeps = {
+  const cliDeps = buildCliDepsFromPayjpApi({
     db: dbPool,
-    getPayjpSubscription: async (id) => {
-      try {
-        return (await payjpApi.subscriptions.retrieve(id)) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    },
-    listPayjpCharges,
-    listPayjpSubscriptions,
-    createPayjpCharge: async (params) => {
-      const ch = (await payjpApi.charges.create(params)) as Record<string, unknown>;
-      return { id: ch.id as string };
-    },
-    createPayjpSubscription: async (params) => {
-      const s = (await payjpApi.subscriptions.create(params)) as Record<string, unknown>;
-      return { id: s.id as string, status: s.status as string };
-    },
-    cancelPayjpSubscription: async (subscriptionId) =>
-      (await payjpApi.subscriptions.cancel(subscriptionId)) as Record<string, unknown>,
-    syncRole,
+    payjpApi,
+    discordRest,
+    discordGuildId: env.DISCORD_GUILD_ID,
     planRoleMapping,
     planInitialChargeAmounts,
-    initialChargeCurrency: 'jpy',
-    log: (entry) => console.log(JSON.stringify(entry)),
-    now: () => new Date(),
-  };
+  });
 
   const out = await runResyncCli(process.argv.slice(2), cliDeps);
   console.log(JSON.stringify(out.result, null, 2));
