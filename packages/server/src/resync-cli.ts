@@ -34,7 +34,14 @@ async function main(): Promise<void> {
   await runMigrations(pool);
   const dbPool = createPgPool(pool);
 
-  const planParse = parseSubscriptionPlanConfig(env, 'resync-cli');
+  const planParse = parseSubscriptionPlanConfig(
+    {
+      PAYJP_PLAN_IDS: env.PAYJP_PLAN_IDS,
+      DISCORD_PLAN_ROLE_IDS: env.DISCORD_PLAN_ROLE_IDS,
+      PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS: env.PAYJP_PLAN_INITIAL_CHARGE_AMOUNTS,
+    },
+    'resync-cli',
+  );
   if (!planParse.ok) {
     process.stderr.write(planParse.message);
     process.exit(1);
