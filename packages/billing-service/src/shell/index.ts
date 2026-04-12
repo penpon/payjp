@@ -1,4 +1,5 @@
 export {
+  calculateTrialEnd,
   formatRfc3339Utc,
   hasActiveSubscription,
   isSameOrigin,

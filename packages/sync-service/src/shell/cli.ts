@@ -2,6 +2,7 @@
  * sync-service CLI — Phase 2b (Green)
  * Manual resync CLI: --operation-id / --discord-user-id / --all
  */
+import { calculateTrialEnd } from '@hayane/billing-service';
 import type { LogEntry } from '@hayane/shared';
 import {
   buildChargeSearchParams,
@@ -196,18 +197,6 @@ async function handleOperationRecovery(
   return { success: false };
 }
 
-/** REQ-BILL-013 trial end: UTC +3 calendar months (aligned with billing-service calculateTrialEnd). */
-function calculateTrialEndUnixSeconds(now: Date): number {
-  const result = new Date(now);
-  const targetMonth = result.getUTCMonth() + 3;
-  const originalDay = result.getUTCDate();
-  result.setUTCMonth(targetMonth);
-  if (result.getUTCDate() !== originalDay) {
-    result.setUTCDate(0);
-  }
-  return Math.floor(result.getTime() / 1000);
-}
-
 async function handleSubscribeRecovery(
   member: Record<string, unknown>,
   operationId: string,
@@ -326,7 +315,7 @@ async function handleSubscribeRecovery(
         metadata: { ...metaBase },
       };
       if (isFirstTime) {
-        subParams.trial_end = calculateTrialEndUnixSeconds(deps.now());
+        subParams.trial_end = Math.floor(calculateTrialEnd(deps.now()).getTime() / 1000);
       }
       const sub = await deps.createPayjpSubscription(subParams);
       subscriptionId = sub.id;
