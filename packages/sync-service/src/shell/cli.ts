@@ -2,7 +2,7 @@
  * sync-service CLI — Phase 2b (Green)
  * Manual resync CLI: --operation-id / --discord-user-id / --all
  */
-import { calculateTrialEnd } from '@hayane/billing-service';
+import { calculateTrialEnd, isFirstTimeUser } from '@hayane/billing-service';
 import type { LogEntry } from '@hayane/shared';
 import {
   buildChargeSearchParams,
@@ -219,16 +219,18 @@ async function handleSubscribeRecovery(
     member_id: memberId,
   } as const;
 
+  const isFirstTime = isFirstTimeUser(member.first_trial_granted_at as Date | null);
+
   // REQ-SYNC-019 step 1: customer_id NULL → fail-close
   if (!customerId) {
     await insertImpactLog(deps.db, memberId, 'subscribe_recovery_no_customer', operationId);
     return { success: false };
   }
 
-  // Step 2: Check existing charge ID
+  // Step 2: Check existing charge ID (initial charge only for first-time subscribers — matches subscribe.ts Step 12)
   let chargeId = member.payjp_initial_charge_id as string | null;
 
-  if (!chargeId) {
+  if (!chargeId && isFirstTime) {
     // Step 3: Search charges
     const inflightStartedAt = member.inflight_operation_started_at as Date;
     const inflightUnix = Math.floor(inflightStartedAt.getTime() / 1000);
@@ -308,7 +310,6 @@ async function handleSubscribeRecovery(
         [subscriptionId, found.status, memberId],
       );
     } else {
-      const isFirstTime = member.first_trial_granted_at == null;
       const subParams: Record<string, unknown> = {
         customer: customerId,
         plan: planId,
