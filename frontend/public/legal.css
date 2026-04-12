@@ -47,6 +47,10 @@ body.legal-page {
   color: #64748d;
 }
 
+.legal-page .placeholder-inline {
+  color: #64748d;
+}
+
 .legal-page .legal-nav {
   margin-top: 40px;
   padding-top: 24px;
