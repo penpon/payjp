@@ -751,6 +751,7 @@ describe('POST /v1/subscriptions/cancel', () => {
       next_billing_at: new Date('2025-05-01T00:00:00Z'),
       payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
       payjp_customer_id: PAYJP_CUSTOMER_ID,
+      payjp_plan_id: PLAN_ID,
       cancel_requested_at: new Date('2025-03-30T00:00:00Z'),
       role_state: 'granted',
     });
@@ -762,7 +763,8 @@ describe('POST /v1/subscriptions/cancel', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
     expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
-    expect(deps.discord.removeRole).not.toHaveBeenCalled();
+    expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-plan-001');
+    expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'revoked');
   });
 
   it('does not clear __Host-link_session cookie on cancel success (cookie expires naturally)', async () => {
@@ -940,7 +942,8 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
-    expect(deps.discord.removeRole).not.toHaveBeenCalled();
+    expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-plan-001');
+    expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'revoked');
     expect(deps.db.consumeCancelFormToken).toHaveBeenCalledTimes(1);
   });
 

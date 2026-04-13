@@ -17,7 +17,7 @@
 2. Discord OAuthで正しいユーザーIDを自動取得し、手入力運用を廃止する。
 3. 異常時の調査に必要な情報をログへ記録し、手動復旧できる状態を維持する。
 
-特に、最終失効状態（`paused/deleted`、および退会後に `members.access_end_at` が到達した `canceled`）ではDiscord有料ロールが確実に剥奪されることを必須要件とする。退会直後〜当該請求期間終了までは `canceled` でも `access_end_at` に基づきロールを維持する。
+特に、最終失効状態（`canceled/paused/deleted`）ではDiscord有料ロールが確実に剥奪されることを必須要件とする。退会申請が成功した時点で `canceled` へ遷移し、Discord有料ロールは即時剥奪する。`members.access_end_at` は最終請求対象期間の終了予定日として保持する。
 
 ## 2. スコープ
 
@@ -27,7 +27,7 @@
 2. PAY.JPで3つの提供プランから1つを選択して定期課金を開始できる。
 3. 初回ユーザー（人間単位）は「1か月目課金 + 2か月目/3か月目無料」を適用できる。
 4. 4か月目以降は月次課金（毎月）で継続できる。
-5. 退会申請はGoogle Form経由で受け付け、フォーム送信後に定期請求停止を即時反映し、サービス利用とDiscord有料ロールは `subscription.current_period_end`（DBでは `members.access_end_at`）まで維持し、期間終了後に失効させる。
+5. 退会申請はGoogle Form経由で受け付け、フォーム送信後に定期請求停止を即時反映し、Discord有料ロールを即時剥奪する。`subscription.current_period_end`（DBでは `members.access_end_at`）は契約終了予定日として保持する。
 6. PAY.JP Webhookを受信し、課金状態をDBへ反映できる。
 7. 課金状態に応じてDiscordロールを付与/剥奪できる。
 8. 日次1回の再同期および手動再同期CLIで不整合を修復できる（不確定失敗で残留した `inflight_operation_*` の解除は手動再同期CLIでのみ行う）。
@@ -102,7 +102,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 4. 初回ユーザーは「1か月目課金 + 2か月目/3か月目無料（trial）」を付与する。成功時に `__Host-member_session` を発行する。
 5. ユーザーはサンクス画面から `GET /v1/auth/discord/start` により OAuth（`identify` + `guilds.join`）を行い、`POST /v1/members/link-discord` で `guilds.join` による自動参加とプランに応じたロール付与を受ける（詳細は server の member ルート）。
 6. 退会申請ユーザーは、購読状況画面の「退会する」から署名付きトークン付きGoogle Formへ遷移し、名前・メールアドレス・退会理由を送信する。
-7. Google Apps Script はフォーム送信を受けてアプリの専用退会APIを呼び、定期請求停止を即時反映し、サービス利用とDiscord有料ロールは `current_period_end`（`members.access_end_at`）まで維持する。
+7. Google Apps Script はフォーム送信を受けてアプリの専用退会APIを呼び、定期請求停止を即時反映し、Discord有料ロールを即時剥奪する。`current_period_end`（`members.access_end_at`）は契約終了予定日として保持する。
 8. 以後はWebhookイベントと日次再同期で状態を維持する。
 
 **料金（税抜・月額・代表）**: スターター **20,000円（税抜）** / ビジネス **50,000円（税抜）** / エンタープライズ **70,000円（税抜）**（決済時は消費税等を加算した税込請求。`PAYJP_PLAN_IDS` および公開ページと一致させる）。
@@ -233,11 +233,11 @@ MVP（〜2026-04-20）では、以下は実装しない。
   - `members` を取得し、`active/trial/canceled` の既存購読が無ければ409
   - `members.inflight_operation_id` が存在する場合は新規キャンセル処理を開始せず `503` を返す（既存 `operationId` を返却）
   - `members.payjp_subscription_id` が未設定の場合は `409` を返し、再同期CLIで状態補正後に再実行する
-  - `members.cancel_requested_at` が既存の場合はPAY.JP cancel APIを再実行せず、冪等 `200` を返す（ロールは `access_end_at` 到達まで維持するため、即時剥奪の再試行は行わない）
+  - `members.cancel_requested_at` が既存の場合はPAY.JP cancel APIを再実行せず、Discordロールが未剥奪なら即時剥奪を再試行したうえで冪等 `200` を返す
   - PAY.JP書き込み（cancel API）開始前に `operationId` を生成し、`members.inflight_operation_id` / `members.inflight_operation_type=cancel` / `members.inflight_operation_started_at` を保存する
   - PAY.JP subscriptionキャンセルAPIを `members.payjp_subscription_id` 指定で呼び、次回請求を停止する（即時削除はしない）
-  - `members.cancel_requested_at` を記録し、`members.subscription_status = canceled`, `members.access_end_at = subscription.current_period_end`（サービス利用・ロール維持の終了日時）、`members.next_billing_at = subscription.current_period_end` を更新する
-  - Discordロールは `access_end_at` 到達まで維持し、即時剥奪しない（`role_state` は `granted` のままとし、期限到達後は日次再同期/Webhookで剥奪する）
+  - `members.cancel_requested_at` を記録し、`members.subscription_status = canceled`, `members.access_end_at = subscription.current_period_end`（契約終了予定日）, `members.next_billing_at = subscription.current_period_end` を更新する
+  - Discordロールは退会成功時に即時剥奪し、成功時は `role_state = revoked` とする。Discord API失敗時は `503` を返し、`role_state = unknown` を残して再試行または再同期で補正する
   - 処理成功時にGoogle Formトークンを消費済みに更新する
 - 失敗時ポリシー:
   - subscriptionキャンセルAPIは自動再試行しない
@@ -317,7 +317,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 14. `data.current_period_end` は取得できた場合のみ `members.next_billing_at` に保存する。`status=active/trial` の間は同値を `members.access_end_at` にも保存する。`status=canceled` の場合も取得できた場合は同値を `members.access_end_at` に保存する（退会後の利用終了日時の正とする）。
 15. `succeeded` として処理したイベントは `status` 不変でも `members.last_payjp_event_created_at = event.created` を更新する（`failed/ignored` は更新しない）。
 16. `status` 不変の `subscription.updated` でも `payjp_plan_id` と `next_billing_at/access_end_at` の更新は行う。ロール同期は実施しない。
-17. `subscription_status` が変化したイベントのみDiscordロール同期を実行する（ただし `12.` の不明ステータス失敗ケースは例外的に剥奪を実行する）。`canceled` かつ `members.access_end_at > now()` の間はロールを維持し、`access_end_at` 到達後または `paused/deleted` 等は剥奪する。
+17. `subscription_status` が変化したイベントのみDiscordロール同期を実行する（ただし `12.` の不明ステータス失敗ケースは例外的に剥奪を実行する）。`active/trial` は付与し、`canceled/paused/deleted` は即時剥奪する。
 18. Discord API `429/5xx` は短時間の同期リトライを最大3回（0秒/1秒/2秒待機、各回タイムアウト1秒、総処理6秒以内）行い、最終失敗時は会員影響ログへ記録して日次再同期対象とする。
 19. 必須項目欠落や検証失敗時は fail-close（`members` 非更新）とし、`failed` を記録する（DB障害以外は `200`）。
 
@@ -330,7 +330,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 ## 6.4 Discordロール同期ルール
 
 1. `active` / `trial` のとき付与する。
-2. `canceled` かつ `members.access_end_at > now()` の間は付与を維持する（退会後も当請求期間終了まで）。`canceled` で `access_end_at` 到達後、`paused` / `deleted`、不明ステータスは剥奪する。
+2. `canceled` / `paused` / `deleted` / 不明ステータスは剥奪する。`members.access_end_at` は契約終了予定日の表示・運用確認に使い、Discordロール維持条件には使わない。
 3. Webhook欠落やDiscord API失敗で剥奪に失敗した場合は、次回日次再同期で補正する。
 4. APIエラー時は短時間の同期リトライを最大3回実行する。長時間待機は行わず、失敗時は再同期へ回す。
 5. `payjp_plan_id` はロール判定に使わない（3プランでもロールは共通）。
@@ -339,8 +339,8 @@ MVP（〜2026-04-20）では、以下は実装しない。
 
 1. 退会申請時はGoogle Formを受付窓口とし、Google Apps Scriptからアプリ専用APIを呼んで処理する。
 2. 退会申請時はPAY.JP subscriptionキャンセルAPIで定期請求を停止する（即時削除はしない）。
-3. 退会申請後は `members.subscription_status = canceled`, `members.cancel_requested_at` を記録し、`members.access_end_at = current_period_end`（サービス利用・ロール維持の終了日時）、`members.next_billing_at = current_period_end` とする（定期請求は停止し、エンタイトルメントは期間終了まで維持する）。
-4. Discordロールは `access_end_at` 到達まで維持し、到達後はWebhookまたは日次再同期で剥奪する。Discord API失敗時は次回日次再同期で補正する。
+3. 退会申請後は `members.subscription_status = canceled`, `members.cancel_requested_at` を記録し、`members.access_end_at = current_period_end`（契約終了予定日）, `members.next_billing_at = current_period_end` とする。
+4. Discordロールは退会成功時に即時剥奪する。Discord API失敗時は `503` と `role_state=unknown` を残し、再試行または日次再同期で補正する。
 5. Google Form送信とアプリAPI呼び出しの間では、署名付きワンタイムトークンと共有シークレットで本人性と送信元を検証する。
 
 ## 6.6 プラン判定ポリシー
@@ -349,7 +349,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 2. すべてのプランは月次課金（毎月）で運用する。
 3. 初回ユーザーのみ「1か月目課金 + 2か月目/3か月目無料」を適用する。
 4. 初回無料終了後（4か月目以降）は毎月課金する。
-5. Discordロール判定は `subscription.status` と `members.access_end_at`（`canceled` 時の猶予）で決定する（プラン差分なし）。
+5. Discordロール判定は `subscription.status` で決定する（プラン差分なし）。`active/trial` は付与し、`canceled/paused/deleted` は剥奪する。`members.access_end_at` は契約終了予定日の表示・運用確認にのみ利用する。
 6. `payjp_plan_id` は課金プラン識別・監査用途にのみ利用する。
 7. 同一ユーザーの同時有効契約は不可（`active/trial` を同時に複数持たせない）。
 
@@ -647,7 +647,7 @@ MVP（〜2026-04-20）では、以下は実装しない。
 各受け入れ項目の証跡は「実施日時 / テストIDまたは実行コマンド / 結果」を必須とし、再現可能な証跡として `CI実行ID` または `主要ログ参照` のいずれか1つを必ず添付する。証跡は `docs/evidence/YYYYMMDD-<testid>.md` に保存し、同一命名規則を用いる。
 
 1. Day9で `12.1` の7件を1回実行してPassしている。不具合修正後は「修正影響範囲 + 12.1-3 + 12.1-4 + 12.1-6」を再実行してPassしている。
-2. Day10に本番最小スモーク（Webhook token/livemode、OAuth→登録→Google Form退会）を1回実施し、cancel はDay1で固定した受付期間内テストユーザーA/Bの未使用側で初回 `200` 成功（PAY.JP cancel API実行あり、`access_end_at` が `current_period_end` 相当で保持され、ロールは期間終了まで維持される）を確認している。Day10未達の場合はDay11までに再実施してPassしている。
+2. Day10に本番最小スモーク（Webhook token/livemode、OAuth→登録→Google Form退会）を1回実施し、cancel はDay1で固定した受付期間内テストユーザーA/Bの未使用側で初回 `200` 成功（PAY.JP cancel API実行あり、`access_end_at` が `current_period_end` 相当で保持され、Discordロール即時剥奪が確認できる）を確認している。Day10未達の場合はDay11までに再実施してPassしている。
 3. 手動再同期CLIを全会員対象で実行し、全体 `failed_count=0` を確認済みで、`members.inflight_operation_id` 残留0件を確認している。
 4. 2026-04-20時点の運用文書として「再同期CLI手順」「手動ロール剥奪手順」が最終化されており、前者には「6時間超の確定不能時エスカレーション分岐（解除可否/担当者/実施時刻の記録必須）」が明記されている。
 5. 本番反映時に `migration適用 -> /health -> 主要API疎通`（OAuth/session/subscriptions/cancel/Webhook）を確認済み。
@@ -770,3 +770,11 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: `INVITE_*` / `invite-cli` / per-user 署名URL / 購読成功時の `invite_tokens` 消費を廃止し、**`SUBSCRIBE_GATE_CODE` + `ACCESS_GATE_SESSION_TTL_SECONDS` + `access_gate_sessions`** に一本化。API は `GET/POST /v1/access-gate/*`、Cookie は `__Host-access_gate`。
 - 理由: MVP 公開範囲のサーバ強制は維持しつつ、発行CLIと1回限りトークン運用を避けるため
 - 影響範囲: `packages/server`、`packages/billing-service`、`packages/shared`、`frontend`、E2E、`.env.example`、`docs/ops/access-gate.md`（`docs/ops/invite-urls.md` 置換）
+
+### CR-012: 退会時Discordロール即時剥奪
+
+- 日付: 2026-04-12
+- 起票: Google Form退会の実地確認で、課金停止成功後もDiscordロールが残存していた
+- 変更内容: `POST /v1/subscriptions/cancel/google-submit` および `POST /v1/subscriptions/cancel` 成功時に、PAY.JP解約反映後ただちに Discord 有料ロールを剥奪する。`members.access_end_at` / `members.next_billing_at` は引き続き `current_period_end` を保持するが、これは契約終了予定日の表示・運用確認にのみ用いる。`canceled` は Webhook / 日次再同期 / 再連携のいずれでも grant 対象にしない。
+- 理由: 退会導線の期待結果を「課金停止とDiscordアクセス停止の即時反映」に統一し、フォーム送信成功後の残留ロールを防ぐため
+- 影響範囲: §1, §2 scope item5, §5 user flow step7, §6.2 cancel APIs, §6.3〜6.5 role/cancel policy, `packages/billing-service`, `packages/sync-service`, `packages/server`, `frontend`, `docs/implementation-design-mvp.md`, `docs/tdd-acceptance-matrix-mvp.md`

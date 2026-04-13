@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { runMigrations } from '../migrate.js';
 import { PgDbClient } from '../pg-db-client.js';
 import { closePool, createPool } from '../pool.js';
+import { truncateAllAppData } from '../truncate-app-data.js';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/hayane_test';
 
@@ -11,9 +12,7 @@ let db: PgDbClient;
 let dbAvailable = false;
 
 async function cleanDatabase() {
-  await pool.query(
-    'TRUNCATE cancel_form_tokens, member_sessions, members, payjp_events, oauth_states, discord_link_sessions, member_impact_logs, access_gate_sessions, invite_sessions, invite_tokens CASCADE',
-  );
+  await truncateAllAppData(pool);
 }
 
 beforeAll(async () => {

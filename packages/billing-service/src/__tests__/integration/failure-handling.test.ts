@@ -182,7 +182,9 @@ function makeCancelDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
   const member = makeMember({
     subscription_status: 'active',
     payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+    payjp_plan_id: PLAN_ID,
     access_end_at: ACCESS_END_AT,
+    role_state: 'granted',
     first_trial_granted_at: new Date('2025-01-01T00:00:00Z'),
     ...memberOverrides,
   });
@@ -503,6 +505,22 @@ describe('Failure Handling — Integration', () => {
         expect(result.operationId).toBe(OPERATION_ID);
       }
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('Discord role revoke failure after cancel → 503, role_state=unknown, link session retained', async () => {
+      const deps = makeCancelDeps();
+      (deps.discord.removeRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Discord 403 Forbidden'));
+
+      const result = await handleCancel(makeCancelRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DISCORD_ROLE_REVOKE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'unknown');
+      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
     });
   });
 

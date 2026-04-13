@@ -185,15 +185,16 @@ export function buildSubscriptionResponse(member: Member): SubscriptionResponse 
 }
 
 // PROP-BILL-011: REQ-BILL-025
-export function buildCancelResponse(member: Member): CancelResponse {
+export function buildCancelResponse(member: Member, roleRemovalAt?: Date): CancelResponse {
   if (!member.cancel_requested_at || !member.access_end_at) {
     throw new Error('buildCancelResponse: required fields are null');
   }
+  const removalAt = roleRemovalAt ?? member.access_end_at;
   return {
     ok: true,
     memberId: member.id,
     cancelEffectiveAt: formatRfc3339Utc(member.cancel_requested_at),
-    roleRemovalAt: formatRfc3339Utc(member.access_end_at),
+    roleRemovalAt: formatRfc3339Utc(removalAt),
   };
 }
 

@@ -131,16 +131,24 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 受付期間境界
+  // 時期に依らないキャンセル受付
   // -------------------------------------------------------------------------
-  describe('受付期間境界', () => {
-    it('now_jst < access_end_at - 1ヶ月 → 409 (too early)', async () => {
-      // access_end_at = 2025-05-15, clock = 2025-04-01 → 受付開始 2025-04-15 より前 → 409
+  describe('時期に依らないキャンセル受付', () => {
+    it('access_end_at の 1ヶ月以上前でもキャンセルを受け付ける', async () => {
       const discordUserId = `cancel-boundary-early-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-05-15T00:00:00Z');
       const fixedDate = new Date('2025-04-01T00:00:00+09:00'); // JST 2025-04-01 = UTC 2025-03-31T15:00:00Z
 
+      const cancelPeriodEnd = Math.floor(accessEndAt.getTime() / 1000);
       const payjpMock = makeMockPayjpClient();
+      (payjpMock.cancelSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'sub_test',
+        status: 'canceled',
+        current_period_end: cancelPeriodEnd,
+        trial_end: null,
+        plan: { id: 'plan_e2e', interval: 'month' },
+        metadata: {},
+      });
       const app = buildE2EApp(pgDb, {
         payjp: payjpMock,
         discord: makeMockDiscordClient(),
@@ -152,13 +160,12 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
 
       const res = await app.inject(buildCancelRequest(rawToken));
 
-      expect(res.statusCode).toBe(409);
-      expect(res.json().ok).toBe(false);
-      expect(payjpMock.cancelSubscription).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
+      expect(payjpMock.cancelSubscription).toHaveBeenCalledOnce();
     });
 
-    it('now_jst >= access_end_at - 1ヶ月 → 200 (成功)', async () => {
-      // access_end_at = 2025-05-15, clock = 2025-04-15 → 受付開始ちょうど → 200
+    it('更新日の1ヶ月前ちょうどでもキャンセルできる', async () => {
       const discordUserId = `cancel-boundary-ok-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-05-15T00:00:00Z');
       const fixedDate = new Date('2025-04-15T00:00:00+09:00'); // JST 2025-04-15
@@ -188,9 +195,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       expect(res.json().ok).toBe(true);
     });
 
-    it('月末繰り上げ: access_end_at = 2025-03-31 → 受付開始 2025-02-28', async () => {
-      // 2025-03-31 の 1ヶ月前は 2025-02-31 → 存在しないので 2025-02-28
-      // clock = 2025-02-28 → 受付開始ちょうど → 200
+    it('月末ケースでもキャンセルできる', async () => {
       const discordUserId = `cancel-carry-0331-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-03-31T00:00:00Z');
       const fixedDate = new Date('2025-02-28T00:00:00+09:00'); // JST 2025-02-28
@@ -216,17 +221,25 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
 
       const res = await app.inject(buildCancelRequest(rawToken));
 
-      // clock = 2025-02-28 >= acceptance start 2025-02-28 → 200
       expect(res.statusCode).toBe(200);
       expect(res.json().ok).toBe(true);
     });
 
-    it('月末繰り上げ: access_end_at = 2025-03-31 → clock = 2025-02-27 → 409 (too early)', async () => {
+    it('月末ケースで前月さらに早い日でもキャンセルを受け付ける', async () => {
       const discordUserId = `cancel-carry-0331-early-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-03-31T00:00:00Z');
       const fixedDate = new Date('2025-02-27T00:00:00+09:00'); // JST 2025-02-27
 
+      const cancelPeriodEnd = Math.floor(accessEndAt.getTime() / 1000);
       const payjpMock = makeMockPayjpClient();
+      (payjpMock.cancelSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'sub_test',
+        status: 'canceled',
+        current_period_end: cancelPeriodEnd,
+        trial_end: null,
+        plan: { id: 'plan_e2e', interval: 'month' },
+        metadata: {},
+      });
       const app = buildE2EApp(pgDb, {
         payjp: payjpMock,
         discord: makeMockDiscordClient(),
@@ -238,14 +251,12 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
 
       const res = await app.inject(buildCancelRequest(rawToken));
 
-      expect(res.statusCode).toBe(409);
-      expect(res.json().ok).toBe(false);
-      expect(payjpMock.cancelSubscription).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
+      expect(payjpMock.cancelSubscription).toHaveBeenCalledOnce();
     });
 
-    it('月末繰り上げ: access_end_at = 2025-05-31 → 受付開始 2025-04-30', async () => {
-      // 2025-05-31 の 1ヶ月前は 2025-04-31 → 存在しないので 2025-04-30
-      // clock = 2025-04-30 → 200
+    it('別の月末ケースでもキャンセルできる', async () => {
       const discordUserId = `cancel-carry-0531-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-05-31T00:00:00Z');
       const fixedDate = new Date('2025-04-30T00:00:00+09:00');
@@ -275,9 +286,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       expect(res.json().ok).toBe(true);
     });
 
-    it('月末繰り上げ: access_end_at = 2026-01-31 → 受付開始 2025-12-31', async () => {
-      // 2026-01-31 の 1ヶ月前は 2025-12-31
-      // clock = 2025-12-31 → 200
+    it('年跨ぎのケースでもキャンセルできる', async () => {
       const discordUserId = `cancel-carry-0131-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2026-01-31T00:00:00Z');
       const fixedDate = new Date('2025-12-31T00:00:00+09:00');
@@ -307,9 +316,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       expect(res.json().ok).toBe(true);
     });
 
-    it('月末繰り上げなし: access_end_at = 2025-04-15 → 受付開始 2025-03-15', async () => {
-      // 繰り上げ不要ケース: clock = 2025-04-15 → access_end_at 当日、
-      // 受付開始 2025-03-15 なので 2025-04-15 は許容される
+    it('通常日付でもキャンセルできる', async () => {
       const discordUserId = `cancel-no-carry-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-04-15T00:00:00Z');
       const fixedDate = new Date('2025-04-15T00:00:00+09:00');
@@ -791,7 +798,7 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       expect(member!.access_end_at?.getTime()).toBe(expectedAccessEndAt.getTime());
     });
 
-    it('キャンセル直後にロールは剥奪されない（access_end_at まで維持）', async () => {
+    it('キャンセル直後にDiscordロールが即時剥奪される', async () => {
       const discordUserId = `cancel-no-role-revoke-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-05-15T00:00:00Z');
       const fixedDate = new Date('2025-04-15T00:00:00+09:00');
@@ -819,8 +826,11 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       const res = await app.inject(buildCancelRequest(rawToken));
       expect(res.statusCode).toBe(200);
 
-      // Discord ロール剥奪は呼ばれない
-      expect(discordMock.removeRole).not.toHaveBeenCalled();
+      expect(discordMock.removeRole).toHaveBeenCalledWith('guild-e2e-test', discordUserId, 'role-e2e-test');
+
+      const member = await pgDb.findMemberByDiscordUserId(discordUserId);
+      expect(member).not.toBeNull();
+      expect(member!.role_state).toBe('revoked');
     });
   });
 
@@ -865,11 +875,9 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
       expect(member!.inflight_operation_started_at).not.toBeNull();
     });
 
-    it('確定的な失敗（受付期間外）→ inflight_operation_* は設定されない', async () => {
-      // acceptance period check が失敗するケース: inflight は設定されないはず
+    it('確定的な失敗（payjp_subscription_id 未設定）→ inflight_operation_* は設定されない', async () => {
       const discordUserId = `cancel-deterministic-fail-${randomUUID().slice(0, 8)}`;
       const accessEndAt = new Date('2025-05-15T00:00:00Z');
-      // clock を too early に設定 → 409 応答
       const fixedDate = new Date('2025-04-01T00:00:00+09:00');
 
       const app = buildE2EApp(pgDb, {
@@ -878,13 +886,13 @@ describe.skipIf(!hasTestDb)('E2E Cancel — T-P0-05', () => {
         clock: () => fixedDate,
       });
 
-      await insertSubscribedMember(pool, discordUserId, accessEndAt);
+      await insertSubscribedMember(pool, discordUserId, accessEndAt, { payjpSubscriptionId: null });
       const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
 
       const res = await app.inject(buildCancelRequest(rawToken));
 
-      // 409 (too early) → inflight は設定されない
       expect(res.statusCode).toBe(409);
+      expect(res.json().errorCode).toBe('NO_PAYJP_SUBSCRIPTION');
 
       const member = await pgDb.findMemberByDiscordUserId(discordUserId);
       expect(member).not.toBeNull();

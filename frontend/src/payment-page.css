@@ -603,6 +603,7 @@ body {
   border-radius: 4px;
   padding: 12px 16px;
   margin-bottom: 16px;
+  white-space: pre-line;
 }
 
 /* --- Operation ID box --- */

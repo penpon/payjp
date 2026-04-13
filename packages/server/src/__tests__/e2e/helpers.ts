@@ -9,7 +9,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { AuthConfig } from '@hayane/auth-service';
 import type { BillingConfig, DiscordClient, PayjpClient } from '@hayane/billing-service';
-import { closePool, createPgPool, createPool, PgDbClient, runMigrations } from '@hayane/shared';
+import { closePool, createPgPool, createPool, PgDbClient, runMigrations, truncateAllAppData } from '@hayane/shared';
 import type { CliDeps, WebhookHandlerDeps } from '@hayane/sync-service';
 import type pg from 'pg';
 import { vi } from 'vitest';
@@ -37,12 +37,6 @@ export {
 
 export const TEST_DB_URL = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 
-/** TRUNCATE 順: FK 依存順（member_impact_logs は members を参照するため先に消す） */
-const TRUNCATE_SQL = `
-  TRUNCATE member_impact_logs, cancel_form_tokens, member_sessions, payjp_events, discord_link_sessions, oauth_states, access_gate_sessions, invite_sessions, invite_tokens, members
-  CASCADE
-`;
-
 export async function createTestDb(): Promise<{ pool: pg.Pool; pgDb: PgDbClient }> {
   if (!TEST_DB_URL) throw new Error('DATABASE_URL_TEST / DATABASE_URL が未設定です');
   const pool = createPool(TEST_DB_URL, { ssl: false });
@@ -52,7 +46,7 @@ export async function createTestDb(): Promise<{ pool: pg.Pool; pgDb: PgDbClient 
 }
 
 export async function truncateAll(pool: pg.Pool): Promise<void> {
-  await pool.query(TRUNCATE_SQL);
+  await truncateAllAppData(pool);
 }
 
 // ---------------------------------------------------------------------------

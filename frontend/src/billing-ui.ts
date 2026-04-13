@@ -114,7 +114,7 @@ export function renderSubscribed(
     ...(needsDiscordRoleConfirmation
       ? [
           renderWarningBanner(
-            '課金停止は反映済みです。Discordロールの削除を確認中です。しばらくしてからページを再読み込みしてください。',
+            '課金停止は反映済みです。Discordロールの削除を確認中です。\nしばらくしてからページを再読み込みしてください。',
           ),
         ]
       : []),
@@ -129,7 +129,7 @@ export function renderSubscribed(
       ? [
           el('p', { class: 'subscribed-detail' }, [
             isWithdrawn
-              ? `ご利用終了日: ${formatDate(subscription.accessEndAt)}`
+              ? `契約終了日: ${formatDate(subscription.accessEndAt)}`
               : `次回更新日: ${formatDate(subscription.accessEndAt)}`,
           ]),
         ]
@@ -144,7 +144,7 @@ export function renderSubscribed(
       el('div', { class: 'cancel-section' }, [
         el('h2', { class: 'cancel-section-title' }, ['退会']),
         el('p', { class: 'cancel-section-desc' }, [
-          '退会手続きが完了しています。現在の期間終了日までサービスをご利用いただけます。',
+          '退会手続きが完了しています。課金停止とDiscordロール削除は反映済みです。',
         ]),
         el('p', { class: 'cancel-section-withdrawn', role: 'status' }, ['退会済み']),
       ]),

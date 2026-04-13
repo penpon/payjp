@@ -4,9 +4,8 @@ import { buildCookieAttributes, decryptToken, serializeCookieAttributes } from '
 import { resolveRoleIdForPlan } from '@hayane/sync-service';
 import type { FastifyInstance } from 'fastify';
 
-function hasLinkableSubscription(status: string | null, accessEndAt: Date | null, now: Date): boolean {
+function hasLinkableSubscription(status: string | null): boolean {
   if (status === 'active' || status === 'trial') return true;
-  if (status === 'canceled' && accessEndAt !== null && accessEndAt > now) return true;
   return false;
 }
 
@@ -168,7 +167,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
             return reply.status(404).send({ ok: false, errorCode: 'MEMBER_NOT_FOUND' });
           }
 
-          if (!hasLinkableSubscription(member.subscription_status, member.access_end_at, now)) {
+          if (!hasLinkableSubscription(member.subscription_status)) {
             return reply.status(409).send({ ok: false, errorCode: 'NO_SUBSCRIPTION' });
           }
 

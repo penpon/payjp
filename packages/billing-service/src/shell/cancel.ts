@@ -14,7 +14,6 @@ import {
   createSignedCancelFormToken,
   hasCancelableSubscription,
   hasInflightOperation,
-  isCancelAcceptanceWindowOpen,
   isSameOrigin,
   linkSessionTokenHash,
   memberSessionTokenHash,
@@ -109,15 +108,6 @@ async function applyImmediateCancelState(
       statusCode: 409,
       errorCode: 'NO_ACCESS_END',
       message: 'access_end_at is not set',
-    };
-  }
-
-  if (!isCancelAcceptanceWindowOpen(now, member.access_end_at, deps.config.cancelNoticeCycles)) {
-    return {
-      ok: false,
-      statusCode: 409,
-      errorCode: 'CANCEL_OUTSIDE_WINDOW',
-      message: 'Cancel acceptance window is not open',
     };
   }
 
@@ -224,14 +214,53 @@ async function applyImmediateCancelState(
 
 async function finalizeImmediateCancel(
   member: Member,
-  _deps: BillingDeps,
+  deps: BillingDeps,
   ctx: {
     flow: 'browser' | 'google-submit';
     operationId?: string;
     finalizeSuccess?: () => Promise<void>;
   },
 ): Promise<CancelResult> {
-  // Role removal is deferred until members.access_end_at (current period end); sync-service webhook/resync revokes after expiry.
+  const roleId = member.payjp_plan_id ? (deps.config.planRoleMapping[member.payjp_plan_id] ?? null) : null;
+  let roleRemovalAt = member.cancel_requested_at ?? deps.clock();
+
+  if (member.role_state !== 'revoked' && member.discord_user_id && roleId) {
+    try {
+      await deps.discord.removeRole(deps.config.discordGuildId, member.discord_user_id, roleId);
+      await deps.db.updateMemberRoleState(member.id, 'revoked');
+      roleRemovalAt = deps.clock();
+    } catch (err) {
+      try {
+        await deps.db.updateMemberRoleState(member.id, 'unknown');
+      } catch (roleStateErr) {
+        slog('error', 'Role revoke failed and role_state fallback update failed', {
+          memberId: member.id,
+          flow: ctx.flow,
+          operationId: ctx.operationId,
+          error: String(err),
+          roleStateError: String(roleStateErr),
+        });
+      }
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
+        message: 'Discord role revoke failed after cancel',
+        operationId: ctx.operationId,
+      };
+    }
+  } else if (member.role_state !== 'revoked' && member.discord_user_id) {
+    try {
+      await deps.db.updateMemberRoleState(member.id, 'unknown');
+    } catch {}
+    return {
+      ok: false,
+      statusCode: 503,
+      errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
+      message: 'Discord role mapping missing for immediate revoke',
+      operationId: ctx.operationId,
+    };
+  }
 
   if (ctx.finalizeSuccess) {
     try {
@@ -253,7 +282,7 @@ async function finalizeImmediateCancel(
     }
   }
 
-  return { ok: true, data: buildCancelResponse(member) };
+  return { ok: true, data: buildCancelResponse(member, roleRemovalAt) };
 }
 
 export async function handleCreateCancelFormLink(
@@ -292,7 +321,6 @@ export async function handleCreateCancelFormLink(
       operationId: member.inflight_operation_id,
     };
   }
-
   const tokenId = randomUUID();
   const expiresAt = new Date(now.getTime() + deps.config.googleFormCancelTokenTtlSeconds * 1000);
   const normalizedEmail = normalizeEmail(member.email);
@@ -364,13 +392,23 @@ export async function handleGoogleCancelSubmit(
 
   const tokenRecord = await deps.db.findCancelFormToken(verifiedToken.payload.jti);
   if (!tokenRecord) {
-    return { ok: false, statusCode: 401, errorCode: 'INVALID_CANCEL_FORM_TOKEN', message: 'Cancel form token missing' };
+    return {
+      ok: false,
+      statusCode: 401,
+      errorCode: 'INVALID_CANCEL_FORM_TOKEN',
+      message: 'Cancel form token missing',
+    };
   }
   if (tokenRecord.used_at !== null) {
     return { ok: false, statusCode: 401, errorCode: 'CONSUMED_CANCEL_FORM_TOKEN', message: 'Cancel form token used' };
   }
   if (tokenRecord.expires_at <= now) {
-    return { ok: false, statusCode: 401, errorCode: 'EXPIRED_CANCEL_FORM_TOKEN', message: 'Cancel form token expired' };
+    return {
+      ok: false,
+      statusCode: 401,
+      errorCode: 'EXPIRED_CANCEL_FORM_TOKEN',
+      message: 'Cancel form token expired',
+    };
   }
   if (
     tokenRecord.member_id !== verifiedToken.payload.memberId ||
@@ -432,7 +470,7 @@ export async function handleGoogleCancelSubmit(
       return cancelState;
     }
 
-    return finalizeImmediateCancel(cancelState.member, deps, {
+    return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'google-submit',
       operationId: cancelState.operationId,
       finalizeSuccess: async () => {
@@ -489,11 +527,12 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return cancelState;
     }
 
-    await deps.db.consumeLinkSession(tokenHash, now);
-
     return finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'browser',
       operationId: cancelState.operationId,
+      finalizeSuccess: async () => {
+        await deps.db.consumeLinkSession(tokenHash, now);
+      },
     });
   } finally {
     try {

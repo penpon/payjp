@@ -322,6 +322,8 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const result = await handleCancel(makeCancelRequest(), deps);
       expect(result.ok).toBe(true);
       expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
+      expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'revoked');
       // REQ-BILL-022: link session is consumed even on idempotent path
       expect(deps.db.consumeLinkSession).toHaveBeenCalled();
     });
@@ -357,7 +359,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
   // PROP-BILL-049: Cancel success
   // -------------------------------------------------------------------------
   describe('PROP-BILL-049: Cancel success', () => {
-    it('PAY.JP cancel API called, cancel_requested_at set, access_end_at updated, inflight cleared, no Discord calls', async () => {
+    it('PAY.JP cancel API called, cancel_requested_at set, access_end_at updated, inflight cleared, Discord role revoked', async () => {
       const deps = makeSuccessfulDeps();
       const result = await handleCancel(makeCancelRequest(), deps);
 
@@ -371,6 +373,8 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
           inflight_operation_id: null,
         }),
       );
+      expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-001');
+      expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'revoked');
       expect(deps.discord.assignRole).not.toHaveBeenCalled();
     });
   });
@@ -469,6 +473,14 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
         callOrder.push('updateMemberAfterCancel');
         return Promise.resolve(makeUpdatedMemberAfterCancel(makeMember()));
       });
+      (deps.discord.removeRole as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callOrder.push('removeRole');
+        return Promise.resolve();
+      });
+      (deps.db.updateMemberRoleState as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callOrder.push('updateMemberRoleState');
+        return Promise.resolve();
+      });
 
       await handleCancel(makeCancelRequest(), deps);
 
@@ -479,14 +491,19 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const idxInflight = callOrder.indexOf('setInflightOperation');
       const idxCancel = callOrder.indexOf('cancelSubscription');
       const idxUpdateMember = callOrder.indexOf('updateMemberAfterCancel');
+      const idxRemoveRole = callOrder.indexOf('removeRole');
+      const idxUpdateRoleState = callOrder.indexOf('updateMemberRoleState');
 
-      // findSession → findMember(initial) → Lock → findMember(locked) → setInflight → cancelSubscription → updateMember → consumeSession
+      // findSession → findMember(initial) → Lock → findMember(locked) → setInflight
+      //   → cancelSubscription → updateMember → removeRole → updateRoleState → consumeSession
       expect(idxFindSession).toBeLessThan(idxLock);
       expect(idxFindMember).toBeLessThan(idxLock);
       expect(idxLock).toBeLessThan(idxInflight);
       expect(idxInflight).toBeLessThan(idxCancel);
       expect(idxCancel).toBeLessThan(idxUpdateMember);
-      expect(idxUpdateMember).toBeLessThan(idxConsumeSession);
+      expect(idxUpdateMember).toBeLessThan(idxRemoveRole);
+      expect(idxRemoveRole).toBeLessThan(idxUpdateRoleState);
+      expect(idxUpdateRoleState).toBeLessThan(idxConsumeSession);
     });
   });
 });

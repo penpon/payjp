@@ -87,7 +87,9 @@ async function pollAfterGoogleFormSubmit(): Promise<void> {
       if (!(err instanceof SubscriptionStatusError)) throw err;
     }
     const canceled = m?.subscriptionStatus === 'canceled' || sub?.status === 'canceled';
-    if (canceled) return;
+    if (canceled) {
+      return;
+    }
     await sleep(CANCEL_POLL_INTERVAL_MS);
   }
 }

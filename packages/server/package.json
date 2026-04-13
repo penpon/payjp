@@ -10,7 +10,8 @@
     "start": "tsx src/main.ts",
     "e2e:serve": "tsx src/e2e-serve.ts",
     "resync": "tsx src/resync-cli.ts",
-    "invalidate-access-gate": "tsx src/invalidate-access-gate-sessions-cli.ts"
+    "invalidate-access-gate": "tsx src/invalidate-access-gate-sessions-cli.ts",
+    "truncate-app-data": "tsx src/truncate-app-data-cli.ts"
   },
   "dependencies": {
     "@discordjs/rest": "^2.4.3",

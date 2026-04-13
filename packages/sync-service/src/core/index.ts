@@ -200,33 +200,14 @@ export function shouldGrantRole(status: string | null): boolean {
   return GRANT_STATUSES.has(status);
 }
 
-/** Epoch ms for access end, or null if unknown / invalid (supports ISO strings from some PG drivers). */
-function accessEndToEpochMs(accessEndAt: Date | string | null): number | null {
-  if (accessEndAt === null) return null;
-  if (accessEndAt instanceof Date) {
-    const t = accessEndAt.getTime();
-    return Number.isNaN(t) ? null : t;
-  }
-  if (typeof accessEndAt === 'string') {
-    const t = Date.parse(accessEndAt);
-    return Number.isNaN(t) ? null : t;
-  }
-  return null;
-}
-
-/** Paid Discord role should be present: active/trial, or canceled until access_end_at (current period end). */
+/** Paid Discord role should be present only for active/trial members. */
 export function shouldGrantPaidDiscordAccess(
   status: string | null,
-  accessEndAt: Date | string | null,
-  now: Date,
+  _accessEndAt: Date | string | null,
+  _now: Date,
 ): boolean {
   if (status === null) return false;
   if (status === 'active' || status === 'trial') return true;
-  if (status === 'canceled') {
-    const endMs = accessEndToEpochMs(accessEndAt);
-    if (endMs === null) return false;
-    return endMs > now.getTime();
-  }
   return false;
 }
 

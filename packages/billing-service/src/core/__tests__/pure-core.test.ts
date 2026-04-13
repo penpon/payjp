@@ -23,7 +23,6 @@ import {
   hasActiveSubscription,
   hasCancelableSubscription,
   hasInflightOperation,
-  isCancelAcceptanceWindowOpen,
   isFirstTimeUser,
   isSameOrigin,
   isThreeDSecureVerified,
@@ -568,25 +567,6 @@ describe('Google cancel helpers', () => {
     expect(url).toContain('entry.1111111111=test%40example.com');
     expect(url).toContain('entry.2222222222=signed-token');
     expect(url).toContain('usp=pp_url');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Cancel acceptance window (JST) — T-P0-05
-// ---------------------------------------------------------------------------
-describe('Cancel acceptance window (JST)', () => {
-  const cycles = 1;
-
-  it('May 15 access end: April 1 JST is too early; April 15 JST is open', () => {
-    const accessEnd = new Date('2025-05-15T00:00:00Z');
-    expect(isCancelAcceptanceWindowOpen(new Date('2025-04-01T00:00:00+09:00'), accessEnd, cycles)).toBe(false);
-    expect(isCancelAcceptanceWindowOpen(new Date('2025-04-15T00:00:00+09:00'), accessEnd, cycles)).toBe(true);
-  });
-
-  it('Mar 31 access end: Feb 28 JST open; Feb 27 JST too early', () => {
-    const accessEnd = new Date('2025-03-31T00:00:00Z');
-    expect(isCancelAcceptanceWindowOpen(new Date('2025-02-28T00:00:00+09:00'), accessEnd, cycles)).toBe(true);
-    expect(isCancelAcceptanceWindowOpen(new Date('2025-02-27T00:00:00+09:00'), accessEnd, cycles)).toBe(false);
   });
 });
 

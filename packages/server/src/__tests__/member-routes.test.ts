@@ -290,6 +290,29 @@ describe('POST /v1/members/link-discord', () => {
     expect(deps.discord.checkMembership).not.toHaveBeenCalled();
   });
 
+  it('rejects linking when subscription is canceled even if access_end_at is in the future', async () => {
+    const deps = makeDeps({
+      subscription_status: 'canceled',
+      access_end_at: new Date('2099-01-01'),
+      role_state: 'revoked',
+    });
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'NO_SUBSCRIPTION' });
+    expect(deps.discord.assignRole).not.toHaveBeenCalled();
+  });
+
   it('returns DISCORD_ALREADY_USED when another active member holds the same Discord ID', async () => {
     const deps = makeDeps({ discord_user_id: null, subscription_status: 'active' });
     const otherMember = makeMember({
