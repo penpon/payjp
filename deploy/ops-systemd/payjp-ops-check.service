@@ -1,0 +1,29 @@
+[Unit]
+Description=PAY.JP ops polling checks (Linux/Docker/Nginx/App/DB)
+Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=payjp-ops
+Group=payjp-ops
+EnvironmentFile=/etc/payjp-ops/env
+ExecStart=/opt/payjp-ops/bin/run-all-checks.sh
+TimeoutStartSec=120
+LogLevelMax=info
+# Hardening (NoNewPrivileges deliberately OFF — sudo required for fail2ban/openssl cert read)
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=no
+ReadWritePaths=/var/lib/payjp-ops /run/payjp-ops
+
+[Install]
+WantedBy=multi-user.target

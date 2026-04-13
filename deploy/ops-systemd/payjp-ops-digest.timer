@@ -1,0 +1,12 @@
+[Unit]
+Description=PAY.JP ops daily digest — 09:00 JST
+Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
+
+[Timer]
+# Asia/Tokyo enforced (requires systemd >= 246).
+OnCalendar=*-*-* 09:00:00 Asia/Tokyo
+Persistent=true
+Unit=payjp-ops-digest.service
+
+[Install]
+WantedBy=timers.target
