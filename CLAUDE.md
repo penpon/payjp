@@ -115,10 +115,39 @@ References:
 
 ## Tool Selection
 
-- Semantic code operations: mcp-serena (symbol search & edit)
-- Library documentation: mcp-context7 (PAY.JP, Discord API, Node.js, etc.)
-- GitHub operations: mcp-github (PR create, merge, status)
-- Browser: mcp-playwright
+**MCP servers** (use directly):
+- mcp-serena — semantic code ops (symbol search, refactor)
+- mcp-context7 — library docs (PAY.JP, Discord API, Node.js, etc.)
+- mcp-playwright — browser automation (E2E)
+- mcp-mempalace — persistent memory across sessions
+
+### MemPalace Usage Rules
+
+**Session start (REQUIRED):** Call `mempalace_wake_up` MCP tool to load L0+L1 context from previous sessions.
+
+**Search before answering** design/architecture questions: Call `mempalace_search` first to retrieve past decisions.
+
+**Write during session** when:
+- A design decision is made
+- A bug root cause is identified
+- An architectural tradeoff is resolved
+- A security concern is noted
+
+Use MCP tools (`mempalace_diary_write`, `mempalace_add_drawer`) directly — do not wait for `/session-end`.
+
+**Knowledge Graph (structured relationships):** Use `mempalace_kg_add_triple` when a fact is best expressed as `(subject, predicate, object)`. Examples:
+- `(subscribe, requires, 3DS-verified)` — security constraint
+- `(auth-service, depends-on, Discord-OAuth)` — architecture
+- `(Issue-#12, blocks, Issue-#15)` — project dependency
+- `(PAY.JP-webhook, writes-to, inflight_operation_log)` — data flow
+
+Triples complement prose diary entries — use them for relationships that will be queried (e.g., "what depends on X?", "what blocks Y?"). Call `mempalace_kg_stats` to verify accumulation.
+
+**Post-commit auto-mine:** `.git/hooks/post-commit` re-indexes the project after each commit (background). No manual `mempalace mine` needed after code changes.
+
+**GitHub:** `gh` CLI via Bash (PR / Issue / CI status)
+
+**Specialized agents & skills** for non-trivial scope (PAY.JP domain, PostgreSQL, security audit, a11y, TDD discipline, frontend debugging, etc.) — see `.claude/rules/agents.md` for the scenario-to-agent mapping.
 
 ## Custom Commands
 
