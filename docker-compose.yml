@@ -1,6 +1,13 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:17-alpine
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -31,6 +38,7 @@ services:
 
   nginx:
     image: nginx:alpine
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
@@ -61,11 +69,13 @@ services:
       - /run
 
   admin-api:
+    logging: *default-logging
     build:
       context: .
       dockerfile: Dockerfile.admin
       # Same as `api`: host network during build so `npm ci` matches registry/DNS behavior.
       network: host
+    user: "appuser:appgroup"
     expose:
       - "3011"
     environment:
@@ -84,10 +94,12 @@ services:
       - /tmp
 
   api:
+    logging: *default-logging
     build:
       context: .
       dockerfile: Dockerfile
       network: host
+    user: "appuser:appgroup"
     expose:
       - "3000"
     environment:
