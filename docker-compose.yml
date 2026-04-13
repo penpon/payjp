@@ -8,12 +8,15 @@ services:
   db:
     image: postgres:17-alpine
     logging: *default-logging
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     # ports: bound to localhost only for local admin access
     #   - "127.0.0.1:5432:5432"
+    networks:
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -39,16 +42,30 @@ services:
   nginx:
     image: nginx:alpine
     logging: *default-logging
+    restart: unless-stopped
+    # Break alpine-nginx's /var/log/nginx/{access,error}.log → /dev/{stdout,stderr}
+    # symlinks so fail2ban on the host can tail the named volume (nginx_logs).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        rm -f /var/log/nginx/access.log /var/log/nginx/error.log
+        exec nginx -g 'daemon off;'
     ports:
-      - "80:80"
-      - "443:443"
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    networks:
+      - frontend
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
       - ./nginx/scanner-blocklist.conf:/etc/nginx/conf.d/scanner-blocklist.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./admin-frontend/dist:/usr/share/nginx/html-admin:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Narrowed from full `/etc/letsencrypt` mount (was exposing ACME account keys).
+      # symlinks in live/ resolve to archive/ — both must be mounted.
+      - /etc/letsencrypt/live/www.and--line.com:/etc/letsencrypt/live/www.and--line.com:ro
+      - /etc/letsencrypt/archive/www.and--line.com:/etc/letsencrypt/archive/www.and--line.com:ro
       - nginx_logs:/var/log/nginx
     depends_on:
       - api
@@ -70,6 +87,7 @@ services:
 
   admin-api:
     logging: *default-logging
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.admin
@@ -78,6 +96,9 @@ services:
     user: "appuser:appgroup"
     expose:
       - "3011"
+    networks:
+      - frontend
+      - backend
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       ADMIN_FRONTEND_ORIGIN: ${ADMIN_FRONTEND_ORIGIN:-https://admin.and--line.com}
@@ -95,6 +116,7 @@ services:
 
   api:
     logging: *default-logging
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -102,6 +124,9 @@ services:
     user: "appuser:appgroup"
     expose:
       - "3000"
+    networks:
+      - frontend
+      - backend
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
@@ -139,3 +164,9 @@ services:
 volumes:
   postgres_data:
   nginx_logs:
+
+networks:
+  # Front-plane: nginx ↔ api/admin-api. nginx has no route to db.
+  frontend:
+  # Back-plane: api/admin-api ↔ db only. Isolates db from external-facing nginx.
+  backend:

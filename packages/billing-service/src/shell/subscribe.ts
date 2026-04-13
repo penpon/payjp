@@ -144,17 +144,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       };
     }
 
-    // Step 5: Existing subscription check (before gate — users who already have entitlement need not re-enter passcode)
-    if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
-      const response = buildSubscriptionResponse(member);
-      const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
-      return {
-        ok: true,
-        data: response,
-        ...(memberSessionToken !== undefined ? { memberSessionToken } : {}),
-      };
-    }
-
+    // Step 5: Enforce access gate BEFORE any state lookup that could leak existence.
     // `subscribeGateCode` is normalized at process startup (`main.ts`); empty means gate off.
     const gateCode = config.subscribeGateCode ?? '';
     const gateEnforced = gateCode.length > 0;
@@ -178,6 +168,17 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
           message: 'Invalid or expired access gate session',
         };
       }
+    }
+
+    // Step 6: Existing subscription short-circuit (after gate; does not leak existence pre-gate)
+    if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
+      const response = buildSubscriptionResponse(member);
+      const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
+      return {
+        ok: true,
+        data: response,
+        ...(memberSessionToken !== undefined ? { memberSessionToken } : {}),
+      };
     }
 
     // Step 6: Persist operationId BEFORE any PAY.JP write (incl. selected plan for recovery)

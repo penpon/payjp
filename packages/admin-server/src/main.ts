@@ -32,11 +32,29 @@ async function main(): Promise<void> {
     credentials: true,
   });
 
+  // Security headers on every response (parity with packages/server/src/app.ts)
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+    reply.header('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
+    return payload;
+  });
+
   app.addHook('onRequest', async (request) => {
     const actor =
       request.headers['cf-access-authenticated-user-email'] ?? request.headers['x-admin-audit-actor'] ?? undefined;
     if (typeof actor === 'string' && actor.length > 0) {
-      request.log.info({ auditActor: actor, path: request.url }, 'admin request');
+      // Log pathname only — raw `request.url` can include PII (e.g. `?q=user@example.com`)
+      let pathname = '';
+      try {
+        pathname = new URL(request.url, 'http://_').pathname;
+      } catch {
+        pathname = '[invalid-url]';
+      }
+      request.log.info({ auditActor: actor, path: pathname }, 'admin request');
     }
   });
 

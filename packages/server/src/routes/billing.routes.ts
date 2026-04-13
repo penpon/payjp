@@ -136,6 +136,19 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           message: 'Origin not allowed',
         });
       }
+      // Reject cross-site fetches even when Origin is absent (img/script/no-cors).
+      // Browsers set Sec-Fetch-Site to `cross-site` for such loads; legitimate same-origin
+      // navigations/fetches send `same-origin` or `same-site`. curl/server-side callers omit it.
+      const secFetchSite =
+        typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
+      if (secFetchSite === 'cross-site') {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Cross-site fetch is not allowed',
+        });
+      }
 
       try {
         const now = billingDeps.clock();
