@@ -1,83 +1,144 @@
-# PAY.JP × Discord 連携サービス — Claude 設定
+# PAY.JP × Discord Integration Service — Claude Configuration
 
-## 仕様文書の正本階層
+## Behavioral Guidelines
 
-1. `2weeks-spec.md` — 機能仕様（Go-Live判定の正本）
-2. `implementation-design-mvp.md` — 実装設計（API契約・DBモデル・シーケンス固定）
-3. `tdd-acceptance-matrix-mvp.md` — TDD受け入れ条件（T-P0-01〜T-P0-07）
+Behavioral guidelines to reduce common LLM coding mistakes.
 
-仕様変更は必ず `2weeks-spec.md` への Change Request として記録し、3文書を同期する。MVP非スコープ項目（管理画面・DLQ・高度監視等）は追加しない。
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## 技術スタック（確定）
+### 1. Think Before Coding
 
-- Language: TypeScript 統一（フロント・バック・CLI）
-- Runtime: Node.js
-- Monorepo: npm workspaces
-- DB: PostgreSQL
-- Discord: `@discordjs/rest`（常駐 bot 不要、REST API のみ）
-- PAY.JP: `payjp` npm
-- Formatter/Linter: Biome（auto-format.sh が自動適用）
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-## ディレクトリ構造
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+## Spec Document Hierarchy (Authoritative)
+
+1. `2weeks-spec.md` — Functional spec (Go-Live source of truth)
+2. `implementation-design-mvp.md` — Implementation design (API contracts, DB models, sequences — fixed)
+3. `tdd-acceptance-matrix-mvp.md` — TDD acceptance criteria (T-P0-01 through T-P0-07)
+
+**Rule:** Spec changes MUST be recorded as Change Requests against `2weeks-spec.md`, and all 3 documents kept in sync. Do NOT add MVP out-of-scope items (admin UI, DLQ, advanced monitoring, etc.).
+
+## Tech Stack (Project-Specific Rules)
+
+- Language: TypeScript
+- Discord: `@discordjs/rest` (REST API only — no persistent bot)
+- PAY.JP: `payjp` npm package
+- Formatter/Linter: Biome (auto-applied via `auto-format.sh`)
+
+## Directory Structure
 
 ```
 packages/
-  shared/          # 型定義・DBスキーマ・共通ユーティリティ
+  shared/          # Type definitions, DB schema, shared utilities
   auth-service/    # Discord OAuth (R1)
-  billing-service/ # PAY.JP課金 (R2-R5)
-  sync-service/    # Webhook + ロール同期 + 手動CLIツール (R6-R8)
-frontend/          # 購読UI
-feature/           # git worktree 用（削除禁止）
-.vcsdd/            # VCSDDパイプライン状態（削除禁止）
+  billing-service/ # PAY.JP billing (R2-R5)
+  sync-service/    # Webhook + role sync + manual CLI tools (R6-R8)
+frontend/          # Subscription UI
+feature/           # git worktree directory (DO NOT delete)
+.vcsdd/            # VCSDD pipeline state (DO NOT delete)
 ```
 
-## 開発ワークフロー
+## Development Workflow
 
-### ビジネスロジック層（完了）— VCSDD
+### Business Logic Layer (Complete) — VCSDD
 
-3サービスの Pure Core + Shell は VCSDD パイプラインで完成済み。
-ビジネスロジックの追加・変更が発生した場合は引き続き VCSDD を使用する。
+For any business-logic addition or change, use the VCSDD pipeline.
 
-- フェーズ順: `/vcsdd-spec` → `/vcsdd-spec-review` → `/vcsdd-tdd` → `/vcsdd-impl` → `/vcsdd-adversary` → `/vcsdd-harden` → `/vcsdd-converge`
-- コミット: `/vcsdd-commit`（フェーズ完了時）
+- Phase order: `/vcsdd-spec` → `/vcsdd-spec-review` → `/vcsdd-tdd` → `/vcsdd-impl` → `/vcsdd-adversary` → `/vcsdd-harden` → `/vcsdd-converge`
+- Commit: `/vcsdd-commit` (on phase completion)
 
-### 統合レイヤー（進行中）— Issue駆動 + TDD
+### Integration Layer (In Progress) — Issue-Driven + TDD
 
-HTTP サーバー / DB接続 / フロントエンド / E2E / デプロイは GitHub Issue 単位で開発する。
+HTTP servers, DB connections, frontend, E2E, and deployment are developed per GitHub Issue.
 
-- Milestone: `MVP Go-Live`（2026-04-20）
-- Issue一覧: #1〜#10（依存関係は各Issueのbodyに記載）
-- Issue着手時は `/issue-start <番号>` で開始する
+- Milestone: `MVP Go-Live` (2026-04-20)
+- Issues: #1 through #10 (dependencies documented in each Issue body)
+- Start an Issue with `/issue-start <number>`
 
-詳細なワークフロー手順・ツール選択マトリクス・Issue別推奨モデルは `.claude/rules/workflow.md` を参照。
+References:
+- `.claude/rules/workflow.md` — Detailed procedures, tool selection matrix, per-Issue model recommendations
+- `.claude/rules/e2e.md` — E2E (Playwright) authoring rules and spec alignment
 
-E2E（Playwright）の書き方・正本との整合・手動確認との役割分担は `.claude/rules/e2e.md` を参照。
+## Tool Selection
 
-## ツール使い分け
+- Semantic code operations: mcp-serena (symbol search & edit)
+- Library documentation: mcp-context7 (PAY.JP, Discord API, Node.js, etc.)
+- GitHub operations: mcp-github (PR create, merge, status)
+- Browser: mcp-playwright
 
-- セマンティックコード操作: mcp-serena（シンボル検索・編集）
-- ライブラリドキュメント: mcp-context7（PAY.JP / Discord API / Node.js 等）
-- GitHub 操作: mcp-github（PR作成・マージ・ステータス）
-- ブラウザ: mcp-playwright
+## Custom Commands
 
-## カスタムコマンド
-
-| コマンド | 用途 |
+| Command | Purpose |
 |---|---|
-| `/issue-start <番号>` | Issue着手セットアップ（ブランチ作成→仕様読み込み→計画） |
-| `/daily-check` | プロジェクト日次健全性チェック |
-| `/debug` | 再現→根本原因→修正→検証のデバッグワークフロー |
-| `/session-end` | セッション終了時のメモリ更新・状態保存 |
+| `/issue-start <number>` | Issue setup (create branch → load spec → plan) |
+| `/daily-check` | Daily project health check |
+| `/debug` | Debug workflow: reproduce → root cause → fix → verify |
+| `/session-end` | Update memory and save state at session end |
 
-## 品質ゲート（必須）
+## Quality Gates (REQUIRED)
 
-- VCSDD対象（ビジネスロジック変更時）: `/vcsdd-adversary` PASS 必須
-- Issue対象（統合レイヤー）: `/code-review` → `/pr-review-toolkit:review-pr` → `pr-review-toolkit:code-simplifier`（3ステップ必須、`security-guidance` はフック自動実行）
-- Go-Live 判定: T-P0-01〜T-P0-07 全 PASS 必須
+- VCSDD scope (on business-logic changes): `/vcsdd-adversary` MUST PASS
+- Issue scope (integration layer): `/code-review` → `/pr-review-toolkit:review-pr` → `pr-review-toolkit:code-simplifier` (3 steps REQUIRED; `security-guidance` is hook-driven and runs automatically)
+- Go-Live decision: T-P0-01 through T-P0-07 — ALL must PASS
 
-## セキュリティ・実装固定ルール
+## Security & Implementation (FIXED Rules)
 
-詳細は `.claude/rules/security.md` を参照。要点:
-- 3DS `verified` 必須、`operationId` 保存後にPAY.JP書き込み、不確定失敗は `503 + operationId`
-- `__Host-` Cookie §6 固定属性変更不可
-- `.env*` 読み取り禁止、シークレットは `op read` で個別取得
+See `.claude/rules/security.md` for full details. Key rules:
+
+- 3DS `verified` is REQUIRED. Write to PAY.JP only AFTER `operationId` is persisted. Indeterminate failures MUST return `503 + operationId` (no client auto-retry).
+- `__Host-` Cookie §6 fixed attributes — DO NOT change (Secure, Path=/, HttpOnly, SameSite=Lax).
+- READING `.env*` files is FORBIDDEN. Fetch secrets per-item via `op read`.
