@@ -17,7 +17,9 @@ RUN_DIR="/run/payjp-ops"
 ENV_DIR="/etc/payjp-ops"
 ENV_FILE="$ENV_DIR/.env"                                    # non-secret runtime config
 CREDS_DIR="$ENV_DIR/creds"                                  # systemd-creds encrypted blobs
-WEBHOOK_CRED_FILE="$CREDS_DIR/DISCORD_OPS_WEBHOOK"           # encrypted Discord webhook URL
+WEBHOOK_CRED_ALERTS="$CREDS_DIR/DISCORD_OPS_WEBHOOK_ALERTS"  # critical/warn/OPS_STORM channel
+WEBHOOK_CRED_NORMAL="$CREDS_DIR/DISCORD_OPS_WEBHOOK_NORMAL"  # RESOLVED + daily digest channel
+LEGACY_WEBHOOK_CRED="$CREDS_DIR/DISCORD_OPS_WEBHOOK"         # pre-split single webhook (removed)
 SYSTEMD_DIR="/etc/systemd/system"
 SUDOERS_FILE="/etc/sudoers.d/payjp-ops"
 USER_NAME="payjp-ops"
@@ -63,7 +65,7 @@ if [[ "$MODE" == "uninstall" ]]; then
   Preserved (delete manually if desired):
     $STATE_DIR       (postmortem state)
     $ENV_FILE        (non-secret runtime config)
-    $CREDS_DIR       (systemd-creds encrypted webhook; machine-bound, safe to leave)
+    $CREDS_DIR       (systemd-creds encrypted webhooks; machine-bound, safe to leave)
     user $USER_NAME
 EOF
   exit 0
@@ -140,10 +142,17 @@ else
   info "$ENV_FILE exists; not overwriting"
 fi
 
-if [[ -e "$WEBHOOK_CRED_FILE" ]]; then
-  info "$WEBHOOK_CRED_FILE exists; not overwriting (encrypt manually to replace)"
-else
-  info "no encrypted webhook yet at $WEBHOOK_CRED_FILE — see Next steps below"
+for f in "$WEBHOOK_CRED_ALERTS" "$WEBHOOK_CRED_NORMAL"; do
+  if [[ -e "$f" ]]; then
+    info "$f exists; not overwriting (encrypt manually to replace)"
+  else
+    info "no encrypted webhook yet at $f — see Next steps below"
+  fi
+done
+
+if [[ -e "$LEGACY_WEBHOOK_CRED" ]]; then
+  info "legacy $LEGACY_WEBHOOK_CRED detected — remove after the split migration completes:"
+  info "  sudo rm $LEGACY_WEBHOOK_CRED"
 fi
 
 info "reloading systemd"
@@ -158,40 +167,57 @@ Next steps (operator):
        sudoedit $ENV_FILE
        # POSTGRES_USER / POSTGRES_DB (match app .env)
 
-  2. Encrypt the Discord webhook URL into a systemd credential file.
-     (Secret lives nowhere on disk in plaintext; decrypt requires this VPS's
+  2. Encrypt BOTH Discord webhook URLs into systemd credential files.
+     (Secrets live nowhere on disk in plaintext; decrypt requires this VPS's
      machine-id + /var/lib/systemd/credential.secret. Snapshot/backup of /etc
      alone is NOT sufficient to decrypt on another host.)
-       sudo bash -c 'systemd-creds encrypt \\
-           --name=DISCORD_OPS_WEBHOOK - $WEBHOOK_CRED_FILE'
-       # paste the webhook URL (single line, no trailing newline), then Ctrl+D
-       sudo chmod 0600 $WEBHOOK_CRED_FILE
-       sudo chown root:root $WEBHOOK_CRED_FILE
 
-     Keep a plaintext backup of the URL in 1Password (Personal is fine) —
+     2a. alerts channel (critical / warn / OPS_STORM):
+         sudo bash -c 'systemd-creds encrypt \\
+             --name=DISCORD_OPS_WEBHOOK_ALERTS - $WEBHOOK_CRED_ALERTS'
+         # paste the alerts webhook URL (single line, no trailing newline), Ctrl+D
+         sudo chmod 0600 $WEBHOOK_CRED_ALERTS
+         sudo chown root:root $WEBHOOK_CRED_ALERTS
+
+     2b. normal channel (RESOLVED + daily digest):
+         sudo bash -c 'systemd-creds encrypt \\
+             --name=DISCORD_OPS_WEBHOOK_NORMAL - $WEBHOOK_CRED_NORMAL'
+         # paste the normal webhook URL (single line, no trailing newline), Ctrl+D
+         sudo chmod 0600 $WEBHOOK_CRED_NORMAL
+         sudo chown root:root $WEBHOOK_CRED_NORMAL
+
+     Keep plaintext backups of BOTH URLs in 1Password (Personal is fine) —
      needed for re-encryption on VPS rebuild or rotation.
 
-  3. Verify the encrypted credential decrypts cleanly:
-       sudo systemd-creds --name=DISCORD_OPS_WEBHOOK decrypt $WEBHOOK_CRED_FILE - \\
+  3. Verify each encrypted credential decrypts cleanly:
+       sudo systemd-creds --name=DISCORD_OPS_WEBHOOK_ALERTS decrypt $WEBHOOK_CRED_ALERTS - \\
          | sed 's#\\(https://discord.com/api/webhooks/\\)[^/]*/.*#\\1<id>/<token>#'
-       # Expect: https://discord.com/api/webhooks/<id>/<token>
+       sudo systemd-creds --name=DISCORD_OPS_WEBHOOK_NORMAL decrypt $WEBHOOK_CRED_NORMAL - \\
+         | sed 's#\\(https://discord.com/api/webhooks/\\)[^/]*/.*#\\1<id>/<token>#'
+       # Expect (each line): https://discord.com/api/webhooks/<id>/<token>
 
-  4. Script-level dry-run (no Discord post, no systemd unit):
+  4. Remove the legacy single-webhook credential if present:
+       sudo rm -f $LEGACY_WEBHOOK_CRED
+
+  5. Script-level dry-run (no Discord post, no systemd unit):
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-host.sh
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-docker.sh
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/daily-digest.sh
 
-  5. Live smoke (posts to Discord if any threshold crosses — systemd loads the
-     encrypted credential):
+  6. Live smoke — run each service once (systemd loads the encrypted credentials):
        sudo systemctl start payjp-ops-check.service
        journalctl -u payjp-ops-check.service -n 40 --no-pager
+       # Expect: fire events appear in the alerts channel
+       sudo systemctl start payjp-ops-digest.service
+       journalctl -u payjp-ops-digest.service -n 40 --no-pager
+       # Expect: digest embed appears in the normal channel
 
-  6. Enable timers:
+  7. Enable timers:
        sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
 
-  7. Rotation (webhook URL changes):
-       sudo rm $WEBHOOK_CRED_FILE
-       # repeat step 2 with the new URL
+  8. Rotation (when a webhook URL is regenerated — do per-channel):
+       sudo rm $WEBHOOK_CRED_ALERTS    # or $WEBHOOK_CRED_NORMAL
+       # repeat the matching sub-step of 2 with the new URL
        sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
 
 Uninstall: sudo $0 --uninstall

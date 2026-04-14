@@ -170,8 +170,8 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-if ! URL=$(get_webhook_url); then
-  log_discord_ops_webhook_unavailable
+if ! URL=$(get_webhook_url normal); then
+  log_discord_ops_webhook_unavailable normal
   exit 1
 fi
 

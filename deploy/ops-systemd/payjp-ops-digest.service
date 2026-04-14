@@ -8,9 +8,11 @@ Wants=network-online.target
 Type=oneshot
 User=payjp-ops
 Group=payjp-ops
-# See payjp-ops-check.service for secret-handling rationale.
+# See payjp-ops-check.service for secret-handling rationale. Digest posts
+# exclusively to the normal channel (read-at-leisure), so only the normal
+# credential is loaded.
 EnvironmentFile=/etc/payjp-ops/.env
-LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK_NORMAL:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
 ExecStart=/opt/payjp-ops/bin/daily-digest.sh
 TimeoutStartSec=120
 LogLevelMax=info

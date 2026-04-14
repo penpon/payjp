@@ -6,7 +6,7 @@
 
 ## What this is
 
-A minimal **pure-poll external observer** for the single-VPS deployment. Bash scripts run by systemd timers check 5 layers (Linux host / Docker / Nginx / Web app / PostgreSQL) every 5 minutes, post severity-coded embeds to **one operator Discord webhook**, and emit a daily digest at 09:00 JST.
+A minimal **pure-poll external observer** for the single-VPS deployment. Bash scripts run by systemd timers check 5 layers (Linux host / Docker / Nginx / Web app / PostgreSQL) every 5 minutes, post severity-coded embeds across **two operator Discord webhooks** (alerts + normal), and emit a daily digest at 09:00 JST.
 
 - No SaaS dependencies
 - No changes to application code / DB schema
@@ -14,11 +14,18 @@ A minimal **pure-poll external observer** for the single-VPS deployment. Bash sc
 - State under `/var/lib/payjp-ops/state.d/` (per-alert stamps + green-streak counters + per-tick storm buffer)
 - Removal leaves zero trace in application process or DB
 
-| Severity | Color   | Default cooldown |
-|----------|---------|------------------|
-| critical | red     | 10 min |
-| warn     | yellow  | 30 min |
-| normal   | green   | 60 min (typically RESOLVED posts only) |
+| Severity | Color   | Channel | Default cooldown |
+|----------|---------|---------|------------------|
+| critical | red     | alerts  | 10 min |
+| warn     | yellow  | alerts  | 30 min |
+| normal   | green   | normal  | 60 min (typically RESOLVED posts only) |
+
+| Post type | Channel |
+|-----------|---------|
+| `critical` / `warn` fire (e.g. `HOST_DISK_ROOT`, `DB_BACKUP_STALE`) | alerts |
+| `OPS_STORM` aggregate | alerts |
+| `*_RESOLVED` (normal, 2 consecutive green ticks) | normal |
+| Daily digest 09:00 JST | normal |
 
 Per-code cooldown overrides live in `scripts/ops/lib/thresholds.conf` (e.g., `COOLDOWN_HOST_TLS_EXPIRING=86400`).
 
@@ -28,21 +35,31 @@ Per-code cooldown overrides live in `scripts/ops/lib/thresholds.conf` (e.g., `CO
 
 ```
 systemd.timer *:0/5  ──►  payjp-ops-check.service
-                           ├── EnvironmentFile: /etc/payjp-ops/.env      (non-secret config)
-                           ├── LoadCredentialEncrypted:
-                           │     DISCORD_OPS_WEBHOOK:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+                           ├── EnvironmentFile: /etc/payjp-ops/.env          (non-secret config)
+                           ├── LoadCredentialEncrypted (BOTH channels):
+                           │     DISCORD_OPS_WEBHOOK_ALERTS:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
+                           │     DISCORD_OPS_WEBHOOK_NORMAL:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
                            │     (systemd-creds machine-bound; decrypt requires
                            │      this VPS's /etc/machine-id + credential.secret)
                            └── ExecStart: run-all-checks.sh
-                                           │ (systemd surfaces the decrypted secret as a
-                                           │  regular file at $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK)
+                                           │ (systemd surfaces each decrypted secret as a
+                                           │  regular file under $CREDENTIALS_DIRECTORY/)
                                            ▼
-                                   run-all-checks.sh  ──► check-{host,docker,nginx,app}.sh  ──► notify.sh ──► $URL (read from $CREDENTIALS_DIRECTORY)
+                                   run-all-checks.sh  ──► check-{host,docker,nginx,app}.sh
+                                                       │                              │
+                                                       │   severity=critical|warn     │   severity=normal
+                                                       ▼                              ▼
+                                                   notify.sh ──► ALERTS webhook   notify.sh ──► NORMAL webhook
 
-systemd.timer 09:00 JST ► payjp-ops-digest.service ──► daily-digest.sh (same credential wiring)
+systemd.timer 09:00 JST ► payjp-ops-digest.service ──► daily-digest.sh ──► NORMAL webhook only
+                           └── LoadCredentialEncrypted:
+                                 DISCORD_OPS_WEBHOOK_NORMAL:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
 
                                                          /var/lib/payjp-ops/state.d/<code>.stamp
 ```
+
+The `severity → webhook kind` mapping lives in `scripts/ops/lib/op-webhook.sh::severity_to_webhook_kind`:
+`critical`/`warn`/unknown → `alerts`, `normal` → `normal`. `OPS_STORM` is emitted with `severity=critical` → routes to alerts.
 
 **Dedup**: `should_fire CODE SEVERITY` checks stamp age vs cooldown. `on_healthy CODE` counts consecutive green ticks; after 2, posts RESOLVED.
 
@@ -54,12 +71,12 @@ systemd.timer 09:00 JST ► payjp-ops-digest.service ──► daily-digest.sh (
 
 ## Bootstrap (operator, one-time)
 
-**Secret model**: the single secret (Discord webhook URL) is encrypted with
-**systemd-creds** and surfaced to the process at runtime via
-`LoadCredentialEncrypted=`. This is machine-bound — the encrypted file on
+**Secret model**: the two secrets (Discord webhook URLs, one per channel) are
+encrypted with **systemd-creds** and surfaced to the process at runtime via
+`LoadCredentialEncrypted=`. This is machine-bound — the encrypted files on
 disk cannot be decrypted on another host (requires this VPS's
 `/etc/machine-id` + `/var/lib/systemd/credential.secret`). 1Password stores
-the plaintext URL as a **backup** only; no 1P runtime dependency, so
+the plaintext URLs as a **backup** only; no 1P runtime dependency, so
 1Password Personal is sufficient.
 
 ### Files
@@ -67,10 +84,11 @@ the plaintext URL as a **backup** only; no 1P runtime dependency, so
 | Path | Mode | Contents |
 |------|------|----------|
 | `/etc/payjp-ops/.env` | 0640 root:payjp-ops | Non-secret runtime config (`POSTGRES_USER`, paths, thresholds) |
-| `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK` | 0600 root:root | Encrypted webhook URL (systemd-creds format) |
+| `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS` | 0600 root:root | Encrypted webhook URL for **critical/warn/OPS_STORM** |
+| `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL` | 0600 root:root | Encrypted webhook URL for **RESOLVED + daily digest** |
 
 Note: the runtime service user `payjp-ops` does **not** need direct read
-access to the encrypted file — systemd itself decrypts and places the
+access to the encrypted files — systemd itself decrypts and places the
 plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
 
 ### Steps
@@ -82,8 +100,10 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
    ```
    Idempotent.
 
-2. **1Password setup** (optional, backup only):
-   - Create (or locate) a 1P item for the Discord webhook URL (e.g. `ENV` vault, item `ops-discord-webhook`, field `credential`). 1P Personal plan is sufficient.
+2. **Discord channel + webhook setup**:
+   - Create two channels (e.g. `#payjp-ops-alerts`, `#payjp-ops-normal`).
+   - In each channel: Integrations → Webhooks → New Webhook → copy URL.
+   - Save BOTH URLs to 1Password (e.g. `ENV` vault, items `ops-discord-webhook-alerts` and `ops-discord-webhook-normal`). 1P Personal plan is sufficient.
    - This 1P item is the canonical plaintext source for (a) re-encryption during VPS rebuild and (b) inter-operator sharing. **Not** queried at runtime.
 
 3. **Populate `/etc/payjp-ops/.env`** (non-secret values):
@@ -93,26 +113,46 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
    Fill:
    - `POSTGRES_USER=...` / `POSTGRES_DB=...` (match the app's `.env`)
 
-4. **Encrypt the webhook URL into a systemd credential file**:
+4. **Encrypt BOTH webhook URLs into systemd credential files**:
+
+   4a. alerts channel (critical / warn / OPS_STORM):
    ```
    sudo bash -c 'systemd-creds encrypt \
-       --name=DISCORD_OPS_WEBHOOK - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK'
-   # paste the webhook URL (single line), then Ctrl+D
-   sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
-   sudo chown root:root /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+       --name=DISCORD_OPS_WEBHOOK_ALERTS - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS'
+   # paste the alerts webhook URL (single line), Ctrl+D
+   sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
+   sudo chown root:root /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
    ```
-   The encrypted file is machine-bound: copying it to another host renders it unreadable.
 
-5. **Verify the credential decrypts** (quick sanity check):
+   4b. normal channel (RESOLVED + daily digest):
    ```
-   sudo systemd-creds --name=DISCORD_OPS_WEBHOOK decrypt \
-       /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK - \
+   sudo bash -c 'systemd-creds encrypt \
+       --name=DISCORD_OPS_WEBHOOK_NORMAL - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL'
+   # paste the normal webhook URL (single line), Ctrl+D
+   sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
+   sudo chown root:root /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
+   ```
+
+   The encrypted files are machine-bound: copying them to another host renders them unreadable.
+
+5. **Verify each credential decrypts** (quick sanity check):
+   ```
+   sudo systemd-creds --name=DISCORD_OPS_WEBHOOK_ALERTS decrypt \
+       /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS - \
      | sed 's#\(https://discord.com/api/webhooks/\)[^/]*/.*#\1<id>/<token>#'
-   # Expect: https://discord.com/api/webhooks/<id>/<token>
+   sudo systemd-creds --name=DISCORD_OPS_WEBHOOK_NORMAL decrypt \
+       /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL - \
+     | sed 's#\(https://discord.com/api/webhooks/\)[^/]*/.*#\1<id>/<token>#'
+   # Expect each line: https://discord.com/api/webhooks/<id>/<token>
    ```
    The `sed` mask prevents the full URL from landing in shell history / journal.
 
-6. **Dry-run the checks** (no Discord post, no systemd):
+6. **Remove any legacy single-webhook credential** (from the pre-split era):
+   ```
+   sudo rm -f /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+   ```
+
+7. **Dry-run the checks** (no Discord post, no systemd):
    ```
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-host.sh
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-docker.sh
@@ -122,33 +162,37 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
    ```
    Dry-run skips the credential read and Discord POST; threshold crossings print JSON on stdout.
 
-7. **Live smoke** — real tick via systemd (systemd loads the encrypted credential and posts to Discord if any threshold crosses):
+8. **Live smoke** — run each service once (systemd loads the encrypted credentials and posts to Discord):
    ```
    sudo systemctl start payjp-ops-check.service
    journalctl -u payjp-ops-check.service -n 40 --no-pager
+   # Expect: fire events in the ALERTS channel
+   sudo systemctl start payjp-ops-digest.service
+   journalctl -u payjp-ops-digest.service -n 40 --no-pager
+   # Expect: digest embed in the NORMAL channel
    ```
 
-8. **Enable timers**:
+9. **Enable timers**:
    ```
    sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
    systemctl list-timers | grep payjp-ops
    journalctl -u payjp-ops-check.service -f
    ```
 
-9. **Webhook rotation** (when the Discord webhook URL is regenerated):
-   - Update the 1P backup item with the new URL.
-   - Re-encrypt:
-     ```
-     sudo rm /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
-     sudo bash -c 'systemd-creds encrypt --name=DISCORD_OPS_WEBHOOK - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK'
-     # paste the new URL, Ctrl+D
-     sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
-     sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
-     ```
+10. **Webhook rotation** (per channel; regenerate one or both):
+    - Update the matching 1P backup item with the new URL.
+    - Re-encrypt the affected credential (replace `_ALERTS` with `_NORMAL` if rotating the normal channel):
+      ```
+      sudo rm /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
+      sudo bash -c 'systemd-creds encrypt --name=DISCORD_OPS_WEBHOOK_ALERTS - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS'
+      # paste the new URL, Ctrl+D
+      sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
+      sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
+      ```
 
-10. **VPS rebuild migration** (rare, e.g. hardware failure):
-    - machine-id changes on a new host → old encrypted file won't decrypt.
-    - Re-run step 1 (install) on the new VPS, then step 4 (re-encrypt) using the plaintext URL from the 1P backup item.
+11. **VPS rebuild migration** (rare, e.g. hardware failure):
+    - machine-id changes on a new host → old encrypted files won't decrypt.
+    - Re-run step 1 (install) on the new VPS, then step 4 (re-encrypt both) using the plaintext URLs from the 1P backup items.
 
 ---
 
@@ -244,7 +288,7 @@ Digest is not subject to cooldown — it always posts when the timer fires.
 | 13 | Digest | `sudo -u payjp-ops /opt/payjp-ops/bin/daily-digest.sh` | 1 normal digest post in production channel |
 | 14 | Uninstall | `sudo ./deploy/ops-systemd/install.sh --uninstall; systemctl list-timers` | no payjp-ops-* timers |
 
-For dev-only testing without polluting the production ops channel, set `OP_WEBHOOK_ITEM=op://Private/ops-discord-webhook-test/url` (separate webhook URL for a test channel) in a shell override before running the script.
+For dev-only testing without polluting the production ops channels, override both URLs via env for the shell session: `DISCORD_OPS_WEBHOOK_ALERTS=https://...test-alerts` and `DISCORD_OPS_WEBHOOK_NORMAL=https://...test-normal` (or set `DRY_RUN=1`).
 
 ---
 
@@ -276,10 +320,10 @@ sudo /home/ubuntu/payjp/deploy/ops-systemd/install.sh --uninstall
 **Preserved** (delete manually if truly done):
 - `/var/lib/payjp-ops/` — state stamps for postmortem
 - `/etc/payjp-ops/.env` — non-secret runtime config
-- `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK` — systemd-creds encrypted blob (machine-bound, useless off-host, but delete for cleanliness)
+- `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS` / `_NORMAL` — systemd-creds encrypted blobs (machine-bound, useless off-host, but delete for cleanliness)
 - `payjp-ops` system user — `sudo userdel payjp-ops`
 
-Zero application-side rollback needed. The webhook URL itself remains valid on the Discord side — regenerate it in Discord server settings if the uninstall is due to a compromise.
+Zero application-side rollback needed. The webhook URLs themselves remain valid on the Discord side — regenerate them in Discord server settings if the uninstall is due to a compromise.
 
 ---
 
