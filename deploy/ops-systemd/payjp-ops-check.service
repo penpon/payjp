@@ -9,11 +9,13 @@ Type=oneshot
 User=payjp-ops
 Group=payjp-ops
 # Non-secret config (POSTGRES_USER, thresholds, paths) lives in plain .env.
-# The single secret (DISCORD_OPS_WEBHOOK) is encrypted via systemd-creds
+# Two Discord webhooks (alerts, normal) are encrypted via systemd-creds
 # (machine-bound, works without TPM via machine-id + credential.secret) and
-# surfaced to the process under $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK.
+# surfaced to the process under $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK_{ALERTS,NORMAL}.
+# check.service needs BOTH: fire posts go to alerts, RESOLVED posts go to normal.
 EnvironmentFile=/etc/payjp-ops/.env
-LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK_ALERTS:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
+LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK_NORMAL:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
 ExecStart=/opt/payjp-ops/bin/run-all-checks.sh
 TimeoutStartSec=120
 LogLevelMax=info

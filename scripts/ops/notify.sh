@@ -71,8 +71,9 @@ if ! global_rate_check; then
   exit 0
 fi
 
-if ! URL=$(get_webhook_url); then
-  log_discord_ops_webhook_unavailable "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
+WEBHOOK_KIND=$(severity_to_webhook_kind "$SEVERITY")
+if ! URL=$(get_webhook_url "$WEBHOOK_KIND"); then
+  log_discord_ops_webhook_unavailable "$WEBHOOK_KIND" "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
   exit 1
 fi
 
