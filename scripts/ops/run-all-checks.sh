@@ -6,15 +6,32 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 ops_strict_mode
+# shellcheck source=lib/thresholds.conf
+source "$SCRIPT_DIR/lib/thresholds.conf"
+# shellcheck source=lib/dedup.sh
+source "$SCRIPT_DIR/lib/dedup.sh"
+NOTIFY_SCRIPT="$SCRIPT_DIR/notify.sh"
+export NOTIFY_SCRIPT
 
-log_info "tick start"
+# Shared TICK_ID for storm counting across all check-*.sh invocations in this run.
+TICK_ID=$(date +%s)
+export TICK_ID
+ops_state_init
 
-# Phase A
-[[ -x "$SCRIPT_DIR/check-host.sh" ]]   && { "$SCRIPT_DIR/check-host.sh"   || log_warn "check-host exited non-zero"   "exit" "$?"; }
-# Phase B
-[[ -x "$SCRIPT_DIR/check-docker.sh" ]] && { "$SCRIPT_DIR/check-docker.sh" || log_warn "check-docker exited non-zero" "exit" "$?"; }
-[[ -x "$SCRIPT_DIR/check-nginx.sh" ]]  && { "$SCRIPT_DIR/check-nginx.sh"  || log_warn "check-nginx exited non-zero"  "exit" "$?"; }
-# Phase C
-[[ -x "$SCRIPT_DIR/check-app.sh" ]]    && { "$SCRIPT_DIR/check-app.sh"    || log_warn "check-app exited non-zero"    "exit" "$?"; }
+log_info "tick start" "tick_id" "$TICK_ID"
 
-log_info "tick complete"
+run_check() {
+  local script="$1"
+  if [[ -x "$script" ]]; then
+    "$script" || log_warn "check exited non-zero" "script" "$(basename "$script")" "exit" "$?"
+  fi
+}
+
+run_check "$SCRIPT_DIR/check-host.sh"
+run_check "$SCRIPT_DIR/check-docker.sh"
+run_check "$SCRIPT_DIR/check-nginx.sh"
+run_check "$SCRIPT_DIR/check-app.sh"
+
+tick_finalize
+
+log_info "tick complete" "tick_id" "$TICK_ID"

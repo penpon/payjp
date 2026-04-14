@@ -111,7 +111,10 @@ Cmnd_Alias PAYJP_OPS_CMDS = \
     /usr/bin/docker inspect *, \
     /usr/bin/docker volume inspect *, \
     /usr/bin/docker exec payjp-db-1 *, \
-    /usr/bin/stat -c * /var/backups/hayane/*
+    /usr/bin/stat -c * /var/backups/hayane/*, \
+    /usr/bin/stat -c * /var/lib/docker/volumes/payjp_nginx_logs/_data/*, \
+    /usr/bin/tail -n * /var/lib/docker/volumes/payjp_nginx_logs/_data/access.log, \
+    /usr/bin/tail -n * /var/lib/docker/volumes/payjp_nginx_logs/_data/error.log
 payjp-ops ALL=(root) NOPASSWD: PAYJP_OPS_CMDS
 SUDOERS
 chmod 0440 "$SUDOERS_FILE"
@@ -134,14 +137,19 @@ cat <<EOF
 
 Next steps (operator):
   1. Edit $ENV_FILE and populate OP_SERVICE_ACCOUNT_TOKEN, PGUSER, PGDB.
-  2. Dry-run:
+  2. Dry-run (each check, or all):
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-host.sh
+       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-docker.sh
+       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-nginx.sh
+       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-app.sh
+       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/daily-digest.sh
   3. Enable the 5-min polling timer:
        sudo systemctl enable --now payjp-ops-check.timer
-  4. (Phase D) enable the daily digest timer:
+  4. Enable the daily digest timer:
        sudo systemctl enable --now payjp-ops-digest.timer
   5. Watch logs:
        journalctl -u payjp-ops-check.service -f
+       journalctl -u payjp-ops-digest.service -f
 
 Uninstall: sudo $0 --uninstall
 EOF

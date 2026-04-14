@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# State-file cooldown + global rate-limit for payjp-ops notifications.
+# State-file cooldown + global rate-limit + per-tick storm collapse for payjp-ops.
 # Source this — do NOT execute. Requires common.sh already sourced.
 
 : "${OPS_STATE_DIR:=/var/lib/payjp-ops}"
+: "${TICK_ID:=$(date +%s)}"
 
 ops_state_init() {
   mkdir -p "$OPS_STATE_DIR/state.d"
@@ -10,6 +11,8 @@ ops_state_init() {
 
 _stamp_path()  { printf '%s/state.d/%s.stamp' "$OPS_STATE_DIR" "$1"; }
 _streak_path() { printf '%s/state.d/%s.green' "$OPS_STATE_DIR" "$1"; }
+_tick_count_file() { printf '%s/state.d/.tick.%s.count' "$OPS_STATE_DIR" "$TICK_ID"; }
+_tick_storm_buf()  { printf '%s/state.d/.tick.%s.storm' "$OPS_STATE_DIR" "$TICK_ID"; }
 
 _cooldown_for() {
   local code="$1" severity="$2"
@@ -79,18 +82,67 @@ global_rate_mark() {
   date +%s > "$OPS_STATE_DIR/last_post_at"
 }
 
-# Dispatch helper used by check-* scripts.
+# ---- Tick counting (for storm collapse) ----
+_tick_inc() {
+  local file cur=0
+  file=$(_tick_count_file)
+  [[ -e "$file" ]] && cur=$(cat "$file")
+  cur=$((cur + 1))
+  printf '%s' "$cur" > "$file"
+  printf '%s' "$cur"
+}
+
+_tick_count() {
+  local file
+  file=$(_tick_count_file)
+  [[ -e "$file" ]] && cat "$file" || echo 0
+}
+
+# Cleanup stale tick files (> 1 hour old).
+_tick_cleanup_stale() {
+  find "$OPS_STATE_DIR/state.d" -maxdepth 1 -name '.tick.*' -mmin +60 -delete 2>/dev/null || true
+}
+
+# Called at the end of a tick (run-all-checks.sh). Posts OPS_STORM summary
+# when storm threshold was reached, then cleans up per-tick state.
+tick_finalize() {
+  local count storm_file
+  count=$(_tick_count)
+  storm_file=$(_tick_storm_buf)
+  if (( count >= ${STORM_CODES_THRESHOLD:-5} )) && [[ -e "$storm_file" ]] && [[ "${DRY_RUN:-0}" != "1" ]]; then
+    local body
+    body="Total fires this tick: ${count}
+$(cat "$storm_file")"
+    "${NOTIFY_SCRIPT:?}" --severity critical --code OPS_STORM \
+      --title "storm: ${count} codes fired in one tick" \
+      --body "$body" || true
+  fi
+  rm -f "$storm_file" "$(_tick_count_file)"
+  _tick_cleanup_stale
+}
+
+# ---- handle() dispatcher ----
 # Usage: handle CODE SEVERITY {fire|clear} TITLE BODY
-#   fire  → post if past cooldown, then mark
-#   clear → post RESOLVED if GREEN_STREAK reached
+#   fire  → post if past cooldown; when tick_count >= STORM_CODES_THRESHOLD,
+#           suppress individual post (storm summary covers it).
+#   clear → post RESOLVED if GREEN_STREAK_FOR_RESOLVE reached.
 handle() {
   local code="$1" severity="$2" condition="$3" title="$4" body="$5"
   if [[ "$condition" == "fire" ]]; then
     if should_fire "$code" "$severity"; then
+      local tick_count
+      tick_count=$(_tick_inc)
+      # Always record for potential OPS_STORM summary.
+      printf '[%s][%s] %s\n' "$severity" "$code" "$title" >> "$(_tick_storm_buf)"
+      if (( tick_count >= ${STORM_CODES_THRESHOLD:-5} )) && [[ "${DRY_RUN:-0}" != "1" ]]; then
+        mark_fired "$code"
+        log_warn "storm suppression" "code" "$code" "tick_count" "$tick_count"
+        return 0
+      fi
       if [[ "${DRY_RUN:-0}" == "1" ]]; then
-        "$NOTIFY_SCRIPT" --severity "$severity" --code "$code" --title "$title" --body "$body"
+        "${NOTIFY_SCRIPT:?}" --severity "$severity" --code "$code" --title "$title" --body "$body"
       else
-        if "$NOTIFY_SCRIPT" --severity "$severity" --code "$code" --title "$title" --body "$body"; then
+        if "${NOTIFY_SCRIPT:?}" --severity "$severity" --code "$code" --title "$title" --body "$body"; then
           mark_fired "$code"
         fi
       fi
@@ -98,7 +150,7 @@ handle() {
   else
     [[ "${DRY_RUN:-0}" == "1" ]] && return 0
     if on_healthy "$code"; then
-      "$NOTIFY_SCRIPT" --severity normal --code "${code}_RESOLVED" \
+      "${NOTIFY_SCRIPT:?}" --severity normal --code "${code}_RESOLVED" \
         --title "[RESOLVED] $code" \
         --body "Condition cleared after ${GREEN_STREAK_FOR_RESOLVE:-2} consecutive healthy checks. ${body}" || true
     fi
