@@ -4,8 +4,12 @@
 # Usage:
 #   notify.sh --severity {critical|warn|normal} --code CODE --title "Title" --body "Body"
 #
-# Env (provided by `op run --env-file=/etc/payjp-ops/.env`):
-#   DISCORD_OPS_WEBHOOK  resolved Discord webhook URL
+# Webhook URL resolution (first non-empty wins):
+#   1. $DISCORD_OPS_WEBHOOK env var (useful for manual/dev runs)
+#   2. $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK file (systemd LoadCredentialEncrypted;
+#      systemd surfaces the decrypted secret here when launched via the service unit)
+#
+# Other env:
 #   DRY_RUN=1            print payload to stdout, skip POST, skip state writes
 #
 # Dependencies: curl, jq.
@@ -69,8 +73,11 @@ if ! global_rate_check; then
 fi
 
 URL="${DISCORD_OPS_WEBHOOK:-}"
+if [[ -z "$URL" && -n "${CREDENTIALS_DIRECTORY:-}" && -r "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK" ]]; then
+  URL=$(< "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK")
+fi
 if [[ -z "$URL" ]]; then
-  log_error "DISCORD_OPS_WEBHOOK unset — script must be invoked under op run" \
+  log_error "DISCORD_OPS_WEBHOOK unavailable — set the env var (manual runs) or invoke via payjp-ops systemd unit (LoadCredentialEncrypted)" \
     "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
   exit 1
 fi
