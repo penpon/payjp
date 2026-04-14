@@ -62,7 +62,7 @@ export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
-    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
     reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     done(null, payload);

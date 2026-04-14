@@ -18,6 +18,7 @@ import {
   linkSessionTokenHash,
   memberSessionTokenHash,
   normalizeEmail,
+  verifyGoogleCancelSubmitSignature,
   verifySignedCancelFormToken,
 } from '../core/index.js';
 import { isUncertainError } from './errors.js';
@@ -373,6 +374,18 @@ export async function handleGoogleCancelSubmit(
 
   if (!secureCompare(req.secret, deps.config.googleFormCancelSecret)) {
     return { ok: false, statusCode: 401, errorCode: 'INVALID_GOOGLE_SECRET', message: 'Invalid Google secret' };
+  }
+
+  // Defense-in-depth: bearer-secret alone is insufficient. HMAC ties the submit
+  // body (email + token) to the shared key, so a leaked bearer cannot forge
+  // an arbitrary submit without also possessing the key to compute signatures.
+  if (
+    !verifyGoogleCancelSubmitSignature(req.signature, deps.config.googleFormCancelSecret, {
+      email: req.email,
+      token: req.token,
+    })
+  ) {
+    return { ok: false, statusCode: 401, errorCode: 'INVALID_CANCEL_SIGNATURE', message: 'Invalid signature' };
   }
 
   const verifiedToken = verifySignedCancelFormToken(req.token, deps.config.googleFormCancelTokenSecret, now);

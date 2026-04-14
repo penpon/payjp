@@ -129,6 +129,31 @@ if (!Number.isInteger(googleFormCancelTokenTtlSeconds) || googleFormCancelTokenT
   process.exit(1);
 }
 
+// Fail-fast on weak / placeholder secrets — prevents accidentally shipping `.env.example` defaults.
+const REJECTED_SECRET_DEFAULTS: ReadonlySet<string> = new Set([
+  'dev-google-shared-secret-change-me',
+  'dev-google-token-secret-change-me',
+  'changeme',
+]);
+const SECRETS_MIN_BYTES: ReadonlyArray<[RequiredEnvKey, number]> = [
+  ['GOOGLE_FORM_CANCEL_SECRET', 32],
+  ['GOOGLE_FORM_CANCEL_TOKEN_SECRET', 32],
+  ['PAYJP_WEBHOOK_TOKEN', 16],
+];
+for (const [name, minBytes] of SECRETS_MIN_BYTES) {
+  const value = env[name];
+  if (REJECTED_SECRET_DEFAULTS.has(value)) {
+    process.stderr.write(`[startup] ${name} must not equal a .env.example placeholder value\n`);
+    process.exit(1);
+  }
+  if (Buffer.byteLength(value, 'utf8') < minBytes) {
+    process.stderr.write(
+      `[startup] ${name} must be at least ${minBytes} bytes (got ${Buffer.byteLength(value, 'utf8')})\n`,
+    );
+    process.exit(1);
+  }
+}
+
 const cancelNoticeCycles = Number(process.env.CANCEL_NOTICE_CYCLES ?? '1');
 if (!Number.isInteger(cancelNoticeCycles) || cancelNoticeCycles < 1) {
   process.stderr.write(

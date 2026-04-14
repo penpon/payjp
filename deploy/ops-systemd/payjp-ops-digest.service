@@ -1,0 +1,28 @@
+[Unit]
+Description=PAY.JP ops daily digest (Phase D)
+Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=payjp-ops
+Group=payjp-ops
+EnvironmentFile=/etc/payjp-ops/env
+ExecStart=/opt/payjp-ops/bin/daily-digest.sh
+TimeoutStartSec=120
+LogLevelMax=info
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=no
+ReadWritePaths=/var/lib/payjp-ops /run/payjp-ops
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,7 @@
 export {
   accessGateSessionTokenHash,
   calculateTrialEnd,
+  computeGoogleCancelSubmitSignature,
   formatRfc3339Utc,
   hasActiveSubscription,
   isFirstTimeUser,

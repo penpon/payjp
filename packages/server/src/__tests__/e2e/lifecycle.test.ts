@@ -314,9 +314,11 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     expect(memberAfterCli!.payjp_subscription_id).toBe('sub_recovered');
 
     // Step 3: access_end_at を将来に設定して cancel が通るようにする（Cancel は link_session → Discord ID で会員を引く）
+    // CR-012 整合: cancel 成功後に Discord role 即剥奪が走るため、planRoleMapping で解決可能な
+    // payjp_plan_id と role_state='granted' を設定しておく（未設定だと role 解決不能で 503 role_state=unknown）。
     await pool.query(
-      "UPDATE members SET subscription_status = 'active', access_end_at = NOW() + INTERVAL '15 days', discord_user_id = $2 WHERE email = $1",
-      [testEmail, discordUserId],
+      "UPDATE members SET subscription_status = 'active', access_end_at = NOW() + INTERVAL '15 days', discord_user_id = $2, payjp_plan_id = $3, role_state = 'granted' WHERE email = $1",
+      [testEmail, discordUserId, E2E_BILLING_CONFIG.allowedPlanIds[0]],
     );
 
     // Step 4: Cancel

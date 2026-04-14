@@ -265,13 +265,12 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
       expect(syncRole).not.toHaveBeenCalled();
     });
 
-    it('5. subscription.canceled → status = canceled, role MAINTAINED (canceled は grant ステータス)', async () => {
+    it('5. subscription.canceled → status = canceled, role REVOKED (CR-012)', async () => {
       const discordUserId = `discord-cancel-${randomUUID().slice(0, 8)}`;
       await insertMember(pool, { discordUserId, subscriptionStatus: 'active', roleState: 'granted' });
 
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_e2e_${randomUUID().slice(0, 8)}`;
-      // access_end が「現在」より未来であること（固定 2025 日付だと年が変わると過去になり revoke になる）
       const periodEnd = Math.floor(Date.now() / 1000) + 45 * 86400;
       const event = makeWebhookEvent({
         id: eventId,
@@ -296,10 +295,11 @@ describe.skipIf(!hasTestDb)('E2E Webhook — イベント種別・状態遷移 (
       expect(member.rows[0].subscription_status).toBe('canceled');
       expect(member.rows[0].access_end_at).not.toBeNull();
 
-      // canceled は GRANT_STATUSES に含まれるため active→canceled のステータス変化で syncRole は grant（revoke ではない）
+      // CR-012 (2026-04-12, 2weeks-spec §CR-012): canceled は Webhook / 日次再同期 /
+      // 再連携のいずれでも grant 対象にしない。active→canceled の遷移で syncRole は revoke。
       expect(syncRole).toHaveBeenCalledOnce();
-      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'grant', E2E_PLAN_ROLE_MAPPING.plan_e2e);
-      expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'revoke', expect.any(String));
+      expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', E2E_PLAN_ROLE_MAPPING.plan_e2e);
+      expect(syncRole).not.toHaveBeenCalledWith(discordUserId, 'grant', expect.any(String));
     });
 
     it('6. subscription.paused → status = paused, Discord ロール即時 revoke', async () => {
