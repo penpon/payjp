@@ -10,6 +10,8 @@ ops_strict_mode
 source "$SCRIPT_DIR/lib/thresholds.conf"
 # shellcheck source=lib/dedup.sh
 source "$SCRIPT_DIR/lib/dedup.sh"
+# shellcheck source=lib/op-webhook.sh
+source "$SCRIPT_DIR/lib/op-webhook.sh"
 ops_state_init
 
 : "${COMPOSE_PROJECT:=payjp}"
@@ -168,12 +170,8 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-URL="${DISCORD_OPS_WEBHOOK:-}"
-if [[ -z "$URL" && -n "${CREDENTIALS_DIRECTORY:-}" && -r "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK" ]]; then
-  URL=$(< "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK")
-fi
-if [[ -z "$URL" ]]; then
-  log_error "DISCORD_OPS_WEBHOOK unavailable — set the env var (manual runs) or invoke via payjp-ops systemd unit (LoadCredentialEncrypted)"
+if ! URL=$(get_webhook_url); then
+  log_discord_ops_webhook_unavailable
   exit 1
 fi
 

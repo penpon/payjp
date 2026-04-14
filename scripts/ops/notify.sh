@@ -4,10 +4,7 @@
 # Usage:
 #   notify.sh --severity {critical|warn|normal} --code CODE --title "Title" --body "Body"
 #
-# Webhook URL resolution (first non-empty wins):
-#   1. $DISCORD_OPS_WEBHOOK env var (useful for manual/dev runs)
-#   2. $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK file (systemd LoadCredentialEncrypted;
-#      systemd surfaces the decrypted secret here when launched via the service unit)
+# Webhook URL resolution: see lib/op-webhook.sh (get_webhook_url).
 #
 # Other env:
 #   DRY_RUN=1            print payload to stdout, skip POST, skip state writes
@@ -22,6 +19,8 @@ ops_strict_mode
 source "$SCRIPT_DIR/lib/thresholds.conf"
 # shellcheck source=lib/dedup.sh
 source "$SCRIPT_DIR/lib/dedup.sh"
+# shellcheck source=lib/op-webhook.sh
+source "$SCRIPT_DIR/lib/op-webhook.sh"
 
 SEVERITY=""
 CODE=""
@@ -72,13 +71,8 @@ if ! global_rate_check; then
   exit 0
 fi
 
-URL="${DISCORD_OPS_WEBHOOK:-}"
-if [[ -z "$URL" && -n "${CREDENTIALS_DIRECTORY:-}" && -r "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK" ]]; then
-  URL=$(< "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK")
-fi
-if [[ -z "$URL" ]]; then
-  log_error "DISCORD_OPS_WEBHOOK unavailable — set the env var (manual runs) or invoke via payjp-ops systemd unit (LoadCredentialEncrypted)" \
-    "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
+if ! URL=$(get_webhook_url); then
+  log_discord_ops_webhook_unavailable "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
   exit 1
 fi
 
