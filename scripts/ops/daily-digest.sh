@@ -169,8 +169,11 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
 fi
 
 URL="${DISCORD_OPS_WEBHOOK:-}"
+if [[ -z "$URL" && -n "${CREDENTIALS_DIRECTORY:-}" && -r "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK" ]]; then
+  URL=$(< "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK")
+fi
 if [[ -z "$URL" ]]; then
-  log_error "DISCORD_OPS_WEBHOOK unset — digest not posted (invoke via op run)"
+  log_error "DISCORD_OPS_WEBHOOK unavailable — set the env var (manual runs) or invoke via payjp-ops systemd unit (LoadCredentialEncrypted)"
   exit 1
 fi
 
