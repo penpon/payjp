@@ -23,12 +23,12 @@ ops_state_init
 # Scalar query helper. Returns "?" on skip/err so callers can still log.
 psql_q() {
   local sql="$1"
-  if [[ -z "${PGUSER:-}" || -z "${PGDB:-}" ]]; then
-    log_warn "PGUSER/PGDB unset; DB check skipped"
+  if [[ -z "${POSTGRES_USER:-}" || -z "${POSTGRES_DB:-}" ]]; then
+    log_warn "POSTGRES_USER/POSTGRES_DB unset; DB check skipped"
     return 1
   fi
   sudo -n docker exec "${COMPOSE_PROJECT}-db-1" \
-    psql -U "$PGUSER" -d "$PGDB" -tAc "$sql" 2>/dev/null
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$sql" 2>/dev/null
 }
 
 check_health() {

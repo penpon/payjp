@@ -1,5 +1,5 @@
 [Unit]
-Description=PAY.JP ops daily digest (Phase D)
+Description=PAY.JP ops daily digest
 Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
 After=network-online.target
 Wants=network-online.target
@@ -8,7 +8,9 @@ Wants=network-online.target
 Type=oneshot
 User=payjp-ops
 Group=payjp-ops
-EnvironmentFile=/etc/payjp-ops/env
+# See payjp-ops-check.service for secret-handling rationale.
+EnvironmentFile=/etc/payjp-ops/.env
+LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
 ExecStart=/opt/payjp-ops/bin/daily-digest.sh
 TimeoutStartSec=120
 LogLevelMax=info

@@ -8,7 +8,12 @@ Wants=network-online.target
 Type=oneshot
 User=payjp-ops
 Group=payjp-ops
-EnvironmentFile=/etc/payjp-ops/env
+# Non-secret config (POSTGRES_USER, thresholds, paths) lives in plain .env.
+# The single secret (DISCORD_OPS_WEBHOOK) is encrypted via systemd-creds
+# (machine-bound, works without TPM via machine-id + credential.secret) and
+# surfaced to the process under $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK.
+EnvironmentFile=/etc/payjp-ops/.env
+LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
 ExecStart=/opt/payjp-ops/bin/run-all-checks.sh
 TimeoutStartSec=120
 LogLevelMax=info

@@ -27,12 +27,20 @@ Per-code cooldown overrides live in `scripts/ops/lib/thresholds.conf` (e.g., `CO
 ## Architecture
 
 ```
-systemd.timer *:0/5  ──►  payjp-ops-check.service  ──►  run-all-checks.sh  ──►  check-{host,docker,nginx,app}.sh
-                                                                               │
-systemd.timer 09:00 JST ► payjp-ops-digest.service ──►  daily-digest.sh        │
-                                                                               ▼
-                                                                            notify.sh  ──►  Discord webhook (1P)
-                                                                               │
+systemd.timer *:0/5  ──►  payjp-ops-check.service
+                           ├── EnvironmentFile: /etc/payjp-ops/.env      (non-secret config)
+                           ├── LoadCredentialEncrypted:
+                           │     DISCORD_OPS_WEBHOOK:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+                           │     (systemd-creds machine-bound; decrypt requires
+                           │      this VPS's /etc/machine-id + credential.secret)
+                           └── ExecStart: run-all-checks.sh
+                                           │ (systemd surfaces the decrypted secret as a
+                                           │  regular file at $CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK)
+                                           ▼
+                                   run-all-checks.sh  ──► check-{host,docker,nginx,app}.sh  ──► notify.sh ──► $URL (read from $CREDENTIALS_DIRECTORY)
+
+systemd.timer 09:00 JST ► payjp-ops-digest.service ──► daily-digest.sh (same credential wiring)
+
                                                          /var/lib/payjp-ops/state.d/<code>.stamp
 ```
 
@@ -46,27 +54,65 @@ systemd.timer 09:00 JST ► payjp-ops-digest.service ──►  daily-digest.sh 
 
 ## Bootstrap (operator, one-time)
 
-1. **Install** (requires root):
+**Secret model**: the single secret (Discord webhook URL) is encrypted with
+**systemd-creds** and surfaced to the process at runtime via
+`LoadCredentialEncrypted=`. This is machine-bound — the encrypted file on
+disk cannot be decrypted on another host (requires this VPS's
+`/etc/machine-id` + `/var/lib/systemd/credential.secret`). 1Password stores
+the plaintext URL as a **backup** only; no 1P runtime dependency, so
+1Password Personal is sufficient.
+
+### Files
+
+| Path | Mode | Contents |
+|------|------|----------|
+| `/etc/payjp-ops/.env` | 0640 root:payjp-ops | Non-secret runtime config (`POSTGRES_USER`, paths, thresholds) |
+| `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK` | 0600 root:root | Encrypted webhook URL (systemd-creds format) |
+
+Note: the runtime service user `payjp-ops` does **not** need direct read
+access to the encrypted file — systemd itself decrypts and places the
+plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
+
+### Steps
+
+1. **Install** (requires root). Verifies `systemd-creds`/`jq`/`curl`/`rsync` presence, creates the `payjp-ops` user, state dir, systemd units, sudoers drop-in, seeds the `.env` template, and prepares the creds directory:
    ```
    cd /home/ubuntu/payjp
    sudo ./deploy/ops-systemd/install.sh
    ```
-   Creates the `payjp-ops` system user, state dir, systemd units, sudoers drop-in, and seeds `/etc/payjp-ops/env` (0400 root:root) from the template. Idempotent.
+   Idempotent.
 
-2. **1Password service account**:
-   - Create a 1P **service account** with read-only access to a `Private` vault item `ops-discord-webhook` (single field `url`).
-   - Copy the service account token.
+2. **1Password setup** (optional, backup only):
+   - Create (or locate) a 1P item for the Discord webhook URL (e.g. `ENV` vault, item `ops-discord-webhook`, field `credential`). 1P Personal plan is sufficient.
+   - This 1P item is the canonical plaintext source for (a) re-encryption during VPS rebuild and (b) inter-operator sharing. **Not** queried at runtime.
 
-3. **Populate `/etc/payjp-ops/env`** (root-only edit):
+3. **Populate `/etc/payjp-ops/.env`** (non-secret values):
    ```
-   sudo nano /etc/payjp-ops/env
+   sudoedit /etc/payjp-ops/.env
    ```
    Fill:
-   - `OP_SERVICE_ACCOUNT_TOKEN=ops_xxx...`
-   - `OP_WEBHOOK_ITEM=op://Private/ops-discord-webhook/url`
-   - `PGUSER=` / `PGDB=` (fetched via `op read`) — needed for Phase C DB checks
+   - `POSTGRES_USER=...` / `POSTGRES_DB=...` (match the app's `.env`)
 
-4. **Verify dry-run** (no Discord post):
+4. **Encrypt the webhook URL into a systemd credential file**:
+   ```
+   sudo bash -c 'systemd-creds encrypt \
+       --name=DISCORD_OPS_WEBHOOK - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK'
+   # paste the webhook URL (single line), then Ctrl+D
+   sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+   sudo chown root:root /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+   ```
+   The encrypted file is machine-bound: copying it to another host renders it unreadable.
+
+5. **Verify the credential decrypts** (quick sanity check):
+   ```
+   sudo systemd-creds --name=DISCORD_OPS_WEBHOOK decrypt \
+       /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK - \
+     | sed 's#\(https://discord.com/api/webhooks/\)[^/]*/.*#\1<id>/<token>#'
+   # Expect: https://discord.com/api/webhooks/<id>/<token>
+   ```
+   The `sed` mask prevents the full URL from landing in shell history / journal.
+
+6. **Dry-run the checks** (no Discord post, no systemd):
    ```
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-host.sh
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-docker.sh
@@ -74,20 +120,35 @@ systemd.timer 09:00 JST ► payjp-ops-digest.service ──►  daily-digest.sh 
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-app.sh
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/daily-digest.sh
    ```
-   Any threshold crossings emit JSON payloads on stdout; no state-file writes.
+   Dry-run skips the credential read and Discord POST; threshold crossings print JSON on stdout.
 
-5. **Enable timers**:
+7. **Live smoke** — real tick via systemd (systemd loads the encrypted credential and posts to Discord if any threshold crosses):
+   ```
+   sudo systemctl start payjp-ops-check.service
+   journalctl -u payjp-ops-check.service -n 40 --no-pager
+   ```
+
+8. **Enable timers**:
    ```
    sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
    systemctl list-timers | grep payjp-ops
    journalctl -u payjp-ops-check.service -f
    ```
 
-6. **Token rotation** (every 90 days):
-   - Rotate the 1P service account token in the 1P console.
-   - Update `/etc/payjp-ops/env`.
-   - `sudo systemctl restart payjp-ops-check.service` (next tick picks up new env).
-   - Revoke the old token.
+9. **Webhook rotation** (when the Discord webhook URL is regenerated):
+   - Update the 1P backup item with the new URL.
+   - Re-encrypt:
+     ```
+     sudo rm /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+     sudo bash -c 'systemd-creds encrypt --name=DISCORD_OPS_WEBHOOK - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK'
+     # paste the new URL, Ctrl+D
+     sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK
+     sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
+     ```
+
+10. **VPS rebuild migration** (rare, e.g. hardware failure):
+    - machine-id changes on a new host → old encrypted file won't decrypt.
+    - Re-run step 1 (install) on the new VPS, then step 4 (re-encrypt) using the plaintext URL from the 1P backup item.
 
 ---
 
@@ -214,10 +275,11 @@ sudo /home/ubuntu/payjp/deploy/ops-systemd/install.sh --uninstall
 
 **Preserved** (delete manually if truly done):
 - `/var/lib/payjp-ops/` — state stamps for postmortem
-- `/etc/payjp-ops/env` — contains 1P service account token; revoke it in the 1P console before deletion
+- `/etc/payjp-ops/.env` — non-secret runtime config
+- `/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK` — systemd-creds encrypted blob (machine-bound, useless off-host, but delete for cleanliness)
 - `payjp-ops` system user — `sudo userdel payjp-ops`
 
-Zero application-side rollback needed.
+Zero application-side rollback needed. The webhook URL itself remains valid on the Discord side — regenerate it in Discord server settings if the uninstall is due to a compromise.
 
 ---
 

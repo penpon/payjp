@@ -4,11 +4,12 @@
 # Usage:
 #   notify.sh --severity {critical|warn|normal} --code CODE --title "Title" --body "Body"
 #
-# Env:
-#   DRY_RUN=1       print payload to stdout, do NOT POST, do NOT touch state
-#   OPS_STATE_DIR   default /var/lib/payjp-ops (for global rate-limit mark)
+# Webhook URL resolution: see lib/op-webhook.sh (get_webhook_url).
 #
-# Dependencies: curl, jq, op (unless DRY_RUN).
+# Other env:
+#   DRY_RUN=1            print payload to stdout, skip POST, skip state writes
+#
+# Dependencies: curl, jq.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
@@ -70,10 +71,10 @@ if ! global_rate_check; then
   exit 0
 fi
 
-URL=$(get_webhook_url) || {
-  log_error "webhook URL unavailable; local-only log" "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
+if ! URL=$(get_webhook_url); then
+  log_discord_ops_webhook_unavailable "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
   exit 1
-}
+fi
 
 # --fail-with-body keeps body on 4xx/5xx; URL scrubbed from stderr for defense-in-depth.
 if curl --silent --show-error --fail-with-body \

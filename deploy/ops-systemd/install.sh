@@ -14,8 +14,10 @@ UNIT_SRC="$REPO_ROOT/deploy/ops-systemd"
 INSTALL_DIR="/opt/payjp-ops/bin"
 STATE_DIR="/var/lib/payjp-ops"
 RUN_DIR="/run/payjp-ops"
-ENV_FILE="/etc/payjp-ops/env"
 ENV_DIR="/etc/payjp-ops"
+ENV_FILE="$ENV_DIR/.env"                                    # non-secret runtime config
+CREDS_DIR="$ENV_DIR/creds"                                  # systemd-creds encrypted blobs
+WEBHOOK_CRED_FILE="$CREDS_DIR/DISCORD_OPS_WEBHOOK"           # encrypted Discord webhook URL
 SYSTEMD_DIR="/etc/systemd/system"
 SUDOERS_FILE="/etc/sudoers.d/payjp-ops"
 USER_NAME="payjp-ops"
@@ -35,9 +37,10 @@ for arg in "$@"; do
 Usage: install.sh [--uninstall]
 
 install: create payjp-ops user, copy scripts to /opt/payjp-ops/bin/, install
-  systemd units, install sudoers drop-in, seed /etc/payjp-ops/env template.
+  systemd units, install sudoers drop-in, seed /etc/payjp-ops/.env template,
+  create /etc/payjp-ops/creds/ dir for systemd-creds encrypted blobs.
 uninstall: disable timers, remove units + scripts + sudoers. Preserves state
-  dir, env file, and user (see docs/ops/alerts.md for full removal).
+  dir, .env, encrypted creds, and user (see docs/ops/alerts.md for full removal).
 USAGE
       exit 0 ;;
     *) die "unknown arg: $arg" ;;
@@ -58,14 +61,22 @@ if [[ "$MODE" == "uninstall" ]]; then
   cat <<EOF
 [install] uninstall complete.
   Preserved (delete manually if desired):
-    $STATE_DIR  (postmortem state)
-    $ENV_FILE   (contains 1P token — revoke manually in 1P console)
-    user        $USER_NAME
+    $STATE_DIR       (postmortem state)
+    $ENV_FILE        (non-secret runtime config)
+    $CREDS_DIR       (systemd-creds encrypted webhook; machine-bound, safe to leave)
+    user $USER_NAME
 EOF
   exit 0
 fi
 
 # ---- install ----
+info "checking dependencies"
+command -v jq >/dev/null 2>&1 || die "jq not found. apt install jq"
+command -v curl >/dev/null 2>&1 || die "curl not found"
+command -v rsync >/dev/null 2>&1 || die "rsync not found"
+command -v systemd-creds >/dev/null 2>&1 || die "systemd-creds not found (need systemd >= 250). Ubuntu 24.04 ships 255; check systemctl --version."
+info "systemd-creds available (secret encryption ready)"
+
 info "creating system user $USER_NAME"
 if ! id "$USER_NAME" >/dev/null 2>&1; then
   useradd --system --no-create-home --shell /usr/sbin/nologin \
@@ -75,6 +86,7 @@ fi
 info "creating directories"
 install -d -o "$USER_NAME" -g "$GROUP_NAME" -m 0750 "$STATE_DIR" "$STATE_DIR/state.d"
 install -d -m 0755 "$ENV_DIR"
+install -d -m 0700 -o root -g root "$CREDS_DIR"
 install -d -m 0755 "$(dirname "$INSTALL_DIR")"
 install -d -m 0755 "$INSTALL_DIR"
 
@@ -120,12 +132,18 @@ SUDOERS
 chmod 0440 "$SUDOERS_FILE"
 visudo -c -f "$SUDOERS_FILE" >/dev/null || die "sudoers syntax invalid"
 
-info "seeding $ENV_FILE if absent"
+info "seeding env file if absent"
 if [[ ! -e "$ENV_FILE" ]]; then
-  install -m 0400 -o root -g root "$UNIT_SRC/payjp-ops.env.example" "$ENV_FILE"
-  info "seeded empty $ENV_FILE — edit before enabling timers"
+  install -m 0640 -o root -g "$GROUP_NAME" "$UNIT_SRC/payjp-ops.env.example" "$ENV_FILE"
+  info "seeded $ENV_FILE (0640 root:$GROUP_NAME) — edit POSTGRES_* before enabling"
 else
   info "$ENV_FILE exists; not overwriting"
+fi
+
+if [[ -e "$WEBHOOK_CRED_FILE" ]]; then
+  info "$WEBHOOK_CRED_FILE exists; not overwriting (encrypt manually to replace)"
+else
+  info "no encrypted webhook yet at $WEBHOOK_CRED_FILE — see Next steps below"
 fi
 
 info "reloading systemd"
@@ -136,20 +154,45 @@ cat <<EOF
 [install] install complete.
 
 Next steps (operator):
-  1. Edit $ENV_FILE and populate OP_SERVICE_ACCOUNT_TOKEN, PGUSER, PGDB.
-  2. Dry-run (each check, or all):
+  1. Populate $ENV_FILE (non-secret values):
+       sudoedit $ENV_FILE
+       # POSTGRES_USER / POSTGRES_DB (match app .env)
+
+  2. Encrypt the Discord webhook URL into a systemd credential file.
+     (Secret lives nowhere on disk in plaintext; decrypt requires this VPS's
+     machine-id + /var/lib/systemd/credential.secret. Snapshot/backup of /etc
+     alone is NOT sufficient to decrypt on another host.)
+       sudo bash -c 'systemd-creds encrypt \\
+           --name=DISCORD_OPS_WEBHOOK - $WEBHOOK_CRED_FILE'
+       # paste the webhook URL (single line, no trailing newline), then Ctrl+D
+       sudo chmod 0600 $WEBHOOK_CRED_FILE
+       sudo chown root:root $WEBHOOK_CRED_FILE
+
+     Keep a plaintext backup of the URL in 1Password (Personal is fine) —
+     needed for re-encryption on VPS rebuild or rotation.
+
+  3. Verify the encrypted credential decrypts cleanly:
+       sudo systemd-creds --name=DISCORD_OPS_WEBHOOK decrypt $WEBHOOK_CRED_FILE - \\
+         | sed 's#\\(https://discord.com/api/webhooks/\\)[^/]*/.*#\\1<id>/<token>#'
+       # Expect: https://discord.com/api/webhooks/<id>/<token>
+
+  4. Script-level dry-run (no Discord post, no systemd unit):
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-host.sh
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-docker.sh
-       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-nginx.sh
-       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-app.sh
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/daily-digest.sh
-  3. Enable the 5-min polling timer:
-       sudo systemctl enable --now payjp-ops-check.timer
-  4. Enable the daily digest timer:
-       sudo systemctl enable --now payjp-ops-digest.timer
-  5. Watch logs:
-       journalctl -u payjp-ops-check.service -f
-       journalctl -u payjp-ops-digest.service -f
+
+  5. Live smoke (posts to Discord if any threshold crosses — systemd loads the
+     encrypted credential):
+       sudo systemctl start payjp-ops-check.service
+       journalctl -u payjp-ops-check.service -n 40 --no-pager
+
+  6. Enable timers:
+       sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
+
+  7. Rotation (webhook URL changes):
+       sudo rm $WEBHOOK_CRED_FILE
+       # repeat step 2 with the new URL
+       sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
 
 Uninstall: sudo $0 --uninstall
 EOF

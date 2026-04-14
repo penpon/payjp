@@ -21,9 +21,9 @@ ops_state_init
 
 psql_q() {
   local sql="$1"
-  [[ -z "${PGUSER:-}" || -z "${PGDB:-}" ]] && { echo "?"; return 0; }
+  [[ -z "${POSTGRES_USER:-}" || -z "${POSTGRES_DB:-}" ]] && { echo "?"; return 0; }
   sudo -n docker exec "${COMPOSE_PROJECT}-db-1" \
-    psql -U "$PGUSER" -d "$PGDB" -tAc "$sql" 2>/dev/null || echo "?"
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$sql" 2>/dev/null || echo "?"
 }
 
 gather_kpi() {
@@ -170,10 +170,10 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-URL=$(get_webhook_url) || {
-  log_error "webhook URL unavailable; digest not posted"
+if ! URL=$(get_webhook_url); then
+  log_discord_ops_webhook_unavailable
   exit 1
-}
+fi
 
 if curl --silent --show-error --fail-with-body \
      --max-time 10 \
