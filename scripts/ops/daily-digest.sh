@@ -10,8 +10,6 @@ ops_strict_mode
 source "$SCRIPT_DIR/lib/thresholds.conf"
 # shellcheck source=lib/dedup.sh
 source "$SCRIPT_DIR/lib/dedup.sh"
-# shellcheck source=lib/op-webhook.sh
-source "$SCRIPT_DIR/lib/op-webhook.sh"
 ops_state_init
 
 : "${COMPOSE_PROJECT:=payjp}"
@@ -21,9 +19,9 @@ ops_state_init
 
 psql_q() {
   local sql="$1"
-  [[ -z "${PGUSER:-}" || -z "${PGDB:-}" ]] && { echo "?"; return 0; }
+  [[ -z "${POSTGRES_USER:-}" || -z "${POSTGRES_DB:-}" ]] && { echo "?"; return 0; }
   sudo -n docker exec "${COMPOSE_PROJECT}-db-1" \
-    psql -U "$PGUSER" -d "$PGDB" -tAc "$sql" 2>/dev/null || echo "?"
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$sql" 2>/dev/null || echo "?"
 }
 
 gather_kpi() {
@@ -170,10 +168,11 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-URL=$(get_webhook_url) || {
-  log_error "webhook URL unavailable; digest not posted"
+URL="${DISCORD_OPS_WEBHOOK:-}"
+if [[ -z "$URL" ]]; then
+  log_error "DISCORD_OPS_WEBHOOK unset — digest not posted (invoke via op run)"
   exit 1
-}
+fi
 
 if curl --silent --show-error --fail-with-body \
      --max-time 10 \

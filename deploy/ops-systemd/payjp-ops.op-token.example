@@ -1,0 +1,4 @@
+# /etc/payjp-ops/op-token — only contains the 1P service account token.
+# Install as 0400 root:root. DO NOT COMMIT real tokens to git.
+# Rotate every 90 days (see docs/ops/alerts.md).
+OP_SERVICE_ACCOUNT_TOKEN=

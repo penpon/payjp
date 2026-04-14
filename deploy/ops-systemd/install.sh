@@ -14,8 +14,9 @@ UNIT_SRC="$REPO_ROOT/deploy/ops-systemd"
 INSTALL_DIR="/opt/payjp-ops/bin"
 STATE_DIR="/var/lib/payjp-ops"
 RUN_DIR="/run/payjp-ops"
-ENV_FILE="/etc/payjp-ops/env"
 ENV_DIR="/etc/payjp-ops"
+ENV_FILE="$ENV_DIR/.env"              # non-secret + op:// refs, consumed by `op run`
+OP_TOKEN_FILE="$ENV_DIR/op-token"     # holds only OP_SERVICE_ACCOUNT_TOKEN
 SYSTEMD_DIR="/etc/systemd/system"
 SUDOERS_FILE="/etc/sudoers.d/payjp-ops"
 USER_NAME="payjp-ops"
@@ -35,9 +36,10 @@ for arg in "$@"; do
 Usage: install.sh [--uninstall]
 
 install: create payjp-ops user, copy scripts to /opt/payjp-ops/bin/, install
-  systemd units, install sudoers drop-in, seed /etc/payjp-ops/env template.
+  systemd units, install sudoers drop-in, seed /etc/payjp-ops/{.env,op-token}
+  templates.
 uninstall: disable timers, remove units + scripts + sudoers. Preserves state
-  dir, env file, and user (see docs/ops/alerts.md for full removal).
+  dir, both env files, and user (see docs/ops/alerts.md for full removal).
 USAGE
       exit 0 ;;
     *) die "unknown arg: $arg" ;;
@@ -58,14 +60,30 @@ if [[ "$MODE" == "uninstall" ]]; then
   cat <<EOF
 [install] uninstall complete.
   Preserved (delete manually if desired):
-    $STATE_DIR  (postmortem state)
-    $ENV_FILE   (contains 1P token — revoke manually in 1P console)
-    user        $USER_NAME
+    $STATE_DIR       (postmortem state)
+    $ENV_FILE        (non-secret op:// refs)
+    $OP_TOKEN_FILE   (1P token — revoke manually in 1P console)
+    user $USER_NAME
 EOF
   exit 0
 fi
 
 # ---- install ----
+info "checking dependencies"
+command -v op >/dev/null 2>&1 || die "1Password CLI (op) not found on PATH. Install from https://developer.1password.com/docs/cli/get-started/"
+command -v jq >/dev/null 2>&1 || die "jq not found. apt install jq"
+command -v curl >/dev/null 2>&1 || die "curl not found"
+command -v rsync >/dev/null 2>&1 || die "rsync not found"
+OP_PATH=$(command -v op)
+info "detected op at $OP_PATH"
+case "$OP_PATH" in
+  /usr/bin/op|/usr/local/bin/op|/usr/local/sbin/op|/usr/sbin/op) ;;
+  *)
+    info "NOTE: op is at $OP_PATH which is outside systemd's default PATH."
+    info "      If timers fail with 'op: command not found', add an override drop-in with PATH= or symlink op into /usr/local/bin."
+    ;;
+esac
+
 info "creating system user $USER_NAME"
 if ! id "$USER_NAME" >/dev/null 2>&1; then
   useradd --system --no-create-home --shell /usr/sbin/nologin \
@@ -120,12 +138,18 @@ SUDOERS
 chmod 0440 "$SUDOERS_FILE"
 visudo -c -f "$SUDOERS_FILE" >/dev/null || die "sudoers syntax invalid"
 
-info "seeding $ENV_FILE if absent"
+info "seeding env files if absent"
 if [[ ! -e "$ENV_FILE" ]]; then
-  install -m 0400 -o root -g root "$UNIT_SRC/payjp-ops.env.example" "$ENV_FILE"
-  info "seeded empty $ENV_FILE — edit before enabling timers"
+  install -m 0640 -o root -g "$GROUP_NAME" "$UNIT_SRC/payjp-ops.env.example" "$ENV_FILE"
+  info "seeded $ENV_FILE (0640 root:$GROUP_NAME) — edit DISCORD_OPS_WEBHOOK + POSTGRES_* before enabling"
 else
   info "$ENV_FILE exists; not overwriting"
+fi
+if [[ ! -e "$OP_TOKEN_FILE" ]]; then
+  install -m 0400 -o root -g root "$UNIT_SRC/payjp-ops.op-token.example" "$OP_TOKEN_FILE"
+  info "seeded $OP_TOKEN_FILE (0400 root:root) — populate OP_SERVICE_ACCOUNT_TOKEN"
+else
+  info "$OP_TOKEN_FILE exists; not overwriting"
 fi
 
 info "reloading systemd"
@@ -136,18 +160,24 @@ cat <<EOF
 [install] install complete.
 
 Next steps (operator):
-  1. Edit $ENV_FILE and populate OP_SERVICE_ACCOUNT_TOKEN, PGUSER, PGDB.
-  2. Dry-run (each check, or all):
+  1. Populate $OP_TOKEN_FILE:
+       sudo nano $OP_TOKEN_FILE
+       # set OP_SERVICE_ACCOUNT_TOKEN=ops_xxx...
+  2. Populate $ENV_FILE:
+       sudo nano $ENV_FILE
+       # set DISCORD_OPS_WEBHOOK=op://<vault>/<item>/<field>
+       # set POSTGRES_USER / POSTGRES_DB (match app .env)
+  3. Verify op can read the webhook:
+       sudo -u $USER_NAME env \$(sudo cat $OP_TOKEN_FILE) \\
+         op run --env-file=$ENV_FILE -- \\
+         bash -c 'printf "DISCORD_OPS_WEBHOOK=%s\\n" "\${DISCORD_OPS_WEBHOOK:0:40}..."'
+  4. Dry-run each check (no Discord post):
+       sudo systemctl start payjp-ops-check.service    # one-shot, posts for real
+       # or script-level dry-run (skip sudo+op, no live values):
        sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-host.sh
-       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-docker.sh
-       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-nginx.sh
-       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/check-app.sh
-       sudo -u $USER_NAME DRY_RUN=1 $INSTALL_DIR/daily-digest.sh
-  3. Enable the 5-min polling timer:
-       sudo systemctl enable --now payjp-ops-check.timer
-  4. Enable the daily digest timer:
-       sudo systemctl enable --now payjp-ops-digest.timer
-  5. Watch logs:
+  5. Enable timers:
+       sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
+  6. Watch logs:
        journalctl -u payjp-ops-check.service -f
        journalctl -u payjp-ops-digest.service -f
 

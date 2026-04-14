@@ -27,12 +27,15 @@ Per-code cooldown overrides live in `scripts/ops/lib/thresholds.conf` (e.g., `CO
 ## Architecture
 
 ```
-systemd.timer *:0/5  ──►  payjp-ops-check.service  ──►  run-all-checks.sh  ──►  check-{host,docker,nginx,app}.sh
-                                                                               │
-systemd.timer 09:00 JST ► payjp-ops-digest.service ──►  daily-digest.sh        │
-                                                                               ▼
-                                                                            notify.sh  ──►  Discord webhook (1P)
-                                                                               │
+systemd.timer *:0/5  ──►  payjp-ops-check.service
+                           ├── EnvironmentFile: /etc/payjp-ops/op-token (OP_SERVICE_ACCOUNT_TOKEN)
+                           └── ExecStart: op run --env-file=/etc/payjp-ops/.env -- run-all-checks.sh
+                                           │ (op resolves op:// refs, then execs the script)
+                                           ▼
+                                   run-all-checks.sh  ──► check-{host,docker,nginx,app}.sh  ──► notify.sh ──► $DISCORD_OPS_WEBHOOK
+
+systemd.timer 09:00 JST ► payjp-ops-digest.service ──► (same op run wrap) ──► daily-digest.sh
+
                                                          /var/lib/payjp-ops/state.d/<code>.stamp
 ```
 
@@ -46,27 +49,53 @@ systemd.timer 09:00 JST ► payjp-ops-digest.service ──►  daily-digest.sh 
 
 ## Bootstrap (operator, one-time)
 
-1. **Install** (requires root):
+Secret handling follows the project's existing convention: `.env` file with `op://` references + `op run --env-file=…` wrapping the entry point. See `.claude/rules/security.md`.
+
+### Two files, separate concerns
+
+| Path | Mode | Contents |
+|------|------|----------|
+| `/etc/payjp-ops/op-token` | 0400 root:root | Only `OP_SERVICE_ACCOUNT_TOKEN=ops_xxx...` (systemd loads as `EnvironmentFile=`) |
+| `/etc/payjp-ops/.env`     | 0640 root:payjp-ops | Non-secret values + `op://` references (consumed by `op run --env-file=...`) |
+
+`op run` uses the service account token from the systemd environment to resolve `op://` references in the `.env` file at invocation time; the resolved values reach the script as plain env vars.
+
+### Steps
+
+1. **Install** (requires root). Verifies `op`/`jq`/`curl`/`rsync` presence, creates the `payjp-ops` user, state dir, systemd units, sudoers drop-in, and seeds both env-file templates:
    ```
    cd /home/ubuntu/payjp
    sudo ./deploy/ops-systemd/install.sh
    ```
-   Creates the `payjp-ops` system user, state dir, systemd units, sudoers drop-in, and seeds `/etc/payjp-ops/env` (0400 root:root) from the template. Idempotent.
+   Idempotent.
 
-2. **1Password service account**:
-   - Create a 1P **service account** with read-only access to a `Private` vault item `ops-discord-webhook` (single field `url`).
-   - Copy the service account token.
+2. **1Password setup**:
+   - Create (or locate) a 1P item for the Discord webhook URL (e.g. `ENV` vault, item `ops-discord-webhook`, field `credential`).
+   - Create a 1P **service account** with read-only access to that vault only. Copy the generated token.
 
-3. **Populate `/etc/payjp-ops/env`** (root-only edit):
+3. **Populate `/etc/payjp-ops/op-token`**:
    ```
-   sudo nano /etc/payjp-ops/env
+   sudoedit /etc/payjp-ops/op-token
+   # OP_SERVICE_ACCOUNT_TOKEN=ops_xxx...
+   ```
+
+4. **Populate `/etc/payjp-ops/.env`**:
+   ```
+   sudoedit /etc/payjp-ops/.env
    ```
    Fill:
-   - `OP_SERVICE_ACCOUNT_TOKEN=ops_xxx...`
-   - `OP_WEBHOOK_ITEM=op://Private/ops-discord-webhook/url`
-   - `PGUSER=` / `PGDB=` (fetched via `op read`) — needed for Phase C DB checks
+   - `DISCORD_OPS_WEBHOOK=op://ENV/<webhook-item-id>/credential`
+   - `POSTGRES_USER=...` / `POSTGRES_DB=...` (plain values, not secrets — match the app's `.env`)
 
-4. **Verify dry-run** (no Discord post):
+5. **Verify op can resolve the webhook**:
+   ```
+   sudo -u payjp-ops env "$(sudo cat /etc/payjp-ops/op-token)" \
+     op run --env-file=/etc/payjp-ops/.env -- \
+     bash -c 'echo "DISCORD_OPS_WEBHOOK starts with: ${DISCORD_OPS_WEBHOOK:0:40}..."'
+   ```
+   Expect something like `DISCORD_OPS_WEBHOOK starts with: https://discord.com/api/webhooks/…`.
+
+6. **Verify checks (no-op dry-run, bypasses op/webhook)**:
    ```
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-host.sh
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-docker.sh
@@ -74,20 +103,26 @@ systemd.timer 09:00 JST ► payjp-ops-digest.service ──►  daily-digest.sh 
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/check-app.sh
    sudo -u payjp-ops DRY_RUN=1 /opt/payjp-ops/bin/daily-digest.sh
    ```
-   Any threshold crossings emit JSON payloads on stdout; no state-file writes.
+   Dry-run skips op entirely (no webhook resolution, no Discord POST). Any threshold crossings print JSON on stdout; no state-file writes.
 
-5. **Enable timers**:
+7. **Live smoke** — trigger a real tick (posts to Discord if any threshold is crossed):
+   ```
+   sudo systemctl start payjp-ops-check.service
+   journalctl -u payjp-ops-check.service -n 40 --no-pager
+   ```
+
+8. **Enable timers**:
    ```
    sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
    systemctl list-timers | grep payjp-ops
    journalctl -u payjp-ops-check.service -f
    ```
 
-6. **Token rotation** (every 90 days):
-   - Rotate the 1P service account token in the 1P console.
-   - Update `/etc/payjp-ops/env`.
-   - `sudo systemctl restart payjp-ops-check.service` (next tick picks up new env).
-   - Revoke the old token.
+9. **Token rotation** (every 90 days):
+   - Rotate the 1P service account token.
+   - Update `/etc/payjp-ops/op-token`.
+   - `sudo systemctl restart payjp-ops-check.service`.
+   - Revoke the old token in the 1P console.
 
 ---
 
@@ -214,7 +249,8 @@ sudo /home/ubuntu/payjp/deploy/ops-systemd/install.sh --uninstall
 
 **Preserved** (delete manually if truly done):
 - `/var/lib/payjp-ops/` — state stamps for postmortem
-- `/etc/payjp-ops/env` — contains 1P service account token; revoke it in the 1P console before deletion
+- `/etc/payjp-ops/op-token` — 1P service account token; revoke in the 1P console before deletion
+- `/etc/payjp-ops/.env` — non-secret op:// refs
 - `payjp-ops` system user — `sudo userdel payjp-ops`
 
 Zero application-side rollback needed.

@@ -4,11 +4,11 @@
 # Usage:
 #   notify.sh --severity {critical|warn|normal} --code CODE --title "Title" --body "Body"
 #
-# Env:
-#   DRY_RUN=1       print payload to stdout, do NOT POST, do NOT touch state
-#   OPS_STATE_DIR   default /var/lib/payjp-ops (for global rate-limit mark)
+# Env (provided by `op run --env-file=/etc/payjp-ops/.env`):
+#   DISCORD_OPS_WEBHOOK  resolved Discord webhook URL
+#   DRY_RUN=1            print payload to stdout, skip POST, skip state writes
 #
-# Dependencies: curl, jq, op (unless DRY_RUN).
+# Dependencies: curl, jq.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
@@ -18,8 +18,6 @@ ops_strict_mode
 source "$SCRIPT_DIR/lib/thresholds.conf"
 # shellcheck source=lib/dedup.sh
 source "$SCRIPT_DIR/lib/dedup.sh"
-# shellcheck source=lib/op-webhook.sh
-source "$SCRIPT_DIR/lib/op-webhook.sh"
 
 SEVERITY=""
 CODE=""
@@ -70,10 +68,12 @@ if ! global_rate_check; then
   exit 0
 fi
 
-URL=$(get_webhook_url) || {
-  log_error "webhook URL unavailable; local-only log" "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
+URL="${DISCORD_OPS_WEBHOOK:-}"
+if [[ -z "$URL" ]]; then
+  log_error "DISCORD_OPS_WEBHOOK unset — script must be invoked under op run" \
+    "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
   exit 1
-}
+fi
 
 # --fail-with-body keeps body on 4xx/5xx; URL scrubbed from stderr for defense-in-depth.
 if curl --silent --show-error --fail-with-body \
