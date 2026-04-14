@@ -149,7 +149,7 @@ PAYLOAD=$(jq -cn \
   --arg fail2ban "$FAIL2BAN" \
   --arg alerts "$ALERTS_24H" \
   '{
-    username: "payjp-ops",
+    username: "payjp-ops-normal",
     embeds: [{
       title: $title,
       color: $color,

@@ -26,7 +26,7 @@ SEVERITY=""
 CODE=""
 TITLE=""
 BODY=""
-USERNAME="payjp-ops"
+USERNAME=""  # empty = derive from webhook kind below
 
 while (( $# > 0 )); do
   case "$1" in
@@ -43,6 +43,9 @@ if [[ -z "$SEVERITY" || -z "$CODE" || -z "$TITLE" ]]; then
   log_error "missing required args" "severity" "${SEVERITY:-}" "code" "${CODE:-}" "title" "${TITLE:-}"
   exit 2
 fi
+
+WEBHOOK_KIND=$(severity_to_webhook_kind "$SEVERITY")
+USERNAME="${USERNAME:-payjp-ops-${WEBHOOK_KIND}}"
 
 COLOR=$(severity_color "$SEVERITY")
 DESCRIPTION="${BODY:-(no body)}"
@@ -71,7 +74,6 @@ if ! global_rate_check; then
   exit 0
 fi
 
-WEBHOOK_KIND=$(severity_to_webhook_kind "$SEVERITY")
 if ! URL=$(get_webhook_url "$WEBHOOK_KIND"); then
   log_discord_ops_webhook_unavailable "$WEBHOOK_KIND" "code" "$CODE" "severity" "$SEVERITY" "title" "$TITLE"
   exit 1
