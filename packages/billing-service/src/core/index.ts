@@ -390,6 +390,36 @@ export function verifySignedCancelFormToken(
   }
 }
 
+/**
+ * google-submit per-request signature canonical form: `${normalizedEmail}\n${token}`.
+ * Excludes name/reason: those are user-visible in the GAS submit log, so they
+ * must not be signed material (an attacker reading the log would otherwise
+ * know both the signature material AND the signature itself).
+ * email is normalized (lowercase+trim) — must match server-side normalization
+ * or the HMAC diverges.
+ */
+function googleCancelSubmitHmacMessage(email: string, token: string): string {
+  return `${normalizeEmail(email)}\n${token}`;
+}
+
+export function computeGoogleCancelSubmitSignature(secret: string, params: { email: string; token: string }): string {
+  return createHmac('sha256', secret).update(googleCancelSubmitHmacMessage(params.email, params.token)).digest('hex');
+}
+
+export function verifyGoogleCancelSubmitSignature(
+  providedSignatureHex: string,
+  secret: string,
+  params: { email: string; token: string },
+): boolean {
+  const expectedHex = computeGoogleCancelSubmitSignature(secret, params);
+  if (providedSignatureHex.length !== expectedHex.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(providedSignatureHex, 'hex'), Buffer.from(expectedHex, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
 export function buildGoogleFormPrefillUrl(
   baseUrl: string,
   emailEntryId: string,

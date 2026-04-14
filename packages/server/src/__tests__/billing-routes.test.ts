@@ -1,6 +1,10 @@
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '@hayane/billing-service';
-import { accessGateSessionTokenHash, linkSessionTokenHash } from '@hayane/billing-service';
+import {
+  accessGateSessionTokenHash,
+  computeGoogleCancelSubmitSignature,
+  linkSessionTokenHash,
+} from '@hayane/billing-service';
 import type { CancelFormTokenRecord, LinkSessionRecord, Member, MemberSessionRecord } from '@hayane/shared';
 import type { InjectOptions } from 'light-my-request';
 import { describe, expect, it, vi } from 'vitest';
@@ -915,15 +919,16 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     return deps;
   }
 
-  it('returns 200 on valid secret and token', async () => {
+  it('returns 200 on valid secret + signature + token', async () => {
     const deps = createGoogleSubmitDeps();
     const app = createApp(deps);
     const linkRes = await app.inject(
       injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
     );
     const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
-    const token = formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1];
+    const token = decodeURIComponent(formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1] ?? '');
     expect(token).toBeTruthy();
+    const signature = computeGoogleCancelSubmitSignature('google-shared-secret', { email: EMAIL, token });
 
     const res = await app.inject({
       method: 'POST',
@@ -931,12 +936,13 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
       headers: {
         'content-type': 'application/json',
         'x-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': signature,
       },
       payload: {
         email: EMAIL,
         name: 'Test User',
         reason: 'Need to cancel',
-        token: decodeURIComponent(token ?? ''),
+        token,
       },
     });
 
@@ -947,15 +953,16 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     expect(deps.db.consumeCancelFormToken).toHaveBeenCalledTimes(1);
   });
 
-  it('accepts legacy X-Google-Cancel-Secret when X-Cancel-Secret is absent', async () => {
+  it('accepts legacy X-Google-Cancel-Secret when X-Cancel-Secret is absent (signature still required)', async () => {
     const deps = createGoogleSubmitDeps();
     const app = createApp(deps);
     const linkRes = await app.inject(
       injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
     );
     const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
-    const token = formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1];
+    const token = decodeURIComponent(formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1] ?? '');
     expect(token).toBeTruthy();
+    const signature = computeGoogleCancelSubmitSignature('google-shared-secret', { email: EMAIL, token });
 
     const res = await app.inject({
       method: 'POST',
@@ -963,12 +970,13 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
       headers: {
         'content-type': 'application/json',
         'x-google-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': signature,
       },
       payload: {
         email: EMAIL,
         name: 'Test User',
         reason: 'Need to cancel',
-        token: decodeURIComponent(token ?? ''),
+        token,
       },
     });
 
@@ -997,5 +1005,54 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().errorCode).toBe('INVALID_GOOGLE_SECRET');
+  });
+
+  it('returns 401 INVALID_CANCEL_SIGNATURE when X-Cancel-Signature missing (CR-013)', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const linkRes = await app.inject(
+      injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
+    );
+    const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
+    const token = decodeURIComponent(formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1] ?? '');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'google-shared-secret',
+        // x-cancel-signature intentionally absent
+      },
+      payload: { email: EMAIL, name: 'Test User', reason: 'Need to cancel', token },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().errorCode).toBe('INVALID_CANCEL_SIGNATURE');
+  });
+
+  it('returns 401 INVALID_CANCEL_SIGNATURE when X-Cancel-Signature is forged with wrong key (CR-013)', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const linkRes = await app.inject(
+      injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
+    );
+    const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
+    const token = decodeURIComponent(formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1] ?? '');
+    const forgedSig = computeGoogleCancelSubmitSignature('attacker-key', { email: EMAIL, token });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': forgedSig,
+      },
+      payload: { email: EMAIL, name: 'Test User', reason: 'Need to cancel', token },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().errorCode).toBe('INVALID_CANCEL_SIGNATURE');
   });
 });

@@ -16,6 +16,7 @@ import {
   buildSubscriptionMetadata,
   buildSubscriptionResponse,
   calculateTrialEnd,
+  computeGoogleCancelSubmitSignature,
   createSignedCancelFormToken,
   determineSubscriptionStatus,
   formatRfc3339Utc,
@@ -34,6 +35,7 @@ import {
   validateFrontendBaseUrl,
   validatePlanId,
   validateRequiredEnvVars,
+  verifyGoogleCancelSubmitSignature,
   verifySharedPasscode,
   verifySignedCancelFormToken,
 } from '../index.js';
@@ -591,5 +593,42 @@ describe('Shared passcode verify', () => {
 
   it('accessGateSessionTokenHash matches memberSessionTokenHash for the same token', () => {
     expect(accessGateSessionTokenHash('raw')).toBe(memberSessionTokenHash('raw'));
+  });
+});
+
+describe('google-submit HMAC signature', () => {
+  const SECRET = 'shared-key-32-bytes-minimum-please';
+  const params = { email: 'user@example.com', token: 'signed.jti.token' };
+
+  it('round-trips compute → verify for valid input', () => {
+    const sig = computeGoogleCancelSubmitSignature(SECRET, params);
+    expect(sig).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifyGoogleCancelSubmitSignature(sig, SECRET, params)).toBe(true);
+  });
+
+  it('normalizes email (case/whitespace) before hashing', () => {
+    const sig = computeGoogleCancelSubmitSignature(SECRET, { ...params, email: '  USER@Example.COM  ' });
+    expect(verifyGoogleCancelSubmitSignature(sig, SECRET, params)).toBe(true);
+  });
+
+  it('rejects signature forged with a different secret', () => {
+    const sig = computeGoogleCancelSubmitSignature('other-key-32-bytes-minimum-please', params);
+    expect(verifyGoogleCancelSubmitSignature(sig, SECRET, params)).toBe(false);
+  });
+
+  it('rejects signature computed for a different email', () => {
+    const sig = computeGoogleCancelSubmitSignature(SECRET, { ...params, email: 'attacker@example.com' });
+    expect(verifyGoogleCancelSubmitSignature(sig, SECRET, params)).toBe(false);
+  });
+
+  it('rejects signature computed for a different token', () => {
+    const sig = computeGoogleCancelSubmitSignature(SECRET, { ...params, token: 'other.token' });
+    expect(verifyGoogleCancelSubmitSignature(sig, SECRET, params)).toBe(false);
+  });
+
+  it('rejects empty / malformed signature hex', () => {
+    expect(verifyGoogleCancelSubmitSignature('', SECRET, params)).toBe(false);
+    expect(verifyGoogleCancelSubmitSignature('not-hex-zz', SECRET, params)).toBe(false);
+    expect(verifyGoogleCancelSubmitSignature('abcd', SECRET, params)).toBe(false); // wrong length
   });
 });

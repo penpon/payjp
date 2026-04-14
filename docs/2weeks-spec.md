@@ -778,3 +778,12 @@ MVP（〜2026-04-20）では、以下は実装しない。
 - 変更内容: `POST /v1/subscriptions/cancel/google-submit` および `POST /v1/subscriptions/cancel` 成功時に、PAY.JP解約反映後ただちに Discord 有料ロールを剥奪する。`members.access_end_at` / `members.next_billing_at` は引き続き `current_period_end` を保持するが、これは契約終了予定日の表示・運用確認にのみ用いる。`canceled` は Webhook / 日次再同期 / 再連携のいずれでも grant 対象にしない。
 - 理由: 退会導線の期待結果を「課金停止とDiscordアクセス停止の即時反映」に統一し、フォーム送信成功後の残留ロールを防ぐため
 - 影響範囲: §1, §2 scope item5, §5 user flow step7, §6.2 cancel APIs, §6.3〜6.5 role/cancel policy, `packages/billing-service`, `packages/sync-service`, `packages/server`, `frontend`, `docs/implementation-design-mvp.md`, `docs/tdd-acceptance-matrix-mvp.md`
+
+### CR-013: `google-submit` HMAC 署名 (X-Cancel-Signature) 追加
+
+- 日付: 2026-04-14
+- 起票: 2026-04-14 セキュリティ監査（F-001）— `X-Cancel-Secret` bearer token のみでは Apps Script 側 secret 漏洩時に第三者が任意 body で cancel submit 可能
+- 変更内容: `POST /v1/subscriptions/cancel/google-submit` に `X-Cancel-Signature` ヘッダーを **必須** で追加する。値は `HMAC-SHA256(GOOGLE_FORM_CANCEL_SECRET, ${normalizedEmail}\n${token})` の hex。サーバー側は `X-Cancel-Secret` 検証の直後に `X-Cancel-Signature` を再計算し `timingSafeEqual` で比較、不一致は `401 INVALID_CANCEL_SIGNATURE` を返す。`normalizedEmail` はサーバー側の `normalizeEmail` と同一（小文字化＋前後空白除去）。name / reason は署名対象外（GAS ログに平文で残るため）。
+- 理由: bearer-only 認証に対する defense-in-depth。bearer secret 漏洩シナリオ（GAS 実行ログ視認・開発者端末盗難など）でも、攻撃者は HMAC を再計算できなければ任意ペイロードの submit を偽造できない。
+- 影響範囲: §6.2 `POST /v1/subscriptions/cancel/google-submit` の仕様、`docs/implementation-design-mvp.md` §5.3 / API 表、`packages/billing-service` core + shell、`packages/server` routes、`docs/ops/apps-script-cancel.md`（新規）、Apps Script 側実装（リポジトリ外・本 CR と同時デプロイ必須）
+- 運用注意: Apps Script 側 HMAC 生成コードは `Utilities.computeHmacSha256Signature(message, secret)` を使用。transition 期間は設けず、本 CR マージと同時に Apps Script もデプロイ更新する（移行フラグ不要）。

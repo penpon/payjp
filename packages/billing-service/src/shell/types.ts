@@ -158,6 +158,11 @@ export interface GoogleCancelSubmitRequest {
   reason: string;
   token: string;
   secret: string;
+  // HMAC-SHA256(googleFormCancelSecret, `${email}\n${token}`) as hex.
+  // Required: defense-in-depth so that leaking just the bearer `secret` header
+  // (e.g. via GAS log visibility) does not allow a third party to forge submits
+  // without also having the shared key to compute signatures.
+  signature: string;
 }
 
 // レスポンス型

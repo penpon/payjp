@@ -86,15 +86,19 @@ credentials-file: /etc/cloudflared/<tunnel-id>.json
 
 ingress:
   - hostname: admin.and--line.com
-    service: https://localhost:443
+    # admin vhost は nginx コンテナ内で `listen 127.0.0.1:8443 ssl;`(nginx/nginx.conf)。
+    # docker-compose.yml で host 127.0.0.1:8443 に publish 済。
+    # cloudflared はホスト側インストール(ホストの loopback から nginx の publish port へ接続)。
+    service: https://localhost:8443
     originRequest:
       originServerName: admin.and--line.com
       # nginx は Let's Encrypt 証明書なので caPool 指定不要
   - service: http_status:404
 ```
 
-- nginx admin vhost は現状 `listen 443 ssl;`（`nginx/nginx.conf:234`）。Tunnel からは **loopback 経由の HTTPS** で接続する。
-- Tunnel 経由以外からの接続を origin 側で弾きたい場合は、後述 §4 のファイアウォール閉塞で対応する（Tunnel は outbound なので影響なし）。
+- nginx admin vhost は `listen 127.0.0.1:8443 ssl;`。docker-compose で `127.0.0.1:8443:8443` publish 済み（H-A(改) 2026-04-14、`security-hardening-pm`）。
+- 外部 443 からは admin vhost に到達しない（default_server が 444 を返す）— cloudflared 導入有無に関わらず admin の外部到達は既に遮断されている。
+- cloudflared 未導入の状態では、運用者は SSH port-forward で admin を開く: `ssh -L 8443:127.0.0.1:8443 <vps>` → ブラウザで `https://admin.and--line.com/`（ただし `admin.and--line.com:8443` を hosts や SSH dynamic forwarding で解決する必要あり、もしくは `https://localhost:8443/` 直接でも SNI 一致するよう設定）。
 
 ### 3.4 systemd サービス化
 
@@ -113,26 +117,24 @@ sudo chmod 600 /etc/cloudflared/<tunnel-id>.json
 
 リポジトリにコミットしない。
 
-## 4. Origin 443 の外部到達遮断（任意、推奨）
+## 4. Origin 外部到達遮断（実装済み 2026-04-14 / H-A(改)）
 
-`admin-console-boundary.md` §5-4「Cloudflare 送信元以外を拒否」を満たすため、Tunnel 切替完了後に外部 443 を閉じる。
+`admin-console-boundary.md` §5-4「Cloudflare 送信元以外を拒否」は **すでに実装済み**。
 
-**注意**: `www.and--line.com` / `api.and--line.com` も同じ origin で 443 を使っている。安易な全面閉塞は公開サービスを落とす。
+実装形態（§3.3 の前提）:
 
-選択肢（状況に応じて運用判断）:
+- admin vhost は nginx コンテナ内で `listen 127.0.0.1:8443 ssl;`（`nginx/nginx.conf`）。
+- docker-compose で `127.0.0.1:8443:8443` のみ host publish（`docker-compose.yml`）。
+- `www.and--line.com` / `api.and--line.com` は `0.0.0.0:443:443` 公開のまま（公開サービスは影響なし）。
+- admin-api は docker network `admin-frontend` に隔離済（H-A(改)、`api` コンテナが compromise されても admin-api に到達不可）。
 
-- **A. 公開サービスも Tunnel 化**してから 443 を UFW で全遮断（最も厳格、別作業）。
-- **B. nginx で `admin.and--line.com` vhost のみ、Cloudflare 送信元 IP allowlist に限定**（公開サービスは現状維持）。
-- **C. admin vhost を `listen 127.0.0.1:443 ssl;` に変更**し、外部 443 からは admin に到達不能にする（`server_name` 分離済みのため他 vhost には影響しない）。
+過去に検討した代替案（参考）:
 
-初期導入では **C**（loopback 限定）が最小変更で安全。差分例:
+- A. 公開サービスも Tunnel 化してから 443 を UFW 全遮断（最厳格・別作業）
+- B. nginx で Cloudflare 送信元 IP allowlist 限定（公開サービス現状維持）
+- C. admin vhost を loopback 限定 ← **採用済み（H-A(改) で 127.0.0.1:8443 に変更、internal port 分離で SSH port-forward / cloudflared 両経路と整合）**
 
-```nginx
-# nginx/nginx.conf (admin vhost)
-listen 127.0.0.1:443 ssl;
-```
-
-nginx コンテナの場合、Docker ネットワーク内の `cloudflared` コンテナからは到達可能な経路設計（同一ネットワーク + `127.0.0.1` 指定は使えない）になるため、`cloudflared` を **ホスト側インストール** で運用する前提。コンテナ化したい場合は内部専用 port（例: `listen 8081;`）を別途定義する。
+Docker ネットワーク内からの cloudflared 接続は使わない方針（cloudflared は **ホスト側インストール** で、ホストの `127.0.0.1:8443` → docker-proxy → nginx コンテナ `127.0.0.1:8443`）。
 
 ## 5. 動作確認
 
