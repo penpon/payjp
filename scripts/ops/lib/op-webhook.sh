@@ -37,8 +37,15 @@ get_webhook_url() {
     log_error "op read returned empty webhook URL"
     return 1
   fi
-  mkdir -p "$(dirname "$cache")"
-  umask 077
-  printf '%s' "$url" > "$cache"
+  # Atomic write: truncate-then-write on the same path would let a concurrent
+  # reader observe an empty URL. Write to a sibling tmp file (same FS = atomic
+  # rename) with locked-down mode before publishing.
+  local cache_dir tmp
+  cache_dir=$(dirname "$cache")
+  mkdir -p "$cache_dir"
+  tmp=$(mktemp "${cache_dir}/webhook.XXXXXX")
+  chmod 0600 "$tmp"
+  printf '%s' "$url" > "$tmp"
+  mv -f "$tmp" "$cache"
   printf '%s' "$url"
 }

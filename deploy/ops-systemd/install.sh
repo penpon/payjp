@@ -110,7 +110,7 @@ Cmnd_Alias PAYJP_OPS_CMDS = \
     /usr/bin/docker ps -a *, \
     /usr/bin/docker inspect *, \
     /usr/bin/docker volume inspect *, \
-    /usr/bin/docker exec payjp-db-1 *, \
+    /usr/bin/docker exec payjp-db-1 psql *, \
     /usr/bin/stat -c * /var/backups/hayane/*, \
     /usr/bin/stat -c * /var/lib/docker/volumes/payjp_nginx_logs/_data/*, \
     /usr/bin/tail -n * /var/lib/docker/volumes/payjp_nginx_logs/_data/access.log, \

@@ -57,7 +57,12 @@ on_healthy() {
   [[ -e "$stamp" ]] || return 1
   streak_file="$(_streak_path "$code")"
   streak=0
-  [[ -e "$streak_file" ]] && streak=$(cat "$streak_file")
+  if [[ -e "$streak_file" ]]; then
+    streak=$(cat "$streak_file" 2>/dev/null || echo 0)
+    streak="${streak:-0}"
+    # Guard against partial writes that are not parseable as integer.
+    [[ "$streak" =~ ^[0-9]+$ ]] || streak=0
+  fi
   streak=$((streak + 1))
   printf '%s' "$streak" > "$streak_file"
   if (( streak >= ${GREEN_STREAK_FOR_RESOLVE:-2} )); then
@@ -73,7 +78,10 @@ global_rate_check() {
   [[ -e "$last_post_file" ]] || return 0
   local now last interval
   now=$(date +%s)
-  last=$(cat "$last_post_file")
+  # Read with fallback: a partial/empty read (concurrent write) or missing
+  # content must not crash the arithmetic under `set -e`.
+  last=$(cat "$last_post_file" 2>/dev/null || echo 0)
+  last="${last:-0}"
   interval="${GLOBAL_MIN_INTERVAL_SEC:-60}"
   (( now - last >= interval ))
 }
@@ -86,16 +94,23 @@ global_rate_mark() {
 _tick_inc() {
   local file cur=0
   file=$(_tick_count_file)
-  [[ -e "$file" ]] && cur=$(cat "$file")
+  if [[ -e "$file" ]]; then
+    cur=$(cat "$file" 2>/dev/null || echo 0)
+    [[ "$cur" =~ ^[0-9]+$ ]] || cur=0
+  fi
   cur=$((cur + 1))
   printf '%s' "$cur" > "$file"
   printf '%s' "$cur"
 }
 
 _tick_count() {
-  local file
+  local file cur=0
   file=$(_tick_count_file)
-  [[ -e "$file" ]] && cat "$file" || echo 0
+  if [[ -e "$file" ]]; then
+    cur=$(cat "$file" 2>/dev/null || echo 0)
+    [[ "$cur" =~ ^[0-9]+$ ]] || cur=0
+  fi
+  printf '%s' "$cur"
 }
 
 # Cleanup stale tick files (> 1 hour old).
