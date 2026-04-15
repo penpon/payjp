@@ -49,20 +49,28 @@
 
 - [ ] 実機またはステージングで **3DS `verified`** のみ課金されることを確認（モックではなくテストモード可）
 - [ ] カード番号が自サーバに保存されない（PAY.JP.js + トークンのみ）
+- [ ] 3DS `attempted` が来た場合に **422 で拒否**されることを確認（`packages/billing-service/src/core/index.ts` `isThreeDSecureVerified` — `=== 'verified'` の厳密比較）
 
-**証跡**: T-P0 または Day10 スモーク記録（[docs/evidence/README.md](../evidence/README.md)）。
+**証跡**: [Day10 スモーク手順](./day10-smoke-test.md) §S3 に従い実施。結果を `docs/evidence/YYYYMMDD-day10-smoke.md` に記録。
+
+**現状**: _未実施。Go-Live 前日〜当日朝に Day10 スモークで実施予定。_
 
 ## 6. 運用
 
 - [ ] `DAILY_RESYNC_CRON` が本番で有効、直近の日次再同期成功ログを確認
-- [ ] [手動再同期 CLI](./resync-cli.md) の実行手順を把握
+- [ ] [手動再同期 CLI](./resync-cli.md) の実行手順を把握（[不確定 503 復旧フロー](./resync-cli.md#不確定-503-復旧フローt-p0-04) を含む）
 - [ ] [手動ロール剥奪](./manual-role-revoke.md) の手順を把握
 - [ ] [インシデント連絡先](./incident-contacts.md) が運用で共有されている
+- [ ] [DB backup runbook](./backup-restore.md) の復元手順とキーローテーション計画を把握
+
+**現状**: `DAILY_RESYNC_CRON` 本番値確認は Go-Live 当日に `sudo crontab -u payjp-ops -l` または `systemctl list-timers` で実施。
 
 ## 7. 法務・表記
 
 - [ ] 特商法の **所在地・事業者名** が、登記・開業届・PAY.JP 登録と一致
 - [ ] **お支払い方法** に、実際に提供する手段を列挙（本サービスはクレジットカード中心）
+
+**現状**: 本番値への差し替えは `frontend/public/tokushou.html` で実施。`docs/evidence/2026-04-12-legal-page-verification.md` の更新版を Go-Live 前に発行予定。
 
 ## 8. PCI 補助（決済ページ・ASV・TPSP）
 
