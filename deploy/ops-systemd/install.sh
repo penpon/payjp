@@ -155,6 +155,22 @@ if [[ ! -e "$ENV_FILE" ]]; then
   info "seeded $ENV_FILE (0640 root:$GROUP_NAME) — edit POSTGRES_* before enabling"
 else
   info "$ENV_FILE exists; not overwriting"
+  # Stale-override guard: BACKUP_DIR is a deployment constant tied to
+  # payjp-ops-backup.service ReadWritePaths. If a prior version of the
+  # env file carries a BACKUP_DIR= line, the service loads it and the
+  # write target diverges from ReadWritePaths → silent "Read-only
+  # filesystem" failure at runtime. Scripts now ignore env BACKUP_DIR
+  # (scripts/ops/backup-db.sh hardcodes the path), but we still nag so
+  # the operator cleans up the stale line.
+  if stale_line="$(grep -E '^[[:space:]]*BACKUP_DIR=' "$ENV_FILE" 2>/dev/null | head -1)"; then
+    if [[ -n "$stale_line" ]]; then
+      info "WARNING: $ENV_FILE contains a stale BACKUP_DIR= override:"
+      info "    $stale_line"
+      info "  BACKUP_DIR is no longer operator-tunable (see payjp-ops.env.example note)."
+      info "  Scripts now ignore it, but please remove the line to avoid confusion:"
+      info "    sudo sed -i.bak '/^[[:space:]]*BACKUP_DIR=/d' $ENV_FILE"
+    fi
+  fi
 fi
 
 for f in "$WEBHOOK_CRED_ALERTS" "$WEBHOOK_CRED_NORMAL"; do

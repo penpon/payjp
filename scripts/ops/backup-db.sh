@@ -13,7 +13,13 @@ set -euo pipefail
 # Repo path:  scripts/ops/backup-db.sh
 # Runbook:    docs/ops/alerts.md
 
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/payjp-db}"
+# BACKUP_DIR is pinned: must match ReadWritePaths= in
+# payjp-ops-backup.service. Overriding via env would cause a silent
+# "Read-only file system" failure at write time. If the backup location
+# ever needs to move, update BOTH this constant AND ReadWritePaths
+# together. Env BACKUP_DIR (if present in /etc/payjp-ops/.env) is
+# intentionally ignored for this script.
+BACKUP_DIR="/var/backups/payjp-db"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 COMPOSE_DIR="${COMPOSE_DIR:-/home/ubuntu/payjp}"
 MIN_BACKUP_BYTES="${MIN_BACKUP_BYTES:-500}"
