@@ -4,6 +4,11 @@ Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
+# On successful local backup, chain to offsite upload. Local failure skips
+# offsite (nothing to upload). Offsite failure does NOT mark backup.service as
+# failed — the services are tracked independently via DB_BACKUP_STALE and
+# DB_OFFSITE_STALE so operators can see which leg is broken.
+OnSuccess=payjp-ops-offsite.service
 
 [Service]
 Type=oneshot

@@ -1,0 +1,15 @@
+[Unit]
+Description=PAY.JP ops monthly restore drill — 1st Sunday 04:00 JST
+Documentation=file:///home/ubuntu/payjp/docs/ops/backup-restore.md
+
+[Timer]
+# First Sunday of each month at 04:00 JST. Offsite upload is capped at
+# TimeoutStartSec=900s (15 min), so starting 1h after the 03:00 backup
+# guarantees the drill pulls the freshly-uploaded blob for the month.
+OnCalendar=Sun *-*-1..7 04:00:00 Asia/Tokyo
+RandomizedDelaySec=10m
+Persistent=true
+Unit=payjp-ops-restore-drill.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,35 @@
+[Unit]
+Description=PAY.JP ops monthly restore drill (download + decrypt + scratch restore)
+Documentation=file:///home/ubuntu/payjp/docs/ops/backup-restore.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Runs as root: needs docker daemon access to launch the scratch postgres
+# container. Sandboxing (ProtectSystem=strict etc.) is looser than backup
+# service because docker client CLI touches /var/run/docker.sock.
+EnvironmentFile=/etc/payjp-ops/.env
+ExecStart=/opt/payjp-ops/bin/restore-drill.sh
+TimeoutStartSec=1800
+LogLevelMax=info
+
+# Credentials loaded for drill run only; tmpfs, process-tree scoped, wiped on
+# exit. The age private key is the most sensitive — its presence on this VPS
+# during drill is a documented trade-off (see restore-drill.sh comment).
+LoadCredentialEncrypted=B2_DRILL_KEY_ID:/etc/payjp-ops/creds/B2_DRILL_KEY_ID
+LoadCredentialEncrypted=B2_DRILL_APPLICATION_KEY:/etc/payjp-ops/creds/B2_DRILL_APPLICATION_KEY
+LoadCredentialEncrypted=BACKUP_AGE_PRIVATE_KEY:/etc/payjp-ops/creds/BACKUP_AGE_PRIVATE_KEY
+
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+ReadWritePaths=/var/lib/payjp-ops
+
+[Install]
+WantedBy=multi-user.target

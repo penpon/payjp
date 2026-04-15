@@ -251,6 +251,7 @@ Always confirm delivery: after subscribing, wait for the first test or regular p
 ## Related
 
 - [`alerts.md`](alerts.md) — internal alert codes, thresholds, runbook, test matrix
+- [`backup-restore.md`](backup-restore.md) — offsite DB backup (BackBlaze B2 + age) and monthly restore drill. B2 is a 4th external dependency, monitored via internal `DB_OFFSITE_STALE` + daily digest bucket-size probe rather than an external status page (B2 has no usable webhook-capable status feed on free tier; solo-operator latency is acceptable for a non-serving backend service)
 - [`admin-access-cloudflare.md`](admin-access-cloudflare.md) — CF Access + Tunnel for admin plane (the main consumer of CF edge certificates that CAA auto-add protects)
 - `scripts/ops/check-host.sh:check_domain` — `HOST_DOMAIN_EXPIRING` implementation
 - `scripts/ops/daily-digest.sh:gather_domain` — digest Domain field

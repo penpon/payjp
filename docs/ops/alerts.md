@@ -251,6 +251,8 @@ Only `payjp-db-1` has a Docker healthcheck. `api` / `admin-api` / `nginx` are co
 | `APP_INFLIGHT_STUCK_WARN` | any `inflight_operation_started_at` > `APP_INFLIGHT_WARN_MIN`min | warn     | watch; escalates to critical at `APP_INFLIGHT_CRIT_HOUR`h |
 | `APP_INFLIGHT_STUCK_CRIT` | any `inflight_operation_started_at` > `APP_INFLIGHT_CRIT_HOUR`h | critical | `npm run resync -- --operation-id <id>` |
 | `DB_BACKUP_STALE`       | latest `payjp_*.sql.gz` mtime > `DB_BACKUP_STALE_HOURS`h | critical | `systemctl list-timers payjp-ops-backup.timer`; manual run: `sudo systemctl start payjp-ops-backup.service` |
+| `DB_OFFSITE_STALE`      | `offsite-last-success.epoch` > `DB_OFFSITE_STALE_HOURS`h (default 30h) or missing | critical | `journalctl -u payjp-ops-offsite.service --since -48h`; manual run: `sudo systemctl start payjp-ops-offsite.service`; see `docs/ops/backup-restore.md` |
+| `DB_RESTORE_DRILL_STALE`| `restore-drill-last-success.epoch` > `DB_RESTORE_DRILL_MAX_AGE_DAYS`d (default 40d) or missing | critical | `sudo systemctl start payjp-ops-restore-drill.service`; see `docs/ops/backup-restore.md` |
 
 ### Aggregate
 
@@ -265,7 +267,8 @@ Only `payjp-db-1` has a Docker healthcheck. `api` / `admin-api` / `nginx` are co
 `payjp-ops-digest.timer` fires `daily-digest.sh` every day at 09:00 Asia/Tokyo. Embeds a green (normal) summary with:
 
 - **KPI (24h)** — webhook failed / api 5xx / unresolved impact count
-- **Backup** — last success age, size, filename
+- **Backup (local)** — last success age, size, filename
+- **Backup (offsite B2)** — offsite last success age + drill last success age + bucket size MB
 - **Host** — disk %, load5, uptime days
 - **TLS** — days remaining per domain
 - **Domain** — whois Registry Expiry days remaining per registered domain in `DOMAINS_TO_MONITOR`
@@ -294,6 +297,18 @@ sudo ls -lt /var/backups/payjp-db/ | head
 ```
 
 Manual run: `sudo systemctl start payjp-ops-backup.service`.
+
+On success, systemd's `OnSuccess=payjp-ops-offsite.service` chains the offsite upload. Offsite failure does NOT mark backup.service as failed — both legs are monitored independently (`DB_BACKUP_STALE` vs `DB_OFFSITE_STALE`).
+
+## Offsite backup (B2) + restore drill
+
+See `docs/ops/backup-restore.md` for full design, runbook, and rotation.
+
+Summary:
+- Offsite upload: `payjp-ops-offsite.service` via OnSuccess=, encrypts with age (public key in `/opt/payjp-ops/etc/backup-age-recipients.pub`), streams to `b2:payjp-db-backup-prod/payjp_*.sql.gz.age`.
+- Object Lock Compliance 30d + lifecycle delete at ~32d = retention window + ransomware protection.
+- Monthly restore drill: `payjp-ops-restore-drill.timer` (1st Sunday 04:00 JST) → downloads, decrypts, restores to scratch container, verifies, tears down.
+- 2 alert codes (above): `DB_OFFSITE_STALE`, `DB_RESTORE_DRILL_STALE`.
 
 ### Migration from legacy `payjp-db-backup.{service,timer}`
 

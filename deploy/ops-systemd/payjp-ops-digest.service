@@ -13,6 +13,12 @@ Group=payjp-ops
 # credential is loaded.
 EnvironmentFile=/etc/payjp-ops/.env
 LoadCredentialEncrypted=DISCORD_OPS_WEBHOOK_NORMAL:/etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_NORMAL
+# B2 read-only credential enables the offsite bucket size probe in
+# gather_offsite(). One `rclone size` call per day is negligible on class C
+# free tier (2500/day). Credential is read-only + bucket-scoped, lowest-risk
+# leak surface among B2 keys.
+LoadCredentialEncrypted=B2_DRILL_KEY_ID:/etc/payjp-ops/creds/B2_DRILL_KEY_ID
+LoadCredentialEncrypted=B2_DRILL_APPLICATION_KEY:/etc/payjp-ops/creds/B2_DRILL_APPLICATION_KEY
 ExecStart=/opt/payjp-ops/bin/daily-digest.sh
 TimeoutStartSec=120
 LogLevelMax=info
