@@ -150,6 +150,7 @@ bootstrap_notify_webhooks_from_systemd_creds() {
 
 	local cred_dir cred_name cred_path value
 	local loaded=0
+	local has_any_cred=0
 	cred_dir="${DEPLOY_OPS_CREDENTIALS_DIR:-/etc/payjp-ops/creds}"
 	if [[ ! -d "$cred_dir" ]]; then
 		return 0
@@ -157,13 +158,14 @@ bootstrap_notify_webhooks_from_systemd_creds() {
 	if ! command -v sudo >/dev/null 2>&1 || ! command -v systemd-creds >/dev/null 2>&1; then
 		return 0
 	fi
-	if [[ ! -f "$cred_dir/DISCORD_OPS_WEBHOOK_NORMAL" ]] &&
-		[[ ! -f "$cred_dir/DISCORD_OPS_WEBHOOK_ALERTS" ]] &&
-		[[ ! -f "$cred_dir/DISCORD_OPS_WEBHOOK" ]]; then
-		return 0
-	fi
-
-	if ! sudo -n true >/dev/null 2>&1; then
+	# /etc/payjp-ops/creds is root-only (0700), so existence checks must run under sudo.
+	# First try non-interactive checks; if not authorized, ask once.
+	if ! sudo -n test -f "$cred_dir/DISCORD_OPS_WEBHOOK_NORMAL" >/dev/null 2>&1 &&
+		! sudo -n test -f "$cred_dir/DISCORD_OPS_WEBHOOK_ALERTS" >/dev/null 2>&1 &&
+		! sudo -n test -f "$cred_dir/DISCORD_OPS_WEBHOOK" >/dev/null 2>&1; then
+		if sudo -n true >/dev/null 2>&1; then
+			return 0
+		fi
 		log "Info: sudo auth required once to enable deploy notifications from $cred_dir."
 		if ! sudo -v; then
 			log "Warning: sudo auth failed; deploy notifications may remain disabled."
@@ -173,9 +175,10 @@ bootstrap_notify_webhooks_from_systemd_creds() {
 
 	for cred_name in DISCORD_OPS_WEBHOOK_NORMAL DISCORD_OPS_WEBHOOK_ALERTS DISCORD_OPS_WEBHOOK; do
 		cred_path="$cred_dir/$cred_name"
-		if [[ ! -f "$cred_path" ]]; then
+		if ! sudo test -f "$cred_path" >/dev/null 2>&1; then
 			continue
 		fi
+		has_any_cred=1
 		if value="$(sudo systemd-creds --name="$cred_name" decrypt "$cred_path" - 2>/dev/null)" && [[ -n "$value" ]]; then
 			printf -v "$cred_name" '%s' "$value"
 			export "$cred_name"
@@ -185,6 +188,8 @@ bootstrap_notify_webhooks_from_systemd_creds() {
 
 	if (( loaded == 1 )); then
 		log "Loaded Discord webhook credentials from systemd-creds for manual deploy notifications."
+	elif (( has_any_cred == 1 )); then
+		log "Warning: webhook credential files exist but decrypt failed; check systemd-creds setup."
 	fi
 }
 
