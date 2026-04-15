@@ -13,7 +13,7 @@
 
 - **フロント**: PAY.JP 公式 `pay.js`（[frontend/index.html](../frontend/index.html)）により決済フォームを表示。カード番号は **PAY.JP へ直接** 送信され、当社アプリケーションサーバには **カード番号・有効期限・セキュリティコードを保存しない**。
 - **送信**: サーバへ送るのは PAY.JP が発行した **トークン** に限る（[frontend/src/billing-ui.ts](../frontend/src/billing-ui.ts)、API 側 [packages/server/src/routes/billing.routes.ts](../packages/server/src/routes/billing.routes.ts)）。
-- **個人情報**: [frontend/public/privacy.html](../frontend/public/privacy.html) には、リポジトリ同梱の **SES 向けプライバシーポリシー**（[SES向けプライバシーポリシー及び個人情報の利用目的について.pdf](../SES向けプライバシーポリシー及び個人情報の利用目的について.pdf)）と**同一の条項本文**を掲載している。決済情報は決済代行会社の取扱いとしカード番号等の詳細は当社が保持しない旨、取得・利用目的、第三者提供の制限、安全管理措置、お問い合わせ窓口を含む。**商材説明**（コミュニティ参加権中心）は [service.html](../frontend/public/service.html) と併せて参照する（プライバシー面の条項は PDF 準拠ページを正とする）。
+- **個人情報**: [frontend/public/privacy.html](../frontend/public/privacy.html) には、リポジトリ同梱の **SES 向けプライバシーポリシー**（[SES向けプライバシーポリシー及び個人情報の利用目的について.pdf](legal/SES向けプライバシーポリシー及び個人情報の利用目的について.pdf)）と**同一の条項本文**を掲載している。決済情報は決済代行会社の取扱いとしカード番号等の詳細は当社が保持しない旨、取得・利用目的、第三者提供の制限、安全管理措置、お問い合わせ窓口を含む。**商材説明**（コミュニティ参加権中心）は [service.html](../frontend/public/service.html) と併せて参照する（プライバシー面の条項は PDF 準拠ページを正とする）。
 
 ## 2. 3D セキュア（本人認証）
 

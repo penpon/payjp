@@ -32,7 +32,7 @@
 
 **証跡の置き場**
 
-- 上表の「記録」列: 本リポジトリの `docs/pci-tpsp-management.md` に **版情報・日付** のみ（全文の貼付は避ける）。
+- 上表の「記録」列: 本リポジトリの `docs/compliance/pci-tpsp-management.md` に **版情報・日付** のみ（全文の貼付は避ける）。
 - AOC・契約書の**コピー**: 社内ストレージまたは 1Password。パスは運用チームが管理する。
 - 問い合わせメールの要約: `docs/evidence/YYYYMMDD-tpsp-payjp-inquiry.md`（任意）に **日付・担当・結論** のみ。
 

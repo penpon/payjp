@@ -66,9 +66,9 @@
 
 ## 8. PCI 補助（決済ページ・ASV・TPSP）
 
-- [ ] 決済ページのスクリプト台帳・監視手順を確認した（[pci-payment-page-script-register.md](../pci-payment-page-script-register.md)、[pci-payment-page-monitoring.md](../pci-payment-page-monitoring.md)）
-- [ ] ASV 方針・PAY.JP 問い合わせ記録欄を埋めた（[pci-asv-scan-policy.md](../pci-asv-scan-policy.md)、証跡 `docs/evidence/YYYYMMDD-asv-payjp-inquiry.md`）
-- [ ] TPSP 規約・AOC 記録欄を更新した（[pci-tpsp-management.md](../pci-tpsp-management.md)。機密は社外保管）
+- [ ] 決済ページのスクリプト台帳・監視手順を確認した（[pci-payment-page-script-register.md](../compliance/pci-payment-page-script-register.md)、[pci-payment-page-monitoring.md](../compliance/pci-payment-page-monitoring.md)）
+- [ ] ASV 方針・PAY.JP 問い合わせ記録欄を埋めた（[pci-asv-scan-policy.md](../compliance/pci-asv-scan-policy.md)、証跡 `docs/evidence/YYYYMMDD-asv-payjp-inquiry.md`）
+- [ ] TPSP 規約・AOC 記録欄を更新した（[pci-tpsp-management.md](../compliance/pci-tpsp-management.md)。機密は社外保管）
 
 ---
 

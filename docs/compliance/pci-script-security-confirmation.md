@@ -36,7 +36,7 @@ Content-Security-Policy:
   img-src 'self' data:
 ```
 
-スタイルは Vite ビルドで出力される **外部 CSS**（`frontend/dist/assets/index-*.css`）のみを読み込み、`index.html` および法務系静的ページに **インライン `<style>` は置かない**。実体は [frontend/public/_headers](../frontend/public/_headers) および [nginx/security-headers.conf](../nginx/security-headers.conf) と一致させる。整合は CI で [`scripts/check-payment-page-security.ts`](../scripts/check-payment-page-security.ts) が検証する。
+スタイルは Vite ビルドで出力される **外部 CSS**（`frontend/dist/assets/index-*.css`）のみを読み込み、`index.html` および法務系静的ページに **インライン `<style>` は置かない**。実体は [frontend/public/_headers](../../frontend/public/_headers) および [nginx/security-headers.conf](../../nginx/security-headers.conf) と一致させる。整合は CI で [`scripts/check-payment-page-security.ts`](../../scripts/check-payment-page-security.ts) が検証する。
 
 **効果:**
 - `script-src 'self' https://js.pay.jp` — 許可されたドメイン以外のスクリプト実行をブロック
@@ -80,7 +80,7 @@ Content-Security-Policy:
 
 - 許可するスクリプトは上記 **2つのみ**。CSP の `script-src` は `'self'` と `https://js.pay.jp` のみを許可する。
 - `pay.js` は **SRI を付与できない**（PAY.JP が整合性ハッシュを公開していない）。残存リスクは [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) の補償的統制（変更検知・レビュー）で説明する。
-- バックエンド JSON API（別ホスト想定）のレスポンスヘッダは [packages/server/src/app.ts](../packages/server/src/app.ts) で `default-src 'none'` 等としており、**購読 UI の HTML とは別オリジン・別ポリシー**である。
+- バックエンド JSON API（別ホスト想定）のレスポンスヘッダは [packages/server/src/app.ts](../../packages/server/src/app.ts) で `default-src 'none'` 等としており、**購読 UI の HTML とは別オリジン・別ポリシー**である。
 
 第三者スクリプト（広告・アナリティクス・タグマネージャ等）: **なし**  
 （過去に使用していた Web フォント用の第三者読込は削除済み。）

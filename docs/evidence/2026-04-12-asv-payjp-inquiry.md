@@ -7,8 +7,8 @@
 
 ## 参照
 
-- [pci-asv-scan-policy.md](../pci-asv-scan-policy.md)
-- [pci-tpsp-management.md](../pci-tpsp-management.md)
+- [pci-asv-scan-policy.md](../compliance/pci-asv-scan-policy.md)
+- [pci-tpsp-management.md](../compliance/pci-tpsp-management.md)
 - [SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md](./SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md)
 
 ## メモ

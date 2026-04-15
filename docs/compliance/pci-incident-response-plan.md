@@ -10,7 +10,7 @@
 | インシデント責任者 | penpon | **1Password に保管した電話・メール**（リポジトリに書かない） | 判断・エスカレーション・対外連絡 |
 | 技術対応 | penpon | 同上 | 封じ込め・調査・復旧 |
 
-実連絡先の一覧と取得手順は [ops/incident-contacts.md](ops/incident-contacts.md) を参照する。
+実連絡先の一覧と取得手順は [ops/incident-contacts.md](../ops/incident-contacts.md) を参照する。
 
 ### 外部連絡先
 
@@ -19,7 +19,7 @@
 | PAY.JP サポート | 決済関連インシデント・アカウント停止 | [pay.jp](https://pay.jp/) ログイン後のサポート・お問い合わせ（URLはログイン後に表示される画面を正とする） |
 | Discord Developer Support | Bot・OAuth障害 | Discord Developer Portal |
 | Cloudflare | CDN・DNS障害 | Cloudflare ダッシュボード |
-| サーバーホスティング | インフラ障害 | 契約プロバイダのサポート（詳細は [ops/incident-contacts.md](ops/incident-contacts.md)） |
+| サーバーホスティング | インフラ障害 | 契約プロバイダのサポート（詳細は [ops/incident-contacts.md](../ops/incident-contacts.md)） |
 
 ## 2. インシデント分類
 

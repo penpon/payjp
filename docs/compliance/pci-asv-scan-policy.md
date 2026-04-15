@@ -30,7 +30,7 @@
 
 ### Go-Live前（2026-04-20）
 
-1. **PAY.JPへの確認（記録必須）**: 加盟店として **ASVスキャンの提出が必須か**、非保持化（PAY.JP.js / iframe）構成での扱い、推奨ベンダー有無を **サポートまたは加盟店向け案内** で確認する。回答内容・日付・担当者は **`docs/evidence/`** にメモを残す（例: `YYYYMMDD-asv-payjp-inquiry.md`）。テンプレートは [docs/evidence/README.md](evidence/README.md) の「ASV / PAY.JP 問い合わせ」を参照。
+1. **PAY.JPへの確認（記録必須）**: 加盟店として **ASVスキャンの提出が必須か**、非保持化（PAY.JP.js / iframe）構成での扱い、推奨ベンダー有無を **サポートまたは加盟店向け案内** で確認する。回答内容・日付・担当者は **`docs/evidence/`** にメモを残す（例: `YYYYMMDD-asv-payjp-inquiry.md`）。テンプレートは [docs/evidence/README.md](../evidence/README.md) の「ASV / PAY.JP 問い合わせ」を参照。
 2. **ASV選定**: 自社インフラに外部公開エンドポイントがあるため、**PCI SSC認定ASV** から選定する（例）
    - Qualys（PCI SSC認定ASV）
    - Tenable / Nessus

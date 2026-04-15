@@ -132,9 +132,9 @@ Revisit the hosted/redirect path when at least one of the following becomes true
 
 These documents support the **current** `payjp.js iframe` approach and do not change the specs:
 
-- [pci-readiness-gap-matrix.md](pci-readiness-gap-matrix.md) — requirement classification
-- [pci-readiness-summary.md](pci-readiness-summary.md) — short verdict and labels
-- [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) — compensating controls for page integrity
+- [compliance/pci-readiness-gap-matrix.md](compliance/pci-readiness-gap-matrix.md) — requirement classification
+- [compliance/pci-readiness-summary.md](compliance/pci-readiness-summary.md) — short verdict and labels
+- [compliance/pci-payment-page-monitoring.md](compliance/pci-payment-page-monitoring.md) — compensating controls for page integrity
 
 ## If Revisited Later
 

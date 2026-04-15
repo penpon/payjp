@@ -16,8 +16,8 @@
 ## 明示的に許可しないもの
 
 - 広告・行動解析・タグマネージャ等の第三者スクリプト: **導入しない**
-- 決済ページでの **Google Fonts 等の追加 CDN 読込**: **行わない**（[frontend/index.html](../frontend/index.html)）
+- 決済ページでの **Google Fonts 等の追加 CDN 読込**: **行わない**（[frontend/index.html](../../frontend/index.html)）
 
 ## CSP との対応
 
-[frontend/public/_headers](../frontend/public/_headers) / [nginx/security-headers.conf](../nginx/security-headers.conf) の `script-src 'self' https://js.pay.jp` が、上記 1・2 のみを実行可能とする前提である。
+[frontend/public/_headers](../../frontend/public/_headers) / [nginx/security-headers.conf](../../nginx/security-headers.conf) の `script-src 'self' https://js.pay.jp` が、上記 1・2 のみを実行可能とする前提である。

@@ -26,7 +26,7 @@ Webhook・日次再同期・手動再同期CLIでも **Discord API の一時障�
 
 ## 記録
 
-インシデントや手動対応の場合は [pci-incident-response-plan.md](../pci-incident-response-plan.md) に沿って **時系列と実施者** を残す。証跡用メモを [docs/evidence/](../evidence/) に保存してよい。
+インシデントや手動対応の場合は [pci-incident-response-plan.md](../compliance/pci-incident-response-plan.md) に沿って **時系列と実施者** を残す。証跡用メモを [docs/evidence/](../evidence/) に保存してよい。
 
 ## 参考コード
 
