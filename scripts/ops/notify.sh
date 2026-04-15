@@ -21,6 +21,17 @@ source "$SCRIPT_DIR/lib/thresholds.conf"
 source "$SCRIPT_DIR/lib/dedup.sh"
 # shellcheck source=lib/op-webhook.sh
 source "$SCRIPT_DIR/lib/op-webhook.sh"
+# shellcheck source=lib/alert-codes-i18n.conf
+source "$SCRIPT_DIR/lib/alert-codes-i18n.conf"
+
+severity_emoji() {
+  case "$1" in
+    critical) printf '🔴' ;;
+    warn)     printf '🟡' ;;
+    normal)   printf '🟢' ;;
+    *)        printf '⚪' ;;
+  esac
+}
 
 SEVERITY=""
 CODE=""
@@ -48,7 +59,35 @@ WEBHOOK_KIND=$(severity_to_webhook_kind "$SEVERITY")
 USERNAME="${USERNAME:-payjp-ops-${WEBHOOK_KIND}}"
 
 COLOR=$(severity_color "$SEVERITY")
-DESCRIPTION="${BODY:-(no body)}"
+EMOJI=$(severity_emoji "$SEVERITY")
+
+# RESOLVED (e.g. HOST_DISK_ROOT_RESOLVED) は suffix を剥がして base code で i18n を引く。
+BASE_CODE="$CODE"
+IS_RESOLVED=0
+if [[ "$CODE" == *_RESOLVED ]]; then
+  BASE_CODE="${CODE%_RESOLVED}"
+  IS_RESOLVED=1
+fi
+
+JA_TITLE="${ALERT_JA_TITLE[$BASE_CODE]:-}"
+JA_CONTEXT="${ALERT_JA_CONTEXT[$BASE_CODE]:-}"
+
+if (( IS_RESOLVED == 1 )); then
+  FINAL_TITLE="${EMOJI} [復旧] ${JA_TITLE:-$BASE_CODE} (${BASE_CODE})"
+  DESCRIPTION="**状況**: ${GREEN_STREAK_FOR_RESOLVE:-2}回連続正常を確認し復旧と判定。"$'\n\n'"**最新値**: ${BODY:-(no body)}"
+else
+  if [[ -n "$JA_TITLE" ]]; then
+    FINAL_TITLE="${EMOJI} ${JA_TITLE}: ${TITLE} (${CODE})"
+  else
+    FINAL_TITLE="${EMOJI} ${TITLE} (${CODE})"
+  fi
+  if [[ -n "$JA_CONTEXT" ]]; then
+    DESCRIPTION="**状況**: ${JA_CONTEXT}"$'\n\n'"**詳細**:"$'\n'"${BODY:-(no body)}"
+  else
+    DESCRIPTION="${BODY:-(no body)}"
+  fi
+fi
+
 # Discord embed description max 4096; truncate conservatively.
 if (( ${#DESCRIPTION} > 3900 )); then
   DESCRIPTION="${DESCRIPTION:0:3900}
@@ -58,7 +97,7 @@ fi
 
 PAYLOAD=$(jq -cn \
   --arg username "$USERNAME" \
-  --arg title "[$SEVERITY] [$CODE] $TITLE" \
+  --arg title "$FINAL_TITLE" \
   --arg description "$DESCRIPTION" \
   --argjson color "$COLOR" \
   '{username: $username, embeds: [{title: $title, description: $description, color: $color}]}')

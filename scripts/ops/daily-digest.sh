@@ -178,7 +178,7 @@ gather_alerts_24h() {
   [[ -z "$lines" ]] && echo "none" || printf '%s' "$lines"
 }
 
-TITLE="PAY.JP daily digest — $(TZ=Asia/Tokyo date +'%Y-%m-%d (JST)')"
+TITLE="PAY.JP 日次サマリ — $(TZ=Asia/Tokyo date +'%Y-%m-%d (JST)')"
 KPI=$(gather_kpi)
 BACKUP=$(gather_backup)
 OFFSITE=$(gather_offsite)
@@ -207,15 +207,15 @@ PAYLOAD=$(jq -cn \
       title: $title,
       color: $color,
       fields: [
-        {name: "KPI (24h)",                       value: $kpi,      inline: false},
-        {name: "Backup (local)",                  value: $backup,   inline: true},
-        {name: "Backup (offsite B2)",             value: $offsite,  inline: true},
-        {name: "Host",                            value: $host,     inline: true},
-        {name: "TLS",                             value: $tls,      inline: true},
-        {name: "Domain",                          value: $domain,   inline: true},
-        {name: "Docker",                          value: $docker,   inline: true},
-        {name: "fail2ban (currently banned)",     value: $fail2ban, inline: true},
-        {name: "Alerts fired (24h)",              value: $alerts,   inline: false}
+        {name: "KPI（直近24時間）",              value: $kpi,      inline: false},
+        {name: "バックアップ（ローカル）",       value: $backup,   inline: true},
+        {name: "バックアップ（オフサイトB2）",   value: $offsite,  inline: true},
+        {name: "ホスト",                         value: $host,     inline: true},
+        {name: "TLS 証明書",                     value: $tls,      inline: true},
+        {name: "ドメイン",                       value: $domain,   inline: true},
+        {name: "Docker",                         value: $docker,   inline: true},
+        {name: "fail2ban（現在BAN中）",          value: $fail2ban, inline: true},
+        {name: "発火アラート（直近24h）",        value: $alerts,   inline: false}
       ]
     }]
   }')
