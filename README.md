@@ -38,7 +38,7 @@ cp .env.example .env
 | `DISCORD_REDIRECT_URI` | ローカルは `http://localhost:3000/v1/auth/discord/callback` のまま |
 | `DISCORD_BOT_TOKEN` | Discord Developer Portal → Bot |
 | `DISCORD_GUILD_ID` | DiscordサーバーID（開発者モードで右クリックコピー）|
-| `DISCORD_PAID_ROLE_ID` | 付与対象ロールのID |
+| `DISCORD_PLAN_ROLE_IDS` | 付与対象ロールIDのカンマ区切り（`PAYJP_PLAN_IDS` と同じ順序・要素数） |
 | `PAYJP_SECRET_KEY` | [PAY.JP ダッシュボード](https://pay.jp/) → APIキー → 秘密鍵 |
 | `PAYJP_WEBHOOK_TOKEN` | PAY.JP → Webhook → トークン |
 | `PAYJP_PLAN_IDS` | PAY.JP → 定期課金プランID（カンマ区切り） |
