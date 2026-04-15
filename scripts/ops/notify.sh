@@ -15,8 +15,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 ops_strict_mode
+# deploy.sh passes GLOBAL_MIN_INTERVAL_SEC via env; preserve it across thresholds.conf source.
+GLOBAL_MIN_INTERVAL_SEC_OVERRIDE="${GLOBAL_MIN_INTERVAL_SEC:-}"
 # shellcheck source=lib/thresholds.conf
 source "$SCRIPT_DIR/lib/thresholds.conf"
+if [[ -n "$GLOBAL_MIN_INTERVAL_SEC_OVERRIDE" ]]; then
+  GLOBAL_MIN_INTERVAL_SEC="$GLOBAL_MIN_INTERVAL_SEC_OVERRIDE"
+fi
 # shellcheck source=lib/dedup.sh
 source "$SCRIPT_DIR/lib/dedup.sh"
 # shellcheck source=lib/op-webhook.sh
