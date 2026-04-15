@@ -155,21 +155,20 @@ if [[ ! -e "$ENV_FILE" ]]; then
   info "seeded $ENV_FILE (0640 root:$GROUP_NAME) — edit POSTGRES_* before enabling"
 else
   info "$ENV_FILE exists; not overwriting"
-  # Stale-override guard: BACKUP_DIR is a deployment constant tied to
-  # payjp-ops-backup.service ReadWritePaths. If a prior version of the
-  # env file carries a BACKUP_DIR= line, the service loads it and the
-  # write target diverges from ReadWritePaths → silent "Read-only
-  # filesystem" failure at runtime. Scripts now ignore env BACKUP_DIR
-  # (scripts/ops/backup-db.sh hardcodes the path), but we still nag so
-  # the operator cleans up the stale line.
-  if stale_line="$(grep -E '^[[:space:]]*BACKUP_DIR=' "$ENV_FILE" 2>/dev/null | head -1)"; then
-    if [[ -n "$stale_line" ]]; then
-      info "WARNING: $ENV_FILE contains a stale BACKUP_DIR= override:"
-      info "    $stale_line"
-      info "  BACKUP_DIR is no longer operator-tunable (see payjp-ops.env.example note)."
-      info "  Scripts now ignore it, but please remove the line to avoid confusion:"
-      info "    sudo sed -i.bak '/^[[:space:]]*BACKUP_DIR=/d' $ENV_FILE"
-    fi
+  # Stale-override auto-removal: BACKUP_DIR is a deployment constant tied
+  # to payjp-ops-backup.service ReadWritePaths. b9f4415 removed env
+  # overridability from scripts/ops/backup-db.sh, so any BACKUP_DIR= line
+  # in the env file is dead config. We delete it (with .bak) instead of
+  # warning, because (a) prior WARN-only design was overlooked during the
+  # first b9f4415 deploy, allowing the silent Read-only failure to recur,
+  # and (b) the line cannot be load-bearing — nothing in the repo reads
+  # it anymore. See memory: project_db_backup_stale_2026_04_15.
+  if grep -qE '^[[:space:]]*BACKUP_DIR=' "$ENV_FILE" 2>/dev/null; then
+    stale_line="$(grep -E '^[[:space:]]*BACKUP_DIR=' "$ENV_FILE" | head -1)"
+    info "removing stale BACKUP_DIR override from $ENV_FILE (deployment constant since b9f4415):"
+    info "    $stale_line"
+    sed -i.payjp-ops.bak '/^[[:space:]]*BACKUP_DIR=/d' "$ENV_FILE"
+    info "  backup saved to ${ENV_FILE}.payjp-ops.bak"
   fi
 fi
 
