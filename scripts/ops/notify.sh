@@ -74,7 +74,7 @@ JA_CONTEXT="${ALERT_JA_CONTEXT[$BASE_CODE]:-}"
 
 if (( IS_RESOLVED == 1 )); then
   FINAL_TITLE="${EMOJI} [復旧] ${JA_TITLE:-$BASE_CODE} (${BASE_CODE})"
-  DESCRIPTION="**状況**: 2回連続正常を確認し復旧と判定。"$'\n\n'"**最新値**: ${BODY:-(no body)}"
+  DESCRIPTION="**状況**: ${GREEN_STREAK_FOR_RESOLVE:-2}回連続正常を確認し復旧と判定。"$'\n\n'"**最新値**: ${BODY:-(no body)}"
 else
   if [[ -n "$JA_TITLE" ]]; then
     FINAL_TITLE="${EMOJI} ${JA_TITLE}: ${TITLE} (${CODE})"
