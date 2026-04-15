@@ -29,6 +29,8 @@ A minimal **pure-poll external observer** for the single-VPS deployment. Bash sc
 
 Per-code cooldown overrides live in `scripts/ops/lib/thresholds.conf` (e.g., `COOLDOWN_HOST_TLS_EXPIRING=86400`).
 
+External-dependency monitoring (PAY.JP / Discord / Let's Encrypt status pages, CAA, domain expiry) is documented separately in [`external-monitoring.md`](external-monitoring.md).
+
 ---
 
 ## Architecture
