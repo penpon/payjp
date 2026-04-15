@@ -1,0 +1,36 @@
+[Unit]
+Description=PAY.JP ops offsite DB backup upload (age + rclone → BackBlaze B2)
+Documentation=file:///home/ubuntu/payjp/docs/ops/backup-restore.md
+After=network-online.target
+Wants=network-online.target
+# Triggered by payjp-ops-backup.service OnSuccess=. Manual start also works.
+
+[Service]
+Type=oneshot
+# Runs as root: the source pg_dump is 0600 root:root. Uploading requires read
+# access; sandboxing below limits the blast radius.
+EnvironmentFile=/etc/payjp-ops/.env
+ExecStart=/opt/payjp-ops/bin/offsite-upload.sh
+TimeoutStartSec=900
+LogLevelMax=info
+
+# B2 credentials injected as plaintext into $CREDENTIALS_DIRECTORY (tmpfs,
+# process tree only, wiped on service exit). Encrypted blobs live at
+# /etc/payjp-ops/creds/ and are machine-id + host-key bound.
+LoadCredentialEncrypted=B2_BACKUP_KEY_ID:/etc/payjp-ops/creds/B2_BACKUP_KEY_ID
+LoadCredentialEncrypted=B2_BACKUP_APPLICATION_KEY:/etc/payjp-ops/creds/B2_BACKUP_APPLICATION_KEY
+
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+# Backup dir: read-only (we stream, not write). State dir: writable for epoch stamp.
+ReadOnlyPaths=/var/backups/payjp-db
+ReadWritePaths=/var/lib/payjp-ops
+
+[Install]
+WantedBy=multi-user.target

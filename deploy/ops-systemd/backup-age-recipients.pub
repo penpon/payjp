@@ -1,0 +1,17 @@
+# PAY.JP DB backup — age recipient (public key).
+#
+# This file is committed to the repo intentionally: age recipient keys are
+# public by design (they only encrypt). The matching private key lives in
+# 1Password ("PAY.JP DB Backup - age private key") + a physical paper/USB
+# backup in a safe. Private key NEVER touches the VPS in normal operation.
+#
+# Used by:
+#   scripts/ops/offsite-upload.sh — encrypts pg_dump output before B2 upload.
+#   scripts/ops/restore-drill.sh  — same (to verify upload integrity round-trip
+#                                   uses private key loaded via systemd-creds,
+#                                   only during the drill service run).
+#
+# Rotation: generate a new keypair, replace this file, re-encrypt existing B2
+# objects via admin workflow (or accept that old blobs are unreadable by the
+# new private key — not a problem for a rolling 30-day retention window).
+age1ff435h3j5ns4n27qu54qzukak3z37zytuqy2ndewwk8ytfv2699qdnf46u

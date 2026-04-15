@@ -2,7 +2,8 @@
 # Web-app + DB signals.
 # Codes: APP_HEALTH_FAIL · APP_HEALTH_SLOW · DB_PING ·
 #        APP_PAYJP_EVENTS_FAILED · APP_IMPACT_LOGS_OPEN ·
-#        APP_INFLIGHT_STUCK_WARN · APP_INFLIGHT_STUCK_CRIT · DB_BACKUP_STALE
+#        APP_INFLIGHT_STUCK_WARN · APP_INFLIGHT_STUCK_CRIT · DB_BACKUP_STALE ·
+#        DB_OFFSITE_STALE · DB_RESTORE_DRILL_STALE
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
@@ -152,9 +153,79 @@ Check cron: journalctl --since -48h | grep backup"
   fi
 }
 
+check_offsite_stale() {
+  local stamp="${OPS_STATE_DIR:-/var/lib/payjp-ops}/state.d/offsite-last-success.epoch"
+  if [[ ! -r "$stamp" ]]; then
+    handle DB_OFFSITE_STALE critical fire \
+      "no offsite upload stamp found" \
+      "Stamp: ${stamp}
+Has offsite ever succeeded? Run:
+  sudo systemctl start payjp-ops-offsite.service
+  journalctl -u payjp-ops-offsite.service -n 50"
+    return
+  fi
+  local recorded age_sec age_h
+  recorded=$(cat "$stamp" 2>/dev/null || true)
+  # Distinguish corrupt/empty stamp from genuinely stale: firing a "490000h
+  # stale" alert on an empty file is a bad UX and obscures the real fault.
+  if [[ ! "$recorded" =~ ^[0-9]+$ ]]; then
+    handle DB_OFFSITE_STALE critical fire \
+      "offsite stamp corrupt or empty" \
+      "Stamp: ${stamp} (content: '${recorded}')
+Repair: sudo systemctl start payjp-ops-offsite.service"
+    return
+  fi
+  age_sec=$(( $(date +%s) - recorded ))
+  age_h=$(( age_sec / 3600 ))
+  if (( age_sec > DB_OFFSITE_STALE_HOURS * 3600 )); then
+    handle DB_OFFSITE_STALE critical fire \
+      "offsite upload ${age_h}h stale" \
+      "Threshold: ${DB_OFFSITE_STALE_HOURS}h
+Inspect: journalctl -u payjp-ops-offsite.service --since -48h"
+  else
+    handle DB_OFFSITE_STALE critical clear "" "offsite ${age_h}h old"
+  fi
+}
+
+check_restore_drill_stale() {
+  local stamp="${OPS_STATE_DIR:-/var/lib/payjp-ops}/state.d/restore-drill-last-success.epoch"
+  if [[ ! -r "$stamp" ]]; then
+    handle DB_RESTORE_DRILL_STALE critical fire \
+      "no restore drill stamp found" \
+      "Stamp: ${stamp}
+Initial drill not yet run. Kick off:
+  sudo systemctl start payjp-ops-restore-drill.service
+  journalctl -u payjp-ops-restore-drill.service -n 80"
+    return
+  fi
+  local recorded age_sec age_d
+  recorded=$(cat "$stamp" 2>/dev/null || true)
+  if [[ ! "$recorded" =~ ^[0-9]+$ ]]; then
+    handle DB_RESTORE_DRILL_STALE critical fire \
+      "drill stamp corrupt or empty" \
+      "Stamp: ${stamp} (content: '${recorded}')
+Repair: sudo systemctl start payjp-ops-restore-drill.service"
+    return
+  fi
+  age_sec=$(( $(date +%s) - recorded ))
+  age_d=$(( age_sec / 86400 ))
+  if (( age_sec > DB_RESTORE_DRILL_MAX_AGE_DAYS * 86400 )); then
+    handle DB_RESTORE_DRILL_STALE critical fire \
+      "last restore drill ${age_d}d ago" \
+      "Threshold: ${DB_RESTORE_DRILL_MAX_AGE_DAYS}d
+The restore drill is what proves encrypted backups are decryptable. Run:
+  sudo systemctl start payjp-ops-restore-drill.service
+Inspect: journalctl -u payjp-ops-restore-drill.service --since -45d"
+  else
+    handle DB_RESTORE_DRILL_STALE critical clear "" "drill ${age_d}d old"
+  fi
+}
+
 safe check_health
 safe check_db_ping
 safe check_payjp_events_failed
 safe check_impact_logs
 safe check_inflight
 safe check_backup_stale
+safe check_offsite_stale
+safe check_restore_drill_stale

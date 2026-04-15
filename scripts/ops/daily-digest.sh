@@ -60,6 +60,36 @@ gather_backup() {
   printf 'last: %dh ago · size: %sMB · file: %s' "$age_h" "$size_mb" "$file"
 }
 
+gather_offsite() {
+  # Bucket size probe requires B2_DRILL creds loaded via LoadCredentialEncrypted
+  # in payjp-ops-digest.service (not wired into the hourly check service).
+  local state_d="${OPS_STATE_DIR:-/var/lib/payjp-ops}/state.d"
+  local offsite_part="last: never" drill_part=" · drill: never" quota_part=""
+  local stamp
+  stamp=$(cat "$state_d/offsite-last-success.epoch" 2>/dev/null || true)
+  if [[ "$stamp" =~ ^[0-9]+$ ]]; then
+    offsite_part="last: $(( ( $(date +%s) - stamp ) / 3600 ))h ago"
+  fi
+  stamp=$(cat "$state_d/restore-drill-last-success.epoch" 2>/dev/null || true)
+  if [[ "$stamp" =~ ^[0-9]+$ ]]; then
+    drill_part=" · drill: $(( ( $(date +%s) - stamp ) / 86400 ))d ago"
+  fi
+  # Bucket size probe (cheap: 1 list call/day). If creds are not loaded we
+  # surface "unprobed"; if probe fails we surface "probe-failed" rather than
+  # silently dropping the segment — silent drop would mask a B2 outage.
+  if [[ ! -r "${CREDENTIALS_DIRECTORY:-/nonexistent}/B2_DRILL_KEY_ID" ]]; then
+    quota_part=" · bucket: unprobed"
+  else
+    local bytes
+    if bytes=$(/opt/payjp-ops/bin/b2-quota-check.sh 2>/dev/null) && [[ "$bytes" =~ ^[0-9]+$ ]]; then
+      quota_part=" · bucket: $(awk -v b="$bytes" 'BEGIN {printf "%.1f", b/1048576}')MB"
+    else
+      quota_part=" · bucket: probe-failed"
+    fi
+  fi
+  printf '%s%s%s' "$offsite_part" "$drill_part" "$quota_part"
+}
+
 gather_host() {
   local root_pct varlog_pct backups_pct load5 uptime_days
   root_pct=$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')
@@ -151,6 +181,7 @@ gather_alerts_24h() {
 TITLE="PAY.JP daily digest — $(TZ=Asia/Tokyo date +'%Y-%m-%d (JST)')"
 KPI=$(gather_kpi)
 BACKUP=$(gather_backup)
+OFFSITE=$(gather_offsite)
 HOST=$(gather_host)
 TLS=$(gather_tls)
 DOMAIN=$(gather_domain)
@@ -163,6 +194,7 @@ PAYLOAD=$(jq -cn \
   --argjson color 3066993 \
   --arg kpi "$KPI" \
   --arg backup "$BACKUP" \
+  --arg offsite "$OFFSITE" \
   --arg host "$HOST" \
   --arg tls "$TLS" \
   --arg domain "$DOMAIN" \
@@ -176,7 +208,8 @@ PAYLOAD=$(jq -cn \
       color: $color,
       fields: [
         {name: "KPI (24h)",                       value: $kpi,      inline: false},
-        {name: "Backup",                          value: $backup,   inline: true},
+        {name: "Backup (local)",                  value: $backup,   inline: true},
+        {name: "Backup (offsite B2)",             value: $offsite,  inline: true},
         {name: "Host",                            value: $host,     inline: true},
         {name: "TLS",                             value: $tls,      inline: true},
         {name: "Domain",                          value: $domain,   inline: true},
