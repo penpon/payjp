@@ -51,6 +51,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // bind to 0.0.0.0 inside the container: reachable only via the `admin-frontend` docker network.
+  // docker-compose.yml publishes nothing to the host (`expose: 3011`, no `ports:`), and nginx is
+  // the sole ingress via cloudflared tunnel at 127.0.0.1:8443. Switching to '127.0.0.1' would cut
+  // off nginx → admin-api traffic inside docker networking.
   await app.listen({ port, host: '0.0.0.0' });
 }
 

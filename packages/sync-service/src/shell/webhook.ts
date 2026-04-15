@@ -77,6 +77,12 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
   const event = req.body as WebhookEvent;
 
+  // Early-return paths below (ignored / validation-fail / idempotency-hit / subscription.created /
+  // member-not-found) intentionally write a single audit row OUTSIDE a transaction: each is a lone
+  // INSERT with no subsequent write, and ON CONFLICT (id) DO NOTHING provides idempotency.
+  // The main update path (lock → stale check → UPDATE members → INSERT payjp_events) is wrapped
+  // in `withTransaction` below (see line ~208).
+
   // REQ-SYNC-002/003/004: Ignore checks
   const ignoreReason = determineIgnoreReason(event, deps.expectedLivemode);
   if (ignoreReason) {
