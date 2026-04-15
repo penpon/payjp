@@ -91,12 +91,8 @@ services:
       - /var/cache/nginx
       - /run
     healthcheck:
-      # default_server returns 444 for bare 127.0.0.1; use named vhost that returns 301 on port 80
-      test:
-        [
-          "CMD-SHELL",
-          "wget --spider -q http://127.0.0.1/ --header='Host: www.and--line.com'",
-        ]
+      # Loopback /healthz in nginx.conf (no redirect; busybox wget cannot disable redirect follow)
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
