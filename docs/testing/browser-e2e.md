@@ -1,7 +1,7 @@
 # ブラウザ E2E（Playwright）
 
 MVP のユーザージャーニー（OAuth・購読・退会導線・薄いスモーク）は **Playwright + Chromium** で `e2e/` に置く。  
-**P0 の網羅**は [tdd-acceptance-matrix-mvp.md](./tdd-acceptance-matrix-mvp.md) を正とし、ブラウザに載せないものは [testing-system-p0.md](./testing-system-p0.md) の Vitest / サーバー E2E に残す。
+**P0 の網羅**は [tdd-acceptance-matrix-mvp.md](../tdd-acceptance-matrix-mvp.md) を正とし、ブラウザに載せないものは [system-p0.md](./system-p0.md) の Vitest / サーバー E2E に残す。
 
 ## 前提
 

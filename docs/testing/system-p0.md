@@ -1,7 +1,7 @@
 # System / Integration テスト（ブラウザ E2E 外の P0）
 
-[2weeks-spec.md](./2weeks-spec.md) 12.1 P0 のうち、**並列性・Webhook 順序・CLI 復旧・日次再同期**などは実ブラウザではなく **Vitest / サーバー inject E2E** で担保する。  
-ブラウザで見る導線は [testing-browser-e2e.md](./testing-browser-e2e.md) を参照。
+[2weeks-spec.md](../2weeks-spec.md) 12.1 P0 のうち、**並列性・Webhook 順序・CLI 復旧・日次再同期**などは実ブラウザではなく **Vitest / サーバー inject E2E** で担保する。  
+ブラウザで見る導線は [browser-e2e.md](./browser-e2e.md) を参照。
 
 ## 503・二重課金・CLI・operationId
 
