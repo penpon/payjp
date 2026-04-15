@@ -155,15 +155,33 @@ notify_safe() {
 	local code="$2"
 	local title="$3"
 	local body="${4:-}"
+	local -a notify_cmd
 
 	if [[ ! -f "$NOTIFY_SH" ]]; then
 		log "Warning: notify script missing; skipping Discord ($code)."
 		return 0
 	fi
 
-	if ! env GLOBAL_MIN_INTERVAL_SEC="$NOTIFY_MIN_INTERVAL_SEC" \
-		OPS_STATE_DIR="$DEPLOY_OPS_STATE_DIR" \
-		bash "$NOTIFY_SH" --severity "$severity" --code "$code" --title "$title" --body "$body"; then
+	notify_cmd=(
+		env
+		GLOBAL_MIN_INTERVAL_SEC="$NOTIFY_MIN_INTERVAL_SEC"
+		OPS_STATE_DIR="$DEPLOY_OPS_STATE_DIR"
+		bash "$NOTIFY_SH"
+		--severity "$severity"
+		--code "$code"
+		--title "$title"
+		--body "$body"
+	)
+
+	# Manual deploys resolve op:// values from .env via `op run` after interactive signin.
+	if (( AFTER_OP == 1 )); then
+		if ! op run --env-file=.env -- "${notify_cmd[@]}"; then
+			log "Warning: notify failed for $code (deploy continues)."
+		fi
+		return 0
+	fi
+
+	if ! "${notify_cmd[@]}"; then
 		log "Warning: notify failed for $code (deploy continues)."
 	fi
 }
