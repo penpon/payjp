@@ -12,6 +12,7 @@
 #   DEPLOY_LOG_MAX_MB              rotate .deploy.log when larger than this size (default: 20)
 #   ALLOW_DIRTY_GIT                set to 1 to allow deploy from dirty working tree
 #   MIN_FREE_ROOT_KB               minimum free disk on / (default: 2097152 = 2GiB)
+#   DEPLOY_OPS_STATE_DIR           notify.sh/dedup state dir (default: ~/.local/state/payjp-ops). Required: user-writable; systemd ops use /var/lib/payjp-ops (root).
 set -euo pipefail
 umask 027
 
@@ -26,6 +27,8 @@ NOTIFY_SH="$ROOT/scripts/ops/notify.sh"
 NOTIFY_MIN_INTERVAL_SEC="${DEPLOY_NOTIFY_MIN_INTERVAL_SEC:-0}"
 DEPLOY_LOG_MAX_MB="${DEPLOY_LOG_MAX_MB:-20}"
 MIN_FREE_ROOT_KB="${MIN_FREE_ROOT_KB:-2097152}"
+# notify.sh sources dedup.sh, which defaults OPS_STATE_DIR to /var/lib/payjp-ops (not writable as deploy user).
+DEPLOY_OPS_STATE_DIR="${DEPLOY_OPS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/payjp-ops}"
 
 # Must match service names in docker-compose.yml and all must expose healthcheck.
 COMPOSE_HEALTH_SERVICES=(db api admin-api nginx)
@@ -124,6 +127,15 @@ release_lock() {
 	rmdir "$LOCKDIR" 2>/dev/null || true
 }
 
+ensure_notify_state_dir() {
+	# dedup.sh ops_state_init needs mkdir under OPS_STATE_DIR; fail early with a clear message.
+	if ! mkdir -p "$DEPLOY_OPS_STATE_DIR/state.d"; then
+		log "Error: cannot create notify state directory: $DEPLOY_OPS_STATE_DIR"
+		log "Set DEPLOY_OPS_STATE_DIR to a writable path (default: ~/.local/state/payjp-ops)."
+		exit 1
+	fi
+}
+
 rotate_deploy_log_if_needed() {
 	if [[ ! -f "$DEPLOY_LOG" ]]; then
 		return 0
@@ -150,6 +162,7 @@ notify_safe() {
 	fi
 
 	if ! env GLOBAL_MIN_INTERVAL_SEC="$NOTIFY_MIN_INTERVAL_SEC" \
+		OPS_STATE_DIR="$DEPLOY_OPS_STATE_DIR" \
 		bash "$NOTIFY_SH" --severity "$severity" --code "$code" --title "$title" --body "$body"; then
 		log "Warning: notify failed for $code (deploy continues)."
 	fi
@@ -265,8 +278,10 @@ main() {
 	fi
 	AFTER_OP=1
 
+	ensure_notify_state_dir
+
 	CURRENT_STEP="notify start"
-	notify_safe normal DEPLOY_START "開始" "sha=${SHA} host=${HOST_SHORT} log=${DEPLOY_LOG}"
+	notify_safe normal DEPLOY_START "開始" "sha=${SHA} host=${HOST_SHORT} log=${DEPLOY_LOG} ops_state=${DEPLOY_OPS_STATE_DIR}"
 
 	run_or_fail "build:frontend" op run --env-file=.env -- npm run build:frontend
 	run_or_fail "build:admin-frontend" op run --env-file=.env -- npm run build:admin-frontend
