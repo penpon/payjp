@@ -165,9 +165,11 @@ handle() {
   else
     [[ "${DRY_RUN:-0}" == "1" ]] && return 0
     if on_healthy "$code"; then
+      # notify.sh が *_RESOLVED を検知して日本語タイトル・状況文を付与するため、
+      # ここでは --title を固定文字列にし、--body は最新値 (clear 呼び出し時の body) のみ渡す。
       "${NOTIFY_SCRIPT:?}" --severity normal --code "${code}_RESOLVED" \
-        --title "[RESOLVED] $code" \
-        --body "Condition cleared after ${GREEN_STREAK_FOR_RESOLVE:-2} consecutive healthy checks. ${body}" || true
+        --title "復旧" \
+        --body "${body}" || true
     fi
   fi
 }
