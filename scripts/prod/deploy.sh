@@ -39,6 +39,7 @@ CURRENT_STEP="bootstrap"
 START_TS=0
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 HOST_SHORT="$(hostname -s 2>/dev/null || hostname || echo unknown-host)"
+NOTIFY_WEBHOOK_BOOTSTRAP_ATTEMPTED=0
 
 log() {
 	printf '[deploy] %s\n' "$*"
@@ -136,6 +137,57 @@ ensure_notify_state_dir() {
 	fi
 }
 
+bootstrap_notify_webhooks_from_systemd_creds() {
+	if (( AFTER_OP != 1 )) || (( NOTIFY_WEBHOOK_BOOTSTRAP_ATTEMPTED == 1 )); then
+		return 0
+	fi
+	NOTIFY_WEBHOOK_BOOTSTRAP_ATTEMPTED=1
+
+	# If .env already resolves any webhook key via op run, no bootstrap is needed.
+	if op run --env-file=.env -- bash -lc '[[ -n "${DISCORD_OPS_WEBHOOK_NORMAL:-}" || -n "${DISCORD_OPS_WEBHOOK_ALERTS:-}" || -n "${DISCORD_OPS_WEBHOOK:-}" ]]' >/dev/null 2>&1; then
+		return 0
+	fi
+
+	local cred_dir cred_name cred_path value
+	local loaded=0
+	cred_dir="${DEPLOY_OPS_CREDENTIALS_DIR:-/etc/payjp-ops/creds}"
+	if [[ ! -d "$cred_dir" ]]; then
+		return 0
+	fi
+	if ! command -v sudo >/dev/null 2>&1 || ! command -v systemd-creds >/dev/null 2>&1; then
+		return 0
+	fi
+	if [[ ! -f "$cred_dir/DISCORD_OPS_WEBHOOK_NORMAL" ]] &&
+		[[ ! -f "$cred_dir/DISCORD_OPS_WEBHOOK_ALERTS" ]] &&
+		[[ ! -f "$cred_dir/DISCORD_OPS_WEBHOOK" ]]; then
+		return 0
+	fi
+
+	if ! sudo -n true >/dev/null 2>&1; then
+		log "Info: sudo auth required once to enable deploy notifications from $cred_dir."
+		if ! sudo -v; then
+			log "Warning: sudo auth failed; deploy notifications may remain disabled."
+			return 0
+		fi
+	fi
+
+	for cred_name in DISCORD_OPS_WEBHOOK_NORMAL DISCORD_OPS_WEBHOOK_ALERTS DISCORD_OPS_WEBHOOK; do
+		cred_path="$cred_dir/$cred_name"
+		if [[ ! -f "$cred_path" ]]; then
+			continue
+		fi
+		if value="$(sudo systemd-creds --name="$cred_name" decrypt "$cred_path" - 2>/dev/null)" && [[ -n "$value" ]]; then
+			printf -v "$cred_name" '%s' "$value"
+			export "$cred_name"
+			loaded=1
+		fi
+	done
+
+	if (( loaded == 1 )); then
+		log "Loaded Discord webhook credentials from systemd-creds for manual deploy notifications."
+	fi
+}
+
 rotate_deploy_log_if_needed() {
 	if [[ ! -f "$DEPLOY_LOG" ]]; then
 		return 0
@@ -156,9 +208,33 @@ notify_safe() {
 	local title="$3"
 	local body="${4:-}"
 	local -a notify_cmd
+	local webhook_kind webhook_env_var
 
 	if [[ ! -f "$NOTIFY_SH" ]]; then
 		log "Warning: notify script missing; skipping Discord ($code)."
+		return 0
+	fi
+
+	case "$severity" in
+		normal)
+			webhook_kind="normal"
+			webhook_env_var="DISCORD_OPS_WEBHOOK_NORMAL"
+			;;
+		*)
+			webhook_kind="alerts"
+			webhook_env_var="DISCORD_OPS_WEBHOOK_ALERTS"
+			;;
+	esac
+
+	bootstrap_notify_webhooks_from_systemd_creds
+
+	# Skip notify early when no webhook is configured in this execution context.
+	# Legacy single webhook (DISCORD_OPS_WEBHOOK) is accepted for split migration compatibility.
+	if [[ -z "${!webhook_env_var:-}" ]] &&
+		[[ -z "${DISCORD_OPS_WEBHOOK:-}" ]] &&
+		{ [[ -z "${CREDENTIALS_DIRECTORY:-}" ]] || { [[ ! -r "$CREDENTIALS_DIRECTORY/$webhook_env_var" ]] && [[ ! -r "$CREDENTIALS_DIRECTORY/DISCORD_OPS_WEBHOOK" ]]; }; } &&
+		{ (( AFTER_OP != 1 )) || ! op run --env-file=.env -- bash -lc "[[ -n \"\${$webhook_env_var:-}\" || -n \"\${DISCORD_OPS_WEBHOOK:-}\" ]]" >/dev/null 2>&1; }; then
+		log "Discord notify skipped for $code (${webhook_kind} webhook unavailable)."
 		return 0
 	fi
 
