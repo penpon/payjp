@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo $CLAUDE_FILE_PATH | grep -qE '\\.env' && echo 'BLOCK: .env files should not be edited by Claude' && exit 1 || exit 0"
+            "command": "f=$(jq -r '.tool_input.file_path'); echo \"$f\" | grep -qE '(^|/)\\.env(\\.|$)' && echo \"BLOCK: $f is an .env file — must not be edited by Claude\" && exit 1 || exit 0"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx biome check --write --files-ignore-unknown=true $CLAUDE_FILE_PATH 2>/dev/null || true"
+            "command": "f=$(jq -r '.tool_response.filePath // .tool_input.file_path'); [ -n \"$f\" ] && npx biome check --write --files-ignore-unknown=true \"$f\" 2>/dev/null; true"
           }
         ]
       }
