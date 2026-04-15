@@ -144,11 +144,7 @@ async function renderMembers(root: HTMLElement): Promise<void> {
       if (typeof v === 'string' && v.length > 0) p.set(k, v);
     }
     const qs = p.toString();
-    window.history.replaceState(
-      {},
-      '',
-      `${window.location.pathname}${qs ? `?${qs}` : ''}#members`,
-    );
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}#members`);
     void render();
   });
   const qIn = document.createElement('input');
@@ -188,7 +184,7 @@ async function renderMembers(root: HTMLElement): Promise<void> {
   for (const m of data.members) {
     const tr = el('tr', null, [
       el('td', null, [m.email]),
-      el('td', { className: 'row-muted' }, [m.id.slice(0, 8) + '…']),
+      el('td', { className: 'row-muted' }, [`${m.id.slice(0, 8)}…`]),
       el('td', { className: 'row-muted' }, [m.discord_user_id ?? '—']),
       el('td', null, [m.subscription_status ?? '—']),
       el('td', null, [m.payjp_plan_id ?? '—']),
@@ -289,9 +285,7 @@ async function render(): Promise<void> {
     else if (route === 'member' && id) await renderMember(mainWrap, id);
     else await renderOverview(mainWrap);
   } catch (e) {
-    mainWrap.replaceChildren(
-      el('p', { className: 'error' }, [e instanceof Error ? e.message : String(e)]),
-    );
+    mainWrap.replaceChildren(el('p', { className: 'error' }, [e instanceof Error ? e.message : String(e)]));
   }
 }
 
