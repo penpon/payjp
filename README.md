@@ -60,7 +60,7 @@ API サーバー（ポート 3000）+ PostgreSQL をまとめて起動。**DBマ
 # 推奨: op:// を含む .env 用（1Password CLI が PATH にあり、セッション済みであること）
 npm run docker:up
 # または
-bash scripts/docker-compose-op.sh up --build
+bash scripts/local/docker-compose-op.sh up --build
 ```
 
 `op://` を含まない通常の `.env`（`.env.example` をベースにしたローカル値）では、このスクリプトは通常の `docker compose` をそのまま実行する。
@@ -71,7 +71,7 @@ docker compose up --build
 
 **トラブルシュート（`op://` 関連）**
 
-- PostgreSQL に `FATAL: role "op://ENV/.../credential" does not exist`、または API に `FRONTEND_BASE_URL ... got: op://...` が出る場合、**`op://` が解決されないまま** `docker compose` を直接実行している可能性が高い。`npm run docker:up` または `bash scripts/docker-compose-op.sh up --build` で起動し直す（1Password CLI で `op signin` 済みであること）。
+- PostgreSQL に `FATAL: role "op://ENV/.../credential" does not exist`、または API に `FRONTEND_BASE_URL ... got: op://...` が出る場合、**`op://` が解決されないまま** `docker compose` を直接実行している可能性が高い。`npm run docker:up` または `bash scripts/local/docker-compose-op.sh up --build` で起動し直す（1Password CLI で `op signin` 済みであること）。
 - ログに `POST /cgi-bin/...` と **status 400** や **444** が出る場合、インターネット上の自動スキャンが典型である。アプリが CGI を使っていなければ侵入成功のログではない（nginx 側で拒否・接続切断される想定）。
 
 ### 2-B. ローカル開発（フロントエンドのホットリロードあり）

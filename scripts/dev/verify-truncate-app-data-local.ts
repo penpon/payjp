@@ -1,6 +1,6 @@
 /**
  * Ephemeral Postgres (Docker) に対して migrate → truncate を実行し、CLI 経路を検証する。
- * Usage: `bash scripts/run-verify-truncate-app-data.sh`（スクリプト側で Docker を起動）
+ * Usage: `bash scripts/local/run-verify-truncate-app-data.sh`（スクリプト側で Docker を起動）
  */
 import { closePool, createPool, runMigrations, truncateAllAppData } from '@hayane/shared';
 

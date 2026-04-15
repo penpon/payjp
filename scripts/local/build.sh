@@ -3,7 +3,7 @@
 # Requires repo-root `.env`. Secrets may use 1Password references (op://...); `op run` resolves them.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 if [[ ! -f .env ]]; then

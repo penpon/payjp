@@ -14,7 +14,7 @@
 | `npm run check:payment-security` | `frontend/index.html` / `frontend/dist/index.html` のスクリプト許可、`frontend/public/*.html` の Google Fonts 禁止、`_headers` と nginx の CSP 一致、`EXPECTED_CSP` との一致 |
 | `PAYMENT_PAGE_URL=https://…/ npm run check:payment-security:live` | 本番 HTTPS 取得でヘッダ（CSP / HSTS / XFO）と HTML 許可リストを検証（PR CI では実行しない） |
 
-実装: [`scripts/check-payment-page-security.ts`](../../scripts/check-payment-page-security.ts)。`EXPECTED_CSP` は `_headers` / nginx と同期すること。
+実装: [`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts)。`EXPECTED_CSP` は `_headers` / nginx と同期すること。
 
 ## 1. 監視対象
 

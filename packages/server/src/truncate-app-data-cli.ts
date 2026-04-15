@@ -3,7 +3,7 @@
  *
  * Usage (repo root): `TRUNCATE_APP_DATA_CONFIRM=1 npm run truncate-app-data`
  * or: `npm run truncate-app-data -- --yes`
- * or: `./scripts/truncate-app-data-cli --yes` (executable wrapper; not on PATH unless you symlink).
+ * or: `./scripts/local/truncate-app-data-cli --yes` (executable wrapper; not on PATH unless you symlink).
  *
  * If `.env` uses `op://` for secrets, dotenv does not resolve them — use:
  * `op run --env-file=.env -- npm run truncate-app-data -- --yes`

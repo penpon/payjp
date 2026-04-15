@@ -6,7 +6,7 @@
 ## 総合判断
 
 - **カード非保持・3DS・operationId 失敗クローズ・ヘッダ基本統制** はコードと文書で説明可能。
-- **11.6.1 完全自動化**（CSP レポート集約等）は未実装。一方 **CI の静的検証**（[`scripts/check-payment-page-security.ts`](../../scripts/check-payment-page-security.ts)）でスクリプト許可・CSP 整合を毎 PR 確認する。運用手順・台帳は [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)・[pci-payment-page-script-register.md](pci-payment-page-script-register.md)。
+- **11.6.1 完全自動化**（CSP レポート集約等）は未実装。一方 **CI の静的検証**（[`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts)）でスクリプト許可・CSP 整合を毎 PR 確認する。運用手順・台帳は [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)・[pci-payment-page-script-register.md](pci-payment-page-script-register.md)。
 - **MFA・ASV・法務本番値・TPSP 証跡の実物** は Git 外作業。一覧は [pci-readiness-gap-matrix.md](pci-readiness-gap-matrix.md)。申請前の実施順は [docs/evidence/SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md](../evidence/SCREENING-EXTERNAL-EVIDENCE-CHECKLIST.md)。
 
 ## 論点別ラベル
@@ -23,7 +23,7 @@
 | 3DS verified・503 + operationId | fixed_in_repo | [packages/billing-service](../../packages/billing-service) |
 | 静的 CSP・決済ページ表面 | fixed_in_repo | [frontend/public/_headers](../../frontend/public/_headers)、[nginx/security-headers.conf](../../nginx/security-headers.conf)、[frontend/index.html](../../frontend/index.html) |
 | pay.js SRI なし | compensating_control（制限の明示） | [pci-script-security-confirmation.md](pci-script-security-confirmation.md) |
-| 11.6.1 改ざん検知 | compensating_control + CI 静的ガード | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)、[pci-incident-response-plan.md](pci-incident-response-plan.md)、[`scripts/check-payment-page-security.ts`](../../scripts/check-payment-page-security.ts) |
+| 11.6.1 改ざん検知 | compensating_control + CI 静的ガード | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)、[pci-incident-response-plan.md](pci-incident-response-plan.md)、[`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts) |
 | Go-Live 証跡の実填 | requires_external_evidence | [docs/evidence/README.md](../evidence/README.md) |
 | PAY.JP MFA | requires_external_evidence | [TEMPLATE-mfa-check.md](../evidence/TEMPLATE-mfa-check.md) |
 | ASV | requires_external_evidence | [pci-asv-scan-policy.md](pci-asv-scan-policy.md) |

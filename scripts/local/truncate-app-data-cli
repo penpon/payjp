@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Same as: npm run truncate-app-data -- <args>
+# Run from anywhere: ~/payjp/scripts/local/truncate-app-data-cli --yes
+# With op:// in .env: op run --env-file=.env -- ./scripts/local/truncate-app-data-cli --yes
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+exec npm run truncate-app-data -- "$@"

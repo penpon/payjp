@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** Must match [frontend/public/_headers](frontend/public/_headers) and [nginx/security-headers.conf](nginx/security-headers.conf). */
 export const EXPECTED_CSP =
@@ -125,7 +125,7 @@ function runStaticChecks(): void {
   }
   if (normalizeCsp(cspHeaders) !== normalizeCsp(EXPECTED_CSP)) {
     throw new Error(
-      `CSP differs from EXPECTED_CSP in scripts/check-payment-page-security.ts.\nExpected:\n${EXPECTED_CSP}\n\nActual:\n${cspHeaders}`,
+      `CSP differs from EXPECTED_CSP in scripts/dev/check-payment-page-security.ts.\nExpected:\n${EXPECTED_CSP}\n\nActual:\n${cspHeaders}`,
     );
   }
 

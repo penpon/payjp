@@ -36,7 +36,7 @@ Content-Security-Policy:
   img-src 'self' data:
 ```
 
-スタイルは Vite ビルドで出力される **外部 CSS**（`frontend/dist/assets/index-*.css`）のみを読み込み、`index.html` および法務系静的ページに **インライン `<style>` は置かない**。実体は [frontend/public/_headers](../../frontend/public/_headers) および [nginx/security-headers.conf](../../nginx/security-headers.conf) と一致させる。整合は CI で [`scripts/check-payment-page-security.ts`](../../scripts/check-payment-page-security.ts) が検証する。
+スタイルは Vite ビルドで出力される **外部 CSS**（`frontend/dist/assets/index-*.css`）のみを読み込み、`index.html` および法務系静的ページに **インライン `<style>` は置かない**。実体は [frontend/public/_headers](../../frontend/public/_headers) および [nginx/security-headers.conf](../../nginx/security-headers.conf) と一致させる。整合は CI で [`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts) が検証する。
 
 **効果:**
 - `script-src 'self' https://js.pay.jp` — 許可されたドメイン以外のスクリプト実行をブロック

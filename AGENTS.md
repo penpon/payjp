@@ -39,7 +39,7 @@ feature/            git worktrees — do not delete
 | `npm run lint` | Biome check |
 | `npm run format` | Biome write |
 | `npm run e2e` | Playwright |
-| `npm run docker:up` / `docker:down` | Compose via `scripts/docker-compose-op.sh` |
+| `npm run docker:up` / `docker:down` | Compose via `scripts/local/docker-compose-op.sh` |
 
 Prefer the smallest command that validates your change (scoped tests before full suite when practical).
 

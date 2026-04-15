@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 既知のパスワードで一時 Postgres を立ち上げ、migrate + truncate が成功することを検証する。
-# リポジトリルートから: bash scripts/run-verify-truncate-app-data.sh
+# リポジトリルートから: bash scripts/local/run-verify-truncate-app-data.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 CONTAINER="payjp-verify-truncate-$$"
@@ -41,7 +41,7 @@ export DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@127.0.0.1:${PORT}/${PGDB
 export TRUNCATE_SKIP_DOTENV=1
 
 echo "[verify-truncate] migrate + truncate (tsx)..."
-if ! npx tsx scripts/verify-truncate-app-data-local.ts; then
+if ! npx tsx scripts/dev/verify-truncate-app-data-local.ts; then
   echo "[verify-truncate] FAILED: migrate+truncate" >&2
   exit 1
 fi

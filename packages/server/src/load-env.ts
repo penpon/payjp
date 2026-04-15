@@ -2,7 +2,7 @@
  * Load repository-root `.env` into `process.env` for local `tsx` / CLI runs.
  * - Does not override variables already set (Docker, CI, or `op run`).
  * - Skipped under Vitest so tests do not pick up a developer machine `.env`.
- * - `op://` references are not resolved here; use `op run --env-file=.env -- <cmd>` or `scripts/docker-compose-op.sh`.
+ * - `op://` references are not resolved here; use `op run --env-file=.env -- <cmd>` or `scripts/local/docker-compose-op.sh`.
  */
 
 import { existsSync } from 'node:fs';

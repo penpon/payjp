@@ -3,7 +3,7 @@
 # If .env contains op:// references, requires 1Password CLI (`op`) and a signed-in session.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 if [[ ! -f .env ]]; then

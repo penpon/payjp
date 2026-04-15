@@ -5,8 +5,8 @@
 # schema_migrations は保持される。
 #
 # Usage:
-#   bash scripts/truncate-local-db.sh          # 確認プロンプトあり
-#   bash scripts/truncate-local-db.sh --yes    # 確認スキップ
+#   bash scripts/local/truncate-local-db.sh          # 確認プロンプトあり
+#   bash scripts/local/truncate-local-db.sh --yes    # 確認スキップ
 set -euo pipefail
 
 CONTAINER="payjp-db-1"
