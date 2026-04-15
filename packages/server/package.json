@@ -32,6 +32,6 @@
     "@types/cron": "^2.0.1",
     "@types/node": "^22.0.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "vitest": "^3.1.1"
   }
 }
