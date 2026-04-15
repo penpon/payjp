@@ -50,6 +50,8 @@ cp .env.example .env
 | `GOOGLE_FORM_CANCEL_TOKEN_SECRET` | 退会用署名トークンの HMAC secret |
 | `GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS` | Google Form 遷移リンクの有効秒数 |
 
+全 28 変数の取得元・本番/ローカル差・`op://` 参照可否・関連ドキュメントは [`docs/ops/environment-variables.md`](docs/ops/environment-variables.md) を参照。
+
 ### 2-A. Docker Compose で起動（推奨）
 
 API サーバー（ポート 3000）+ PostgreSQL をまとめて起動。**DBマイグレーションは自動実行**。
