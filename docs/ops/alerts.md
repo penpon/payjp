@@ -215,6 +215,7 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
 | `HOST_SWAP_HIGH`       | swap used > `SWAP_PCT`% | warn | investigate memory pressure |
 | `HOST_FAIL2BAN_SURGE`  | currently-banned aggregate ≥ `FAIL2BAN_BANNED_THRESHOLD` | warn | `sudo fail2ban-client status <jail>`; inspect attack source |
 | `HOST_TLS_EXPIRING`    | cert `notAfter` < `TLS_DAYS_CRITICAL` days | critical | `sudo certbot renew` (stop nginx first for standalone) |
+| `HOST_DOMAIN_EXPIRING` | whois Registry Expiry Date < `DOMAIN_DAYS_CRITICAL` days for any domain in `DOMAINS_TO_MONITOR` | critical | CF dashboard → Registrar → verify auto-renew ON + payment method valid; trigger manual renewal if needed |
 
 ### Docker (Phase B)
 
@@ -265,6 +266,7 @@ Only `payjp-db-1` has a Docker healthcheck. `api` / `admin-api` / `nginx` are co
 - **Backup** — last success age, size, filename
 - **Host** — disk %, load5, uptime days
 - **TLS** — days remaining per domain
+- **Domain** — whois Registry Expiry days remaining per registered domain in `DOMAINS_TO_MONITOR`
 - **Docker** — running/expected count + db healthcheck status
 - **fail2ban** — currently banned per jail
 - **Alerts fired (24h)** — `list_recent_alerts` summary (up to 8 entries)
@@ -311,6 +313,7 @@ The repo-managed `payjp-ops-backup.*` unit **replaces** the host-level `/usr/loc
 | 8  | DB ping | `sudo docker stop payjp-db-1` (test env); wait 6 min | 1 critical `DB_PING` |
 | 9  | Backup stale | `sudo touch -d '30 hours ago' /var/backups/payjp-db/payjp_*.sql.gz` | 1 critical `DB_BACKUP_STALE` |
 | 10 | TLS | point `CERT_PATHS` at a test cert <14 days remaining | 1 critical `HOST_TLS_EXPIRING` |
+| 10b | Domain | `DOMAIN_DAYS_CRITICAL=400` (forces fire on any 1-year domain) in shell env, run check-host.sh once | 1 critical `HOST_DOMAIN_EXPIRING` |
 | 11 | 5xx burst | inject 6 status-500 JSON lines into nginx access.log | 1 critical `NGINX_5XX_BURST` |
 | 12 | Storm | trigger 5+ codes in one tick | `OPS_STORM` post; individual #5+ suppressed |
 | 13 | Digest | `sudo -u payjp-ops /opt/payjp-ops/bin/daily-digest.sh` | 1 normal digest post in production channel |

@@ -77,6 +77,7 @@ info "checking dependencies"
 command -v jq >/dev/null 2>&1 || die "jq not found. apt install jq"
 command -v curl >/dev/null 2>&1 || die "curl not found"
 command -v rsync >/dev/null 2>&1 || die "rsync not found"
+command -v whois >/dev/null 2>&1 || die "whois not found. apt install whois (required by check-host.sh:check_domain)"
 command -v systemd-creds >/dev/null 2>&1 || die "systemd-creds not found (need systemd >= 250). Ubuntu 24.04 ships 255; check systemctl --version."
 info "systemd-creds available (secret encryption ready)"
 

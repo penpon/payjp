@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Daily digest — posted 09:00 JST. Always fires (schedule-driven), not gated by dedup.
-# Aggregates: 3 KPI (24h) · backup · host · TLS · docker · fail2ban · recent alerts.
+# Aggregates: 3 KPI (24h) · backup · host · TLS · domain · docker · fail2ban · recent alerts.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
@@ -85,6 +85,25 @@ gather_tls() {
   printf '%s' "${list%· }"
 }
 
+gather_domain() {
+  local domain list=""
+  for domain in $DOMAINS_TO_MONITOR; do
+    local raw expiry epoch days
+    raw=$(timeout 10 whois "$domain" 2>/dev/null) || { list+="${domain}: ? · "; continue; }
+    expiry=$(printf '%s\n' "$raw" | awk -F': +' '/Registry Expiry Date/ {print $2; exit}')
+    [[ -z "$expiry" ]] && \
+      expiry=$(printf '%s\n' "$raw" | awk -F': +' '/Registrar Registration Expiration Date/ {print $2; exit}')
+    if [[ -z "$expiry" ]] || ! epoch=$(date -d "$expiry" +%s 2>/dev/null); then
+      list+="${domain}: ? · "
+      continue
+    fi
+    days=$(( (epoch - $(date +%s)) / 86400 ))
+    list+="${domain}: ${days}d · "
+  done
+  [[ -z "$list" ]] && list="(no domains configured)"
+  printf '%s' "${list%· }"
+}
+
 gather_docker() {
   local up=0 total=0 db_health="?"
   local svc container state
@@ -134,6 +153,7 @@ KPI=$(gather_kpi)
 BACKUP=$(gather_backup)
 HOST=$(gather_host)
 TLS=$(gather_tls)
+DOMAIN=$(gather_domain)
 DOCKER_INFO=$(gather_docker)
 FAIL2BAN=$(gather_fail2ban)
 ALERTS_24H=$(gather_alerts_24h)
@@ -145,6 +165,7 @@ PAYLOAD=$(jq -cn \
   --arg backup "$BACKUP" \
   --arg host "$HOST" \
   --arg tls "$TLS" \
+  --arg domain "$DOMAIN" \
   --arg docker "$DOCKER_INFO" \
   --arg fail2ban "$FAIL2BAN" \
   --arg alerts "$ALERTS_24H" \
@@ -158,6 +179,7 @@ PAYLOAD=$(jq -cn \
         {name: "Backup",                          value: $backup,   inline: true},
         {name: "Host",                            value: $host,     inline: true},
         {name: "TLS",                             value: $tls,      inline: true},
+        {name: "Domain",                          value: $domain,   inline: true},
         {name: "Docker",                          value: $docker,   inline: true},
         {name: "fail2ban (currently banned)",     value: $fail2ban, inline: true},
         {name: "Alerts fired (24h)",              value: $alerts,   inline: false}
