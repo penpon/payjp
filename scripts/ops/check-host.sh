@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Linux host signals → payjp-ops Discord.
 # Codes: HOST_DISK_{ROOT,VARLOG,BACKUPS} · HOST_LOAD_HIGH · HOST_OOM_KILL ·
-#        HOST_REBOOT_REQUIRED · HOST_SWAP_HIGH · HOST_FAIL2BAN_SURGE · HOST_TLS_EXPIRING
+#        HOST_REBOOT_REQUIRED · HOST_SWAP_HIGH · HOST_FAIL2BAN_SURGE · HOST_TLS_EXPIRING ·
+#        HOST_DOMAIN_EXPIRING
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
@@ -157,6 +158,51 @@ Renew: stop nginx, run certbot renew (standalone), restart nginx."
   fi
 }
 
+check_domain() {
+  local domain any_found=0 min_days=99999 worst_domain=""
+  for domain in $DOMAINS_TO_MONITOR; do
+    local raw expiry expiry_epoch now days
+    # 10s timeout — whois server unreachable must not stall the tick.
+    if ! raw=$(timeout 10 whois "$domain" 2>/dev/null); then
+      log_warn "whois timeout or failure" "domain" "$domain"
+      continue
+    fi
+    # .com/.net (Verisign): "Registry Expiry Date"
+    # Many gTLDs also expose "Registrar Registration Expiration Date" as fallback.
+    expiry=$(printf '%s\n' "$raw" | awk -F': +' '/Registry Expiry Date/ {print $2; exit}')
+    [[ -z "$expiry" ]] && \
+      expiry=$(printf '%s\n' "$raw" | awk -F': +' '/Registrar Registration Expiration Date/ {print $2; exit}')
+    if [[ -z "$expiry" ]]; then
+      log_warn "whois expiry not parseable" "domain" "$domain"
+      continue
+    fi
+    if ! expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null); then
+      log_warn "whois expiry date parse failed" "domain" "$domain" "raw" "$expiry"
+      continue
+    fi
+    now=$(date +%s)
+    days=$(( (expiry_epoch - now) / 86400 ))
+    any_found=1
+    if (( days < min_days )); then
+      min_days=$days
+      worst_domain=$domain
+    fi
+  done
+  if (( any_found == 0 )); then
+    log_warn "no parseable domain expiry — check skipped"
+    return 0
+  fi
+  if (( min_days < DOMAIN_DAYS_CRITICAL )); then
+    handle HOST_DOMAIN_EXPIRING critical fire \
+      "domain ${worst_domain} expires in ${min_days} days" \
+      "Threshold: ${DOMAIN_DAYS_CRITICAL}d
+Cloudflare Registrar normally auto-renews ~30d before expiry; this alert means renewal did not complete.
+Action: dashboard → Registrar → verify auto-renew ON + payment method valid."
+  else
+    handle HOST_DOMAIN_EXPIRING critical clear "" "min domain days remaining: ${min_days} (${worst_domain})"
+  fi
+}
+
 safe check_disk /                       HOST_DISK_ROOT    critical
 safe check_disk /var/log                HOST_DISK_VARLOG  warn
 safe check_disk "$BACKUP_DIR"           HOST_DISK_BACKUPS critical
@@ -166,3 +212,4 @@ safe check_reboot_required
 safe check_swap
 safe check_fail2ban
 safe check_tls
+safe check_domain
