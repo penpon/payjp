@@ -30,7 +30,8 @@
     "verify:truncate": "bash scripts/local/run-verify-truncate-app-data.sh",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
-    "e2e:install": "playwright install --with-deps chromium"
+    "e2e:install": "playwright install --with-deps chromium",
+    "clean": "rm -rf logs/nginx/* test-results/* playwright-report/* entities.json node_modules/.cache 2>/dev/null || true"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",
