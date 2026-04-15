@@ -51,10 +51,11 @@ done
 
 if [[ "$MODE" == "uninstall" ]]; then
   info "disabling timers"
-  systemctl disable --now payjp-ops-check.timer payjp-ops-digest.timer 2>/dev/null || true
+  systemctl disable --now payjp-ops-check.timer payjp-ops-digest.timer payjp-ops-backup.timer 2>/dev/null || true
   info "removing unit files"
   rm -f "$SYSTEMD_DIR"/payjp-ops-check.service "$SYSTEMD_DIR"/payjp-ops-check.timer
   rm -f "$SYSTEMD_DIR"/payjp-ops-digest.service "$SYSTEMD_DIR"/payjp-ops-digest.timer
+  rm -f "$SYSTEMD_DIR"/payjp-ops-backup.service "$SYSTEMD_DIR"/payjp-ops-backup.timer
   systemctl daemon-reload
   info "removing install dir"
   rm -rf "$INSTALL_DIR"
@@ -102,11 +103,25 @@ rsync -a --delete "$SCRIPT_SRC/" "$INSTALL_DIR/"
 find "$INSTALL_DIR" -type f -name '*.sh' -exec chmod 0755 {} +
 find "$INSTALL_DIR/lib" -type f -name '*.conf' -exec chmod 0644 {} + 2>/dev/null || true
 
+info "migrating legacy payjp-db-backup.{service,timer} → payjp-ops-backup.*"
+if systemctl list-unit-files payjp-db-backup.timer >/dev/null 2>&1; then
+  systemctl disable --now payjp-db-backup.timer 2>/dev/null || true
+  systemctl stop payjp-db-backup.service 2>/dev/null || true
+  rm -f "$SYSTEMD_DIR/payjp-db-backup.service" "$SYSTEMD_DIR/payjp-db-backup.timer"
+  rm -f /usr/local/sbin/payjp-db-backup
+  info "  legacy units + /usr/local/sbin/payjp-db-backup removed (existing backups under /var/backups/payjp-db preserved)"
+fi
+
+info "ensuring /var/backups/payjp-db exists (0750 root:$GROUP_NAME — dir list+traverse for payjp-ops; files stay 0600 root:root)"
+install -d -o root -g "$GROUP_NAME" -m 0750 /var/backups/payjp-db
+
 info "installing systemd units"
 install -m 0644 "$UNIT_SRC/payjp-ops-check.service"  "$SYSTEMD_DIR/"
 install -m 0644 "$UNIT_SRC/payjp-ops-check.timer"    "$SYSTEMD_DIR/"
 install -m 0644 "$UNIT_SRC/payjp-ops-digest.service" "$SYSTEMD_DIR/"
 install -m 0644 "$UNIT_SRC/payjp-ops-digest.timer"   "$SYSTEMD_DIR/"
+install -m 0644 "$UNIT_SRC/payjp-ops-backup.service" "$SYSTEMD_DIR/"
+install -m 0644 "$UNIT_SRC/payjp-ops-backup.timer"   "$SYSTEMD_DIR/"
 
 info "installing sudoers drop-in (minimum read-only commands)"
 cat > "$SUDOERS_FILE" <<'SUDOERS'
@@ -125,7 +140,7 @@ Cmnd_Alias PAYJP_OPS_CMDS = \
     /usr/bin/docker inspect *, \
     /usr/bin/docker volume inspect *, \
     /usr/bin/docker exec payjp-db-1 psql *, \
-    /usr/bin/stat -c * /var/backups/hayane/*, \
+    /usr/bin/stat -c * /var/backups/payjp-db/*, \
     /usr/bin/stat -c * /var/lib/docker/volumes/payjp_nginx_logs/_data/*, \
     /usr/bin/tail -n * /var/lib/docker/volumes/payjp_nginx_logs/_data/access.log, \
     /usr/bin/tail -n * /var/lib/docker/volumes/payjp_nginx_logs/_data/error.log
@@ -211,14 +226,18 @@ Next steps (operator):
        sudo systemctl start payjp-ops-digest.service
        journalctl -u payjp-ops-digest.service -n 40 --no-pager
        # Expect: digest embed appears in the normal channel
+       sudo systemctl start payjp-ops-backup.service
+       journalctl -u payjp-ops-backup.service -n 40 --no-pager
+       sudo ls -lt /var/backups/payjp-db/ | head
+       # Expect: new payjp_<ts>Z.sql.gz of non-trivial size (>500B minimum enforced)
 
   7. Enable timers:
-       sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
+       sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer payjp-ops-backup.timer
 
   8. Rotation (when a webhook URL is regenerated — do per-channel):
        sudo rm $WEBHOOK_CRED_ALERTS    # or $WEBHOOK_CRED_NORMAL
        # repeat the matching sub-step of 2 with the new URL
-       sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
+       sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer payjp-ops-backup.timer
 
 Uninstall: sudo $0 --uninstall
 EOF

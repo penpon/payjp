@@ -1,0 +1,14 @@
+[Unit]
+Description=PAY.JP ops nightly DB backup — 03:00 JST (±5min)
+Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
+
+[Timer]
+# Asia/Tokyo enforced (requires systemd >= 246). Matches the legacy
+# payjp-db-backup.timer firing pattern (UTC 18:00 = JST 03:00, ±5min jitter).
+OnCalendar=*-*-* 03:00:00 Asia/Tokyo
+RandomizedDelaySec=5m
+Persistent=true
+Unit=payjp-ops-backup.service
+
+[Install]
+WantedBy=timers.target

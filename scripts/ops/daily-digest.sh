@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/lib/op-webhook.sh"
 ops_state_init
 
 : "${COMPOSE_PROJECT:=payjp}"
-: "${BACKUP_DIR:=/var/backups/hayane}"
+: "${BACKUP_DIR:=/var/backups/payjp-db}"
 : "${HEALTH_URL:=https://api.and--line.com/health}"
 : "${NGINX_VOLUME:=payjp_nginx_logs}"
 
@@ -45,7 +45,7 @@ gather_kpi() {
 
 gather_backup() {
   local latest
-  latest=$(ls -1t "$BACKUP_DIR"/hayane_*.sql.gz 2>/dev/null | head -1)
+  latest=$(ls -1t "$BACKUP_DIR"/payjp_*.sql.gz 2>/dev/null | head -1)
   if [[ -z "$latest" ]]; then
     printf 'no backup found in %s' "$BACKUP_DIR"
     return

@@ -81,14 +81,14 @@
 
 | シナリオ | 手順 |
 |---|---|
-| DB障害 | `scripts/backup-db.sh` のバックアップから `pg_restore` でリストア |
+| DB障害 | `scripts/ops/backup-db.sh` のバックアップから `pg_restore` でリストア |
 | Webページ改ざん | Gitリポジトリから `git checkout` + フロントエンド再ビルド + nginx再起動 |
 | PAY.JP API障害 | PAY.JP側復旧を待機 → 復旧後に `resync-cli --all` で同期 |
 | Discord API障害 | Discord側復旧を待機 → 復旧後にロール同期を手動実行 |
 
 ## 6. データバックアップ
 
-- バックアップ: `scripts/backup-db.sh`（日次、7日間保持）
+- バックアップ: `scripts/ops/backup-db.sh`（`payjp-ops-backup.timer` で日次 03:00 JST ±5min、`/var/backups/payjp-db/payjp_<UTC>.sql.gz` に 14日間保持）
 - RTO（目標復旧時間）: 4時間
 - RPO（目標復旧時点）: 24時間（日次バックアップ間隔）
 

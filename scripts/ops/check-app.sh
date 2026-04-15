@@ -17,7 +17,7 @@ export NOTIFY_SCRIPT
 ops_state_init
 
 : "${HEALTH_URL:=https://api.and--line.com/health}"
-: "${BACKUP_DIR:=/var/backups/hayane}"
+: "${BACKUP_DIR:=/var/backups/payjp-db}"
 : "${COMPOSE_PROJECT:=payjp}"
 
 # Scalar query helper. Returns "?" on skip/err so callers can still log.
@@ -128,11 +128,11 @@ check_inflight() {
 
 check_backup_stale() {
   local latest mtime age_sec age_h threshold_sec
-  latest=$(ls -1t "$BACKUP_DIR"/hayane_*.sql.gz 2>/dev/null | head -1)
+  latest=$(ls -1t "$BACKUP_DIR"/payjp_*.sql.gz 2>/dev/null | head -1)
   if [[ -z "$latest" ]]; then
     handle DB_BACKUP_STALE critical fire \
       "no backup file found in ${BACKUP_DIR}" \
-      "Run scripts/backup-db.sh (op run --env-file=.env ...) or inspect cron"
+      "Run scripts/ops/backup-db.sh (or: sudo systemctl start payjp-ops-backup.service)"
     return
   fi
   if ! mtime=$(sudo -n stat -c %Y "$latest" 2>/dev/null); then

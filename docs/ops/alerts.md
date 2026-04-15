@@ -170,11 +170,15 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
    sudo systemctl start payjp-ops-digest.service
    journalctl -u payjp-ops-digest.service -n 40 --no-pager
    # Expect: digest embed in the NORMAL channel
+   sudo systemctl start payjp-ops-backup.service
+   journalctl -u payjp-ops-backup.service -n 40 --no-pager
+   sudo ls -lt /var/backups/payjp-db/ | head
+   # Expect: new payjp_<ts>Z.sql.gz, minimum 500B enforced
    ```
 
 9. **Enable timers**:
    ```
-   sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer
+   sudo systemctl enable --now payjp-ops-check.timer payjp-ops-digest.timer payjp-ops-backup.timer
    systemctl list-timers | grep payjp-ops
    journalctl -u payjp-ops-check.service -f
    ```
@@ -187,7 +191,7 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
       sudo bash -c 'systemd-creds encrypt --name=DISCORD_OPS_WEBHOOK_ALERTS - /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS'
       # paste the new URL, Ctrl+D
       sudo chmod 0600 /etc/payjp-ops/creds/DISCORD_OPS_WEBHOOK_ALERTS
-      sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer
+      sudo systemctl restart payjp-ops-check.timer payjp-ops-digest.timer payjp-ops-backup.timer
       ```
 
 11. **VPS rebuild migration** (rare, e.g. hardware failure):
@@ -204,7 +208,7 @@ plaintext under `$CREDENTIALS_DIRECTORY` only for the service's process tree.
 |------|---------|----------|-------------|
 | `HOST_DISK_ROOT`       | `/` used > `DISK_PCT` | critical | `df -h /`; purge images (`docker system prune`), old logs |
 | `HOST_DISK_VARLOG`     | `/var/log` used > `DISK_PCT` | warn     | inspect `json-file` driver retention; rotate |
-| `HOST_DISK_BACKUPS`    | `$BACKUP_DIR` used > `DISK_PCT` | critical | prune `hayane_*.sql.gz` beyond retention |
+| `HOST_DISK_BACKUPS`    | `$BACKUP_DIR` used > `DISK_PCT` | critical | prune `payjp_*.sql.gz` beyond retention |
 | `HOST_LOAD_HIGH`       | load5 > `LOAD5_X_NPROC × nproc` × 3 ticks | warn | `top`, identify runaway proc |
 | `HOST_OOM_KILL`        | ≥1 `Killed process` in kernel log / 24h | critical | find OOM target; raise limits or reduce load |
 | `HOST_REBOOT_REQUIRED` | `/var/run/reboot-required` exists | warn | schedule reboot |
@@ -243,7 +247,7 @@ Only `payjp-db-1` has a Docker healthcheck. `api` / `admin-api` / `nginx` are co
 | `APP_IMPACT_LOGS_OPEN`  | unresolved `member_impact_logs` > `APP_IMPACT_LOGS_OPEN` | warn     | `docs/ops/resync-cli.md` |
 | `APP_INFLIGHT_STUCK_WARN` | any `inflight_operation_started_at` > `APP_INFLIGHT_WARN_MIN`min | warn     | watch; escalates to critical at `APP_INFLIGHT_CRIT_HOUR`h |
 | `APP_INFLIGHT_STUCK_CRIT` | any `inflight_operation_started_at` > `APP_INFLIGHT_CRIT_HOUR`h | critical | `npm run resync -- --operation-id <id>` |
-| `DB_BACKUP_STALE`       | latest `hayane_*.sql.gz` mtime > `DB_BACKUP_STALE_HOURS`h | critical | check cron, run `scripts/backup-db.sh` manually |
+| `DB_BACKUP_STALE`       | latest `payjp_*.sql.gz` mtime > `DB_BACKUP_STALE_HOURS`h | critical | `systemctl list-timers payjp-ops-backup.timer`; manual run: `sudo systemctl start payjp-ops-backup.service` |
 
 ### Aggregate
 
@@ -269,6 +273,30 @@ Digest is not subject to cooldown — it always posts when the timer fires.
 
 ---
 
+## Nightly DB backup (03:00 JST ±5min)
+
+`payjp-ops-backup.timer` fires `backup-db.sh` every day at 03:00 Asia/Tokyo (`RandomizedDelaySec=5m`). Writes `payjp_<YYYYMMDD_HHMMSSZ>.sql.gz` (UTC) to `/var/backups/payjp-db/`, retention `${BACKUP_RETENTION_DAYS:-14}` days.
+
+Implementation: runs as **root**, uses `docker compose exec -T db sh -c 'pg_dump -U $POSTGRES_USER -d $POSTGRES_DB --no-owner --no-privileges' | gzip -9`. `POSTGRES_*` come from inside the container; no host-side DB secret is required. The backup directory is `0750 root:payjp-ops` so the polling check (running as `payjp-ops`) can list + stat mtimes while file contents remain 0600 root-only.
+
+Minimum size threshold: `${MIN_BACKUP_BYTES:-500}` bytes — suspiciously small dumps fail loudly.
+
+Failure surfaces as `DB_BACKUP_STALE` via the polling `check-app.sh:check_backup_stale` (threshold `DB_BACKUP_STALE_HOURS`). Inspect:
+
+```
+systemctl list-timers payjp-ops-backup.timer
+journalctl -u payjp-ops-backup.service -n 80 --no-pager
+sudo ls -lt /var/backups/payjp-db/ | head
+```
+
+Manual run: `sudo systemctl start payjp-ops-backup.service`.
+
+### Migration from legacy `payjp-db-backup.{service,timer}`
+
+The repo-managed `payjp-ops-backup.*` unit **replaces** the host-level `/usr/local/sbin/payjp-db-backup` + `payjp-db-backup.{service,timer}`. `install.sh` detects and removes the legacy units idempotently. File naming (`payjp_*.sql.gz`), output directory (`/var/backups/payjp-db/`), and retention (14 days) are preserved, so existing backups carry over and age out normally.
+
+---
+
 ## Test matrix
 
 | # | Scenario | Command | Expected |
@@ -281,7 +309,7 @@ Digest is not subject to cooldown — it always posts when the timer fires.
 | 6  | Container exited | `sudo docker stop payjp-admin-api-1` (test env); wait 6 min | 1 critical `DOCKER_CONTAINER_EXITED` |
 | 7  | /health down | `sudo docker pause payjp-api-1`; wait 6 min | 1 critical `APP_HEALTH_FAIL`; `unpause` to clear |
 | 8  | DB ping | `sudo docker stop payjp-db-1` (test env); wait 6 min | 1 critical `DB_PING` |
-| 9  | Backup stale | `sudo touch -d '30 hours ago' /var/backups/hayane/hayane_*.sql.gz` | 1 critical `DB_BACKUP_STALE` |
+| 9  | Backup stale | `sudo touch -d '30 hours ago' /var/backups/payjp-db/payjp_*.sql.gz` | 1 critical `DB_BACKUP_STALE` |
 | 10 | TLS | point `CERT_PATHS` at a test cert <14 days remaining | 1 critical `HOST_TLS_EXPIRING` |
 | 11 | 5xx burst | inject 6 status-500 JSON lines into nginx access.log | 1 critical `NGINX_5XX_BURST` |
 | 12 | Storm | trigger 5+ codes in one tick | `OPS_STORM` post; individual #5+ suppressed |

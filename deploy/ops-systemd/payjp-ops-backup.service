@@ -1,0 +1,31 @@
+[Unit]
+Description=PAY.JP ops nightly DB backup (pg_dump via docker compose exec)
+Documentation=file:///home/ubuntu/payjp/docs/ops/alerts.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Runs as root: `docker compose exec` needs docker socket access. Running
+# backup as payjp-ops would require docker-group membership, which is
+# effectively root. Backup is a scheduled one-shot, not a persistent service,
+# so privilege concentration is acceptable. Non-secret config comes from the
+# shared env file; no secrets are loaded.
+EnvironmentFile=/etc/payjp-ops/.env
+ExecStart=/opt/payjp-ops/bin/backup-db.sh
+TimeoutStartSec=600
+LogLevelMax=info
+# Defense in depth: limit write scope to the backup directory.
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+ReadWritePaths=/var/backups/payjp-db
+
+[Install]
+WantedBy=multi-user.target
