@@ -95,7 +95,13 @@ if (( STAGE_SIZE <= SIZE )); then
 fi
 info "encrypted: ${STAGE_SIZE} bytes (+$((STAGE_SIZE - SIZE)) overhead)"
 
+# --no-check-dest: skip HEAD-on-destination. rclone's default copyto does a
+# HEAD to decide "skip if identical", which requires B2 readFiles — a capability
+# our write-only key (payjp-backup-write, writeFiles only) intentionally lacks.
+# Each upload is a unique-timestamp filename, so dedup via HEAD is irrelevant
+# anyway. Without this flag the service 401s on every run.
 if ! rclone copyto "$STAGE" "b2:${B2_BUCKET}/${REMOTE_NAME}" \
+     --no-check-dest \
      --retries 3 \
      --low-level-retries 5 \
      --stats 0

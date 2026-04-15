@@ -40,7 +40,11 @@ SCRATCH_PORT="${SCRATCH_PORT:-55432}"
 SCRATCH_USER=drilluser
 SCRATCH_DB=drilldb
 SCRATCH_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d /+=)
-POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
+# Must match prod db image major version (docker-compose.yml db.image) — a
+# dump produced by prod carries SET statements (e.g., `transaction_timeout`)
+# that are unrecognized on older majors. Keep this pinned to the SAME major
+# as docker-compose.yml, bump both together on prod upgrade.
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17-alpine}"
 
 info() { echo "[restore-drill] $*"; }
 
