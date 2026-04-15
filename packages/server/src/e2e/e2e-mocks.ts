@@ -36,7 +36,6 @@ export const E2E_BILLING_CONFIG: BillingConfig = {
   googleFormCancelSecret: 'e2e-google-secret',
   googleFormCancelTokenSecret: 'e2e-google-token-secret',
   googleFormCancelTokenTtlSeconds: 900,
-  cancelNoticeCycles: 1,
   accessGateSessionTtlSeconds: 86400,
 };
 

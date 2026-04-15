@@ -43,7 +43,6 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_id: null,
     inflight_operation_type: null,
     inflight_operation_started_at: null,
-    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -102,7 +101,6 @@ function makeConfig(): BillingConfig {
     googleFormCancelSecret: 'google-shared-secret',
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
-    cancelNoticeCycles: 1,
     accessGateSessionTtlSeconds: 86400,
   };
 }
@@ -123,7 +121,6 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     inflight_operation_id: OPERATION_ID,
     inflight_operation_type: 'subscribe',
     inflight_operation_started_at: NOW,
-    privacy_consented_at: NOW,
   };
 }
 
@@ -735,15 +732,6 @@ describe('POST /v1/subscriptions — Integration', () => {
         expect(result.operationId).toBe(OPERATION_ID);
       }
       expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
-    });
-
-    it('F-10: privacy_consented_at passed to updateMemberAfterSubscribe', async () => {
-      const deps = makeSuccessfulDeps();
-      await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(deps.db.updateMemberAfterSubscribe).toHaveBeenCalledWith(
-        MEMBER_ID,
-        expect.objectContaining({ privacy_consented_at: NOW }),
-      );
     });
   });
 

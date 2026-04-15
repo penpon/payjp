@@ -1,6 +1,6 @@
 /**
  * Read-only admin API — Phase A (see docs/admin-console-boundary.md).
- * Binds ADMIN_FRONTEND_ORIGIN for CORS; trust Cloudflare Access at the edge.
+ * Binds ADMIN_FRONTEND_ORIGIN for CORS and enforces request identity headers.
  */
 import cors from '@fastify/cors';
 import { createPool, runMigrations } from '@hayane/shared';
@@ -41,21 +41,6 @@ async function main(): Promise<void> {
     reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
     reply.header('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
     return payload;
-  });
-
-  app.addHook('onRequest', async (request) => {
-    const actor =
-      request.headers['cf-access-authenticated-user-email'] ?? request.headers['x-admin-audit-actor'] ?? undefined;
-    if (typeof actor === 'string' && actor.length > 0) {
-      // Log pathname only — raw `request.url` can include PII (e.g. `?q=user@example.com`)
-      let pathname = '';
-      try {
-        pathname = new URL(request.url, 'http://_').pathname;
-      } catch {
-        pathname = '[invalid-url]';
-      }
-      request.log.info({ auditActor: actor, path: pathname }, 'admin request');
-    }
   });
 
   await registerAdminRoutes(app, { pool });

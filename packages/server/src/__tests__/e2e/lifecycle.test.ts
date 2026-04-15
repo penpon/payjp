@@ -397,8 +397,8 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
 
     // inflight_operation_id は Webhook では消えない（CLI が担当）
     // → inflight が残っていても Webhook 処理は成功する
-    const evtRow = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
-    expect(evtRow.rows[0].processing_result).toBe('processed');
+    const evtRow = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
+    expect(evtRow.rows[0].process_status).toBe('succeeded');
   });
 
   // =========================================================================

@@ -7,7 +7,7 @@ export interface PayjpEventInsert {
   id: string;
   event_type: string;
   payload: unknown;
-  processing_result: 'processed' | 'ignored' | 'failed';
+  process_status: 'succeeded' | 'ignored' | 'failed';
   member_id?: string;
   ignore_reason?: string;
   fail_reason?: string;
@@ -17,7 +17,7 @@ export interface PayjpEventInsert {
 export interface PayjpEventRecord {
   id: string;
   event_type: string;
-  processing_result: string;
+  process_status: string;
   received_at: Date;
 }
 

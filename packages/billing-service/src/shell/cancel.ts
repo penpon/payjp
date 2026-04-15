@@ -16,6 +16,7 @@ import {
   hasInflightOperation,
   isSameOrigin,
   linkSessionTokenHash,
+  maskSensitiveLogFields,
   memberSessionTokenHash,
   normalizeEmail,
   verifyGoogleCancelSubmitSignature,
@@ -33,7 +34,8 @@ import type {
 } from './types.js';
 
 function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
-  console[level](JSON.stringify({ level, service: 'billing-cancel', message, ...ctx }));
+  const entry = maskSensitiveLogFields({ level, service: 'billing-cancel', message, ...ctx });
+  console[level](JSON.stringify(entry));
 }
 
 function secureCompare(a: string, b: string): boolean {

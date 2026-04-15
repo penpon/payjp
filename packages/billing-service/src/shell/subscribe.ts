@@ -16,6 +16,7 @@ import {
   isFirstTimeUser,
   isSameOrigin,
   isThreeDSecureVerified,
+  maskSensitiveLogFields,
   memberSessionTokenHash,
   validatePlanId,
 } from '../core/index.js';
@@ -33,7 +34,8 @@ function initialChargeAmountJpy(planId: string, config: BillingConfig): number {
 }
 
 function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
-  console[level](JSON.stringify({ level, service: 'billing-subscribe', message, ...ctx }));
+  const entry = maskSensitiveLogFields({ level, service: 'billing-subscribe', message, ...ctx });
+  console[level](JSON.stringify(entry));
 }
 
 async function issueMemberSessionToken(
@@ -476,7 +478,6 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         next_billing_at: nextBillingAt,
         role_state: 'unknown',
         last_synced_at: now,
-        privacy_consented_at: now,
       });
     } catch (err) {
       slog('error', 'DB update failed after PAY.JP subscription creation', {

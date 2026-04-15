@@ -36,7 +36,6 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_type: null,
     inflight_operation_started_at: null,
     inflight_subscribe_plan_id: null,
-    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -99,7 +98,6 @@ function makeConfig(): BillingConfig {
     googleFormCancelSecret: 'google-shared-secret',
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
-    cancelNoticeCycles: 1,
     accessGateSessionTtlSeconds: 86400,
   };
 }

@@ -56,56 +56,6 @@ export function hasInflightOperation(inflightOperationId: string | null): inflig
   return inflightOperationId !== null;
 }
 
-/** Calendar date parts in Asia/Tokyo (used for cancel acceptance window). */
-export function toJstYmd(d: Date): { y: number; m: number; day: number } {
-  const s = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-  const [y, m, day] = s.split('-').map((p) => Number.parseInt(p, 10));
-  return { y, m, day };
-}
-
-function daysInMonthUtcCalendar(year: number, month1To12: number): number {
-  return new Date(Date.UTC(year, month1To12, 0)).getUTCDate();
-}
-
-/** Subtract whole calendar months from a JST YMD, clamping the day to the target month's last day. */
-export function subtractJstCalendarMonths(
-  y: number,
-  m: number,
-  day: number,
-  months: number,
-): { y: number; m: number; day: number } {
-  const totalMonths = y * 12 + (m - 1) - months;
-  const ny = Math.floor(totalMonths / 12);
-  const nm = (totalMonths % 12) + 1;
-  const maxDay = daysInMonthUtcCalendar(ny, nm);
-  return { y: ny, m: nm, day: Math.min(day, maxDay) };
-}
-
-export function compareJstYmd(
-  a: { y: number; m: number; day: number },
-  b: { y: number; m: number; day: number },
-): number {
-  if (a.y !== b.y) return a.y - b.y;
-  if (a.m !== b.m) return a.m - b.m;
-  return a.day - b.day;
-}
-
-/**
- * True when `now` (JST calendar date) is on or after the acceptance start date:
- * access_end_at's JST calendar date minus `cancelNoticeCycles` months (month-end clamping).
- */
-export function isCancelAcceptanceWindowOpen(now: Date, accessEndAt: Date, cancelNoticeCycles: number): boolean {
-  const nowJst = toJstYmd(now);
-  const endJst = toJstYmd(accessEndAt);
-  const start = subtractJstCalendarMonths(endJst.y, endJst.m, endJst.day, cancelNoticeCycles);
-  return compareJstYmd(nowJst, start) >= 0;
-}
-
 // PROP-BILL-005: REQ-BILL-009
 export function isThreeDSecureVerified(threeDSecureStatus: string | null): boolean {
   return threeDSecureStatus === 'verified';
@@ -207,28 +157,11 @@ export function formatRfc3339Utc(date: Date): string {
 }
 
 // PROP-BILL-013: REQ-BILL-001
-export function isSameOrigin(requestOrigin: string, allowedOrigin: string): boolean {
-  if (requestOrigin === 'null' || requestOrigin === '') return false;
-  if (requestOrigin.endsWith('/')) return false;
-  try {
-    const req = new URL(requestOrigin);
-    const allowed = new URL(allowedOrigin);
-    if (req.protocol !== allowed.protocol) return false;
-    if (req.hostname.toLowerCase() !== allowed.hostname.toLowerCase()) return false;
-    const normalizePort = (url: URL): string => {
-      if (url.port !== '') return url.port;
-      if (url.protocol === 'https:') return '443';
-      if (url.protocol === 'http:') return '80';
-      return '';
-    };
-    return normalizePort(req) === normalizePort(allowed);
-  } catch {
-    return false;
-  }
-}
+// 実装は @hayane/shared に移動済み。後方互換性のため re-export。
+export { isSameOrigin } from '@hayane/shared';
 
 // PROP-BILL-014: REQ-BILL-030
-const SENSITIVE_FIELD_PATTERN = /^(cookie|authorization|set-cookie|token|card)$/i;
+const SENSITIVE_FIELD_PATTERN = /^(cookie|authorization|set-cookie|token|card|email)$/i;
 
 export function maskSensitiveLogFields(logEntry: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
@@ -265,7 +198,6 @@ const REQUIRED_ENV_VAR_NAMES = [
   'GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS',
   'BILLING_INTERVAL_MONTHS',
   'INITIAL_FREE_CYCLES',
-  'CANCEL_NOTICE_CYCLES',
 ] as const;
 
 export function validateRequiredEnvVars(
@@ -280,7 +212,6 @@ export function validateRequiredEnvVars(
 const FIXED_ENV_VARS: Array<{ name: string; expected: string }> = [
   { name: 'BILLING_INTERVAL_MONTHS', expected: '1' },
   { name: 'INITIAL_FREE_CYCLES', expected: '2' },
-  { name: 'CANCEL_NOTICE_CYCLES', expected: '1' },
 ];
 
 export function validateFixedEnvVars(env: Record<string, string | undefined>): FixedEnvVarValidationResult {

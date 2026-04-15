@@ -66,12 +66,24 @@ describe('runMigrations', () => {
     await expect(runMigrations(pool)).resolves.not.toThrow();
   });
 
-  it('payjp_events has data_metadata_operation_id column', async () => {
+  it('payjp_events has process_status and data_metadata_operation_id columns', async () => {
     const result = await pool.query(`
       SELECT column_name FROM information_schema.columns
       WHERE table_name = 'payjp_events'
-      AND column_name = 'data_metadata_operation_id'
+      AND column_name IN ('process_status', 'data_metadata_operation_id')
     `);
-    expect(result.rows).toHaveLength(1);
+    const columns = result.rows.map((r: { column_name: string }) => r.column_name);
+    expect(columns).toContain('process_status');
+    expect(columns).toContain('data_metadata_operation_id');
+  });
+
+  it('members does not include deprecated privacy_consented_at column', async () => {
+    const result = await pool.query(`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'members'
+      AND column_name = 'privacy_consented_at'
+    `);
+    expect(result.rowCount ?? 0).toBe(0);
   });
 });

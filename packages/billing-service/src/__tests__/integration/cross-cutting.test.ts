@@ -44,6 +44,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
         authorization: 'Bearer token-xyz',
         token: 'tok_secret',
         card: '4242424242424242',
+        email: 'user@example.com',
         operationId: 'op-001',
         userId: 'user-123',
       };
@@ -54,6 +55,7 @@ describe('Cross-Cutting Concerns — Integration', () => {
       expect(masked.authorization).toBe('[REDACTED]');
       expect(masked.token).toBe('[REDACTED]');
       expect(masked.card).toBe('[REDACTED]');
+      expect(masked.email).toBe('[REDACTED]');
       // 機密でないフィールドは保持される
       expect(masked.operationId).toBe('op-001');
       expect(masked.userId).toBe('user-123');
@@ -90,7 +92,6 @@ describe('Cross-Cutting Concerns — Integration', () => {
         DISCORD_PLAN_ROLE_IDS: 'role-starter',
         BILLING_INTERVAL_MONTHS: '1',
         INITIAL_FREE_CYCLES: '2',
-        CANCEL_NOTICE_CYCLES: '1',
       };
 
       const result = validateRequiredEnvVars(incompleteEnv);
@@ -109,7 +110,6 @@ describe('Cross-Cutting Concerns — Integration', () => {
       const env: Record<string, string | undefined> = {
         BILLING_INTERVAL_MONTHS: '3', // 不正な値
         INITIAL_FREE_CYCLES: '2',
-        CANCEL_NOTICE_CYCLES: '1',
       };
 
       const result = validateFixedEnvVars(env);
@@ -126,7 +126,6 @@ describe('Cross-Cutting Concerns — Integration', () => {
       const env: Record<string, string | undefined> = {
         BILLING_INTERVAL_MONTHS: '1',
         INITIAL_FREE_CYCLES: '3', // 不正な値
-        CANCEL_NOTICE_CYCLES: '1',
       };
 
       const result = validateFixedEnvVars(env);

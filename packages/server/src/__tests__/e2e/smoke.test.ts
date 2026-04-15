@@ -223,10 +223,10 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true });
 
-      // payjp_events に processed レコードが挿入されている
-      const events = await pool.query("SELECT processing_result FROM payjp_events WHERE id = 'evnt_e2e_webhook_001'");
+      // payjp_events に succeeded レコードが挿入されている
+      const events = await pool.query("SELECT process_status FROM payjp_events WHERE id = 'evnt_e2e_webhook_001'");
       expect(events.rows).toHaveLength(1);
-      expect(events.rows[0].processing_result).toBe('processed');
+      expect(events.rows[0].process_status).toBe('succeeded');
 
       // members の subscription_status が active に更新されている
       const member = await pgDb.findMemberByDiscordUserId(WEBHOOK_DISCORD_USER_ID);
@@ -289,9 +289,9 @@ describe.skipIf(!hasTestDb)('E2E Smoke — ハーネス動作確認', () => {
       expect(res.json()).toEqual({ ok: true });
 
       // payjp_events に ignored レコードが挿入されている
-      const events = await pool.query("SELECT processing_result FROM payjp_events WHERE id = 'evnt_e2e_stale_001'");
+      const events = await pool.query("SELECT process_status FROM payjp_events WHERE id = 'evnt_e2e_stale_001'");
       expect(events.rows).toHaveLength(1);
-      expect(events.rows[0].processing_result).toBe('ignored');
+      expect(events.rows[0].process_status).toBe('ignored');
 
       // members の subscription_status は変更されていない
       const member = await pgDb.findMemberByDiscordUserId(WEBHOOK_DISCORD_USER_ID);

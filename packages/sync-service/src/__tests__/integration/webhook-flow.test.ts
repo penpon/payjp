@@ -27,7 +27,7 @@ function createMockDb(
       return { rows: options.existingEvent ? [options.existingEvent] : [], rowCount: options.existingEvent ? 1 : 0 };
     }
     if (text.includes('INSERT INTO payjp_events')) {
-      insertedEvents.push({ id: params?.[0], processing_result: params?.[3] });
+      insertedEvents.push({ id: params?.[0], process_status: params?.[3] });
       return { rows: [], rowCount: 1 };
     }
     if (text.includes('FROM members WHERE id')) {
@@ -133,7 +133,7 @@ describe('INT-SYNC-037: Member missing on re-fetch inside transaction', () => {
     expect((res.body as Record<string, unknown>).ok).toBe(true);
     expect(deps.syncRole).not.toHaveBeenCalled();
     const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
-    expect(inserted.some((e) => e.processing_result === 'failed')).toBe(true);
+    expect(inserted.some((e) => e.process_status === 'failed')).toBe(true);
   });
 });
 

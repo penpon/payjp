@@ -80,13 +80,13 @@ Output: ${out:-(empty)}"
 
 check_payjp_events_failed() {
   local cnt
-  cnt=$(psql_q "SELECT count(*) FROM payjp_events WHERE processing_result='failed' AND received_at > now() - interval '1 hour'") || return 0
+  cnt=$(psql_q "SELECT count(*) FROM payjp_events WHERE process_status='failed' AND received_at > now() - interval '1 hour'") || return 0
   if (( cnt > APP_PAYJP_EVENTS_FAILED_PER_1H )); then
     handle APP_PAYJP_EVENTS_FAILED critical fire \
       "payjp_events failed: ${cnt} in last 1h" \
       "Threshold: ${APP_PAYJP_EVENTS_FAILED_PER_1H}
 Inspect: SELECT event_type, received_at, payload->>'_processing' FROM payjp_events
-         WHERE processing_result='failed' ORDER BY received_at DESC LIMIT 10;"
+         WHERE process_status='failed' ORDER BY received_at DESC LIMIT 10;"
   else
     handle APP_PAYJP_EVENTS_FAILED critical clear "" "payjp_events failed=${cnt}/1h"
   fi

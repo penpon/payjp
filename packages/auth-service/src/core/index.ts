@@ -85,47 +85,8 @@ export function maskSensitiveLogFields(logEntry: Record<string, unknown>): Recor
 
 // PROP-AUTH-008 対象: isSameOrigin
 // REQ-AUTH-008: scheme+host+port 正規化比較（RFC 6454準拠）
-// - ホスト名は大文字小文字を区別しない（lowercase正規化）
-// - デフォルトポート認識: https:443, http:80 は省略と等価
-// - Origin: null は拒否
-// - requestOrigin の末尾スラッシュは拒否
-export function isSameOrigin(requestOrigin: string, allowedOrigin: string): boolean {
-  if (requestOrigin === 'null') {
-    return false;
-  }
-  // 末尾スラッシュは不一致とする
-  if (requestOrigin.endsWith('/')) {
-    return false;
-  }
-  try {
-    const req = new URL(requestOrigin);
-    const allowed = new URL(allowedOrigin);
-    // スキーム比較（小文字正規化済み）
-    if (req.protocol !== allowed.protocol) {
-      return false;
-    }
-    // ホスト比較（RFC 6454: case-insensitive）
-    if (req.hostname.toLowerCase() !== allowed.hostname.toLowerCase()) {
-      return false;
-    }
-    // ポート正規化: デフォルトポートは省略と等価
-    const normalizePort = (url: URL): string => {
-      if (url.port !== '') {
-        return url.port;
-      }
-      if (url.protocol === 'https:') {
-        return '443';
-      }
-      if (url.protocol === 'http:') {
-        return '80';
-      }
-      return '';
-    };
-    return normalizePort(req) === normalizePort(allowed);
-  } catch {
-    return false;
-  }
-}
+// 実装は @hayane/shared に移動済み。後方互換性のため re-export。
+export { isSameOrigin } from '@hayane/shared';
 
 // PROP-AUTH-031 対象: buildCallbackRedirectUrl
 // REQ-AUTH-002, REQ-AUTH-006: コールバックリダイレクト先は FRONTEND_BASE_URL そのもの（パス追加なし）

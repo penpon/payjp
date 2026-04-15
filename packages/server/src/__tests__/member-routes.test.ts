@@ -37,7 +37,6 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_type: null,
     inflight_operation_started_at: null,
     inflight_subscribe_plan_id: null,
-    privacy_consented_at: null,
     access_end_at: null,
     next_billing_at: null,
     role_state: 'unknown',
@@ -88,7 +87,6 @@ function makeConfig(): BillingConfig {
     googleFormCancelSecret: 'google-shared-secret',
     googleFormCancelTokenSecret: 'google-token-secret',
     googleFormCancelTokenTtlSeconds: 900,
-    cancelNoticeCycles: 1,
     accessGateSessionTtlSeconds: 86400,
   };
 }
@@ -192,9 +190,68 @@ describe('GET /v1/members/me', () => {
       },
     });
   });
+
+  it('treats member_session expiring exactly now as invalid and clears cookie', async () => {
+    const deps = makeDeps({ subscription_status: 'active' });
+    (deps.db.findMemberSession as ReturnType<typeof vi.fn>).mockResolvedValue(makeMemberSession({ expires_at: NOW }));
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/members/me',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ member: null });
+    expect(String(res.headers['set-cookie'])).toContain('__Host-member_session=');
+  });
 });
 
 describe('POST /v1/members/link-discord', () => {
+  it('returns INVALID_MEMBER_SESSION when member_session expires exactly now', async () => {
+    const deps = makeDeps({ subscription_status: 'active' });
+    (deps.db.findMemberSession as ReturnType<typeof vi.fn>).mockResolvedValue(makeMemberSession({ expires_at: NOW }));
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'INVALID_MEMBER_SESSION' });
+  });
+
+  it('returns INVALID_LINK_SESSION when link_session expires exactly now', async () => {
+    const deps = makeDeps(
+      { subscription_status: 'active' },
+      {
+        linkSession: { expires_at: NOW },
+      },
+    );
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'INVALID_LINK_SESSION' });
+  });
+
   it('keeps idempotent short-circuit when already granted', async () => {
     const deps = makeDeps({ role_state: 'granted', subscription_status: 'active' });
     const app = buildApp(APP_CONFIG, deps);

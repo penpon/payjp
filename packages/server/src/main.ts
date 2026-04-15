@@ -154,14 +154,6 @@ for (const [name, minBytes] of SECRETS_MIN_BYTES) {
   }
 }
 
-const cancelNoticeCycles = Number(process.env.CANCEL_NOTICE_CYCLES ?? '1');
-if (!Number.isInteger(cancelNoticeCycles) || cancelNoticeCycles < 1) {
-  process.stderr.write(
-    `[startup] CANCEL_NOTICE_CYCLES must be a positive integer, got: "${process.env.CANCEL_NOTICE_CYCLES}"\n`,
-  );
-  process.exit(1);
-}
-
 const port = Number(process.env.PORT ?? '3000');
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   process.stderr.write(`[startup] Invalid PORT: ${process.env.PORT}\n`);
@@ -401,7 +393,6 @@ const billingDeps: BillingDeps = {
     googleFormCancelSecret: env.GOOGLE_FORM_CANCEL_SECRET,
     googleFormCancelTokenSecret: env.GOOGLE_FORM_CANCEL_TOKEN_SECRET,
     googleFormCancelTokenTtlSeconds,
-    cancelNoticeCycles,
     subscribeGateCode,
     accessGateSessionTtlSeconds,
   },

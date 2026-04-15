@@ -54,7 +54,6 @@ export interface DbClient {
       next_billing_at: Date;
       role_state: 'granted' | 'unknown';
       last_synced_at: Date;
-      privacy_consented_at: Date;
     },
   ): Promise<Member>;
   updateMemberRoleState(memberId: string, roleState: 'granted' | 'revoked' | 'unknown'): Promise<void>;
@@ -129,7 +128,6 @@ function toMember(row: Record<string, unknown>): Member {
     inflight_operation_type: (row.inflight_operation_type as Member['inflight_operation_type']) ?? null,
     inflight_operation_started_at: (row.inflight_operation_started_at as Date) ?? null,
     inflight_subscribe_plan_id: (row.inflight_subscribe_plan_id as string) ?? null,
-    privacy_consented_at: (row.privacy_consented_at as Date) ?? null,
     access_end_at: (row.access_end_at as Date) ?? null,
     next_billing_at: (row.next_billing_at as Date) ?? null,
     role_state: row.role_state as Member['role_state'],
@@ -386,7 +384,6 @@ async function queryUpdateMemberAfterSubscribe(
        next_billing_at = $9,
        role_state = $10,
        last_synced_at = $11,
-       privacy_consented_at = $12,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,
@@ -402,7 +399,6 @@ async function queryUpdateMemberAfterSubscribe(
       params.next_billing_at,
       params.role_state,
       params.last_synced_at,
-      params.privacy_consented_at,
     ],
   );
   if (!result.rows[0]) throw new Error(`Member not found: ${memberId}`);
@@ -667,11 +663,11 @@ export class PgDbClient implements DbClient {
   async findPayjpEventById(eventId: string): Promise<{
     id: string;
     event_type: string;
-    processing_result: string;
+    process_status: string;
     received_at: Date;
   } | null> {
     const result = await this.pool.query(
-      'SELECT id, event_type, processing_result, received_at FROM payjp_events WHERE id = $1',
+      'SELECT id, event_type, process_status, received_at FROM payjp_events WHERE id = $1',
       [eventId],
     );
     if (!result.rows[0]) return null;
@@ -679,7 +675,7 @@ export class PgDbClient implements DbClient {
     return {
       id: row.id as string,
       event_type: row.event_type as string,
-      processing_result: row.processing_result as string,
+      process_status: row.process_status as string,
       received_at: row.received_at as Date,
     };
   }
@@ -688,19 +684,19 @@ export class PgDbClient implements DbClient {
     id: string;
     event_type: string;
     payload: unknown;
-    processing_result: 'processed' | 'ignored' | 'failed';
+    process_status: 'succeeded' | 'ignored' | 'failed';
     data_metadata_operation_id?: string | null;
     member_id?: string | null;
   }): Promise<boolean> {
     const result = await this.pool.query(
-      `INSERT INTO payjp_events (id, event_type, payload, processing_result, data_metadata_operation_id, member_id)
+      `INSERT INTO payjp_events (id, event_type, payload, process_status, data_metadata_operation_id, member_id)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`,
       [
         event.id,
         event.event_type,
         JSON.stringify(event.payload),
-        event.processing_result,
+        event.process_status,
         event.data_metadata_operation_id ?? null,
         event.member_id ?? null,
       ],

@@ -1,4 +1,5 @@
-import type { FastifyInstance } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { isUuid, queryAdminOverview, queryMemberDetail, queryMemberImpactLogs, queryMembersList } from './queries.js';
 
@@ -7,6 +8,38 @@ function parseBool(v: unknown): boolean | null {
   if (v === 'true' || v === '1') return true;
   if (v === 'false' || v === '0') return false;
   return null;
+}
+
+function parseHeaderValue(v: unknown): string | null {
+  if (Array.isArray(v)) {
+    const first = v[0];
+    if (typeof first === 'string') {
+      const trimmed = first.trim();
+      return trimmed === '' ? null : trimmed;
+    }
+    return null;
+  }
+  if (typeof v !== 'string') return null;
+  const trimmed = v.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function hasValidAdminApiKey(provided: string | null, expectedRaw: string | undefined): boolean {
+  const expected = expectedRaw?.trim() ?? '';
+  if (expected === '' || !provided) return false;
+  const providedDigest = createHash('sha256').update(provided, 'utf8').digest();
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(providedDigest, expectedDigest);
+}
+
+function logAdminRequest(request: FastifyRequest, actor: string): void {
+  let pathname = '';
+  try {
+    pathname = new URL(request.url, 'http://_').pathname;
+  } catch {
+    pathname = '[invalid-url]';
+  }
+  request.log.info({ auditActor: actor, path: pathname }, 'admin request');
 }
 
 export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Pool }): Promise<void> {
@@ -19,6 +52,24 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return reply.status(405).send({ error: 'read_only', message: 'Only GET is allowed' });
     }
+
+    const cloudflareActor = parseHeaderValue(request.headers['cf-access-authenticated-user-email']);
+    if (cloudflareActor) {
+      logAdminRequest(request, cloudflareActor);
+      return;
+    }
+
+    const localActor = parseHeaderValue(request.headers['x-admin-audit-actor']);
+    const localApiKey = parseHeaderValue(request.headers['x-admin-api-key']);
+    if (localActor && hasValidAdminApiKey(localApiKey, process.env.ADMIN_API_KEY)) {
+      logAdminRequest(request, localActor);
+      return;
+    }
+
+    return reply.status(401).send({
+      error: 'unauthorized_admin_request',
+      message: 'Cloudflare Access identity is required',
+    });
   });
 
   app.get('/admin/overview', async () => {

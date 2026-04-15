@@ -60,7 +60,6 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     inflight_operation_type: null,
     inflight_operation_started_at: null,
     inflight_subscribe_plan_id: null,
-    privacy_consented_at: null,
     access_end_at: new Date('2026-05-01T00:00:00Z'),
     next_billing_at: new Date('2026-05-01T00:00:00Z'),
     role_state: 'granted',
@@ -323,7 +322,7 @@ describe('PROP-BILL-013: isSameOrigin', () => {
 // PROP-BILL-014: maskSensitiveLogFields (property test)
 // ---------------------------------------------------------------------------
 describe('PROP-BILL-014: maskSensitiveLogFields', () => {
-  const SENSITIVE_KEYS = ['cookie', 'authorization', 'set-cookie', 'token', 'card'];
+  const SENSITIVE_KEYS = ['cookie', 'authorization', 'set-cookie', 'token', 'card', 'email'];
 
   it('masks all sensitive keys', () => {
     const entry: Record<string, unknown> = {
@@ -331,6 +330,7 @@ describe('PROP-BILL-014: maskSensitiveLogFields', () => {
       authorization: 'Bearer token',
       token: 'tk_xxx',
       card: '4242424242424242',
+      email: 'user@example.com',
       endpoint: '/v1/subscriptions',
     };
     const masked = maskSensitiveLogFields(entry);
@@ -338,6 +338,7 @@ describe('PROP-BILL-014: maskSensitiveLogFields', () => {
     expect(masked.authorization).toBe('[REDACTED]');
     expect(masked.token).toBe('[REDACTED]');
     expect(masked.card).toBe('[REDACTED]');
+    expect(masked.email).toBe('[REDACTED]');
     expect(masked.endpoint).toBe('/v1/subscriptions');
   });
 
@@ -410,7 +411,6 @@ describe('PROP-BILL-016: validateRequiredEnvVars', () => {
     GOOGLE_FORM_CANCEL_TOKEN_TTL_SECONDS: '900',
     BILLING_INTERVAL_MONTHS: '1',
     INITIAL_FREE_CYCLES: '2',
-    CANCEL_NOTICE_CYCLES: '1',
   };
 
   it('passes with all vars present', () => {
@@ -438,7 +438,6 @@ describe('PROP-BILL-067: validateFixedEnvVars', () => {
     const env = {
       BILLING_INTERVAL_MONTHS: '1',
       INITIAL_FREE_CYCLES: '2',
-      CANCEL_NOTICE_CYCLES: '1',
     };
     expect(validateFixedEnvVars(env).ok).toBe(true);
   });
@@ -447,7 +446,6 @@ describe('PROP-BILL-067: validateFixedEnvVars', () => {
     const env = {
       BILLING_INTERVAL_MONTHS: '2',
       INITIAL_FREE_CYCLES: '2',
-      CANCEL_NOTICE_CYCLES: '1',
     };
     const result = validateFixedEnvVars(env);
     expect(result.ok).toBe(false);
@@ -457,7 +455,6 @@ describe('PROP-BILL-067: validateFixedEnvVars', () => {
     const env = {
       BILLING_INTERVAL_MONTHS: '1',
       INITIAL_FREE_CYCLES: '0',
-      CANCEL_NOTICE_CYCLES: '1',
     };
     const result = validateFixedEnvVars(env);
     expect(result.ok).toBe(false);
