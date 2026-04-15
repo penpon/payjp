@@ -3,7 +3,9 @@ pre-commit:
   commands:
     biome:
       glob: "*.{ts,json,jsonc}"
-      exclude: "cloudflare/**"
+      exclude:
+        - "cloudflare/**"
+        - "scripts/**/*.json"
       run: node_modules/.bin/biome check --write {staged_files} && git add {staged_files}
     typecheck:
       glob: "*.ts"
