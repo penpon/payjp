@@ -7,9 +7,25 @@ pre-commit:
         - "cloudflare/**"
         - "scripts/**/*.json"
       run: node_modules/.bin/biome check --write {staged_files} && git add {staged_files}
-    typecheck:
+    # typecheck を 6 project 並列化 (parallel: true のもとで同時実行される)
+    typecheck-shared:
       glob: "*.ts"
-      run: node_modules/.bin/tsc --noEmit -p packages/shared/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/auth-service/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/billing-service/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/sync-service/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/server/tsconfig.json && node_modules/.bin/tsc --noEmit -p packages/admin-server/tsconfig.json
+      run: node_modules/.bin/tsc --noEmit -p packages/shared/tsconfig.json
+    typecheck-auth:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc --noEmit -p packages/auth-service/tsconfig.json
+    typecheck-billing:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc --noEmit -p packages/billing-service/tsconfig.json
+    typecheck-sync:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc --noEmit -p packages/sync-service/tsconfig.json
+    typecheck-server:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc --noEmit -p packages/server/tsconfig.json
+    typecheck-admin-server:
+      glob: "*.ts"
+      run: node_modules/.bin/tsc --noEmit -p packages/admin-server/tsconfig.json
     test:
       glob: "packages/**/*.ts"
       run: npm test
