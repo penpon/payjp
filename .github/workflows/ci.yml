@@ -33,7 +33,7 @@ jobs:
       - name: Biome lint & format
         run: npx biome check .
       - name: TypeScript typecheck
-        run: npx tsc --noEmit -p packages/shared/tsconfig.json && npx tsc --noEmit -p packages/auth-service/tsconfig.json && npx tsc --noEmit -p packages/billing-service/tsconfig.json && npx tsc --noEmit -p packages/sync-service/tsconfig.json && npx tsc --noEmit -p packages/server/tsconfig.json && npx tsc --noEmit -p frontend/tsconfig.json
+        run: npx tsc --noEmit -p packages/shared/tsconfig.json && npx tsc --noEmit -p packages/auth-service/tsconfig.json && npx tsc --noEmit -p packages/billing-service/tsconfig.json && npx tsc --noEmit -p packages/sync-service/tsconfig.json && npx tsc --noEmit -p packages/server/tsconfig.json && npx tsc --noEmit -p packages/admin-server/tsconfig.json && npx tsc --noEmit -p frontend/tsconfig.json && npx tsc --noEmit -p admin-frontend/tsconfig.json
       - name: Frontend build
         run: npm run build:frontend
         env:
