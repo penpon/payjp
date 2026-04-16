@@ -190,6 +190,16 @@ describe('GET /v1/auth/discord/session', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('returns 403 when Sec-Fetch-Site is cross-site (blocks link_session JSON exfiltration without Origin)', async () => {
+    const app = createApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/discord/session',
+      headers: { 'sec-fetch-site': 'cross-site' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('returns CORS headers with valid origin', async () => {
     const app = createApp();
     const res = await app.inject({
