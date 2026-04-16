@@ -14,14 +14,35 @@ interface Env {
   CF_API_ORIGIN: string;
 }
 
+/**
+ * Parse `CF_API_ORIGIN` as a bare https origin (scheme + host[:port] only).
+ * Rejects path/query/fragment/credentials so a typo cannot turn this function into a generic open proxy.
+ */
+function parseStrictHttpsOrigin(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  let u: URL;
+  try {
+    u = new URL(t);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:') return null;
+  if (u.username !== '' || u.password !== '') return null;
+  if (u.pathname !== '/' && u.pathname !== '') return null;
+  if (u.search !== '' || u.hash !== '') return null;
+  if (!u.hostname) return null;
+  return u.origin;
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, params } = context;
 
-  if (!env.CF_API_ORIGIN) {
-    return new Response('CF_API_ORIGIN is not configured', { status: 502 });
+  const origin = parseStrictHttpsOrigin(env.CF_API_ORIGIN ?? '');
+  if (!origin) {
+    return new Response('CF_API_ORIGIN is not a valid https origin', { status: 502 });
   }
 
-  const origin = env.CF_API_ORIGIN.replace(/\/$/, '');
   const route = Array.isArray(params.route) ? params.route.join('/') : (params.route ?? '');
   const incomingUrl = new URL(request.url);
   const targetUrl = `${origin}/v1/${route}${incomingUrl.search}`;
