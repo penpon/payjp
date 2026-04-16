@@ -401,6 +401,14 @@ describe('POST /v1/subscriptions', () => {
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
   });
 
+  it('returns 403 when Sec-Fetch-Site is blank even if Origin matches (forged cross-site request)', async () => {
+    const app = createApp();
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { secFetchSite: '' }));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
   it('returns 422 for invalid planId', async () => {
     const app = createApp();
     const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, { ...subscribePayload(), planId: 'invalid-plan' }));
