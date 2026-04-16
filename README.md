@@ -682,32 +682,169 @@ Let's Encrypt (certbot standalone) / TLSv1.2+1.3 / ECDHE 系暗号 / HSTS preloa
 
 ## 運用・監視
 
-### 自動監視（systemd timer、5 分間隔）
+> 詳細: [`docs/ops/`](docs/ops/) 配下の各ドキュメント
 
-| チェック | アラートコード | 閾値 |
+### VPS 内部監視 (payjp-ops)
+
+systemd timer（5 分間隔）で 4 層のチェックスクリプトを順次実行し、異常検知時は Discord webhook で即時通知。日次ダイジェストを 09:00 JST に配信。
+
+```mermaid
+graph TD
+    Timer["⏱ systemd timer\n5分間隔"] --> RAC["run-all-checks.sh"]
+    RAC --> CH["check-host.sh\n10 codes"]
+    RAC --> CD["check-docker.sh\n4 codes"]
+    RAC --> CN["check-nginx.sh\n4 codes"]
+    RAC --> CA["check-app.sh\n10 codes"]
+
+    CH --> DD{"dedup\ncooldown\nstorm"}
+    CD --> DD
+    CN --> DD
+    CA --> DD
+
+    DD -->|"critical / warn"| WHA["🔴 #payjp-ops-alerts"]
+    DD -->|"RESOLVED"| WHN["🟢 #payjp-ops-normal"]
+    DD -->|"≥5 codes/tick"| STORM["OPS_STORM 集約"] --> WHA
+
+    Digest["daily-digest.sh\n09:00 JST"] --> WHN
+```
+
+**check-host.sh（Linux ホスト層）**
+
+| コード | チェック | 閾値 | 重大度 |
+|---|---|---|---|
+| `HOST_DISK_ROOT` | `/` 使用率 | > 85% | critical |
+| `HOST_DISK_VARLOG` | `/var/log` 使用率 | > 85% | warn |
+| `HOST_DISK_BACKUPS` | backup 領域使用率 | > 85% | critical |
+| `HOST_LOAD_HIGH` | load5 / nproc | > 2x, 3 tick 連続 | warn |
+| `HOST_OOM_KILL` | OOM kill (24h) | ≥ 1 イベント | critical |
+| `HOST_REBOOT_REQUIRED` | 再起動要求ファイル | 存在検知 | warn |
+| `HOST_SWAP_HIGH` | swap 使用率 | > 50% | warn |
+| `HOST_FAIL2BAN_SURGE` | fail2ban BAN 合計 | ≥ 10 | warn |
+| `HOST_TLS_EXPIRING` | TLS 証明書残日数 | < 14 日 | critical |
+| `HOST_DOMAIN_EXPIRING` | ドメイン残日数 | < 30 日 | critical |
+
+**check-docker.sh（Docker 層）**
+
+| コード | チェック | 閾値 | 重大度 |
+|---|---|---|---|
+| `DOCKER_DAEMON_DOWN` | docker daemon 状態 | != active | critical |
+| `DOCKER_CONTAINER_EXITED` | compose コンテナ | exited 検知 | critical |
+| `DOCKER_RESTART_DELTA` | RestartCount 差分 | 前 tick から増加 | warn |
+| `DOCKER_HEALTH_UNHEALTHY` | DB healthcheck | unhealthy | critical |
+
+**check-nginx.sh（HTTP 層）**
+
+| コード | チェック | 閾値 | 重大度 |
+|---|---|---|---|
+| `NGINX_5XX_BURST` | 5xx 応答 / 5 分 | > 5 | critical |
+| `NGINX_429_BURST` | 429 応答 / 5 分 | > 50 | warn |
+| `NGINX_UPSTREAM_SLOW` | upstream p95 応答時間 | > 5.0s | warn |
+| `NGINX_ERRLOG_CRIT` | error.log crit/alert/emerg | 新規エントリ | critical |
+
+**check-app.sh（アプリ + DB 層）**
+
+| コード | チェック | 閾値 | 重大度 |
+|---|---|---|---|
+| `APP_HEALTH_FAIL` | `/health` HTTP | != 200 or timeout 3s | critical |
+| `APP_HEALTH_SLOW` | `/health` 応答時間 | > 3.0s | warn |
+| `DB_PING` | `SELECT 1` | 失敗 | critical |
+| `APP_PAYJP_EVENTS_FAILED` | webhook failed / 1h | > 3 | critical |
+| `APP_IMPACT_LOGS_OPEN` | 未解決 impact_logs | > 5 | warn |
+| `APP_INFLIGHT_STUCK_WARN` | inflight 滞留 | > 30 分 | warn |
+| `APP_INFLIGHT_STUCK_CRIT` | inflight 滞留 | > 6 時間 | critical |
+| `DB_BACKUP_STALE` | 最新 backup 経過時間 | > 26h | critical |
+| `DB_OFFSITE_STALE` | オフサイト upload 経過時間 | > 30h | critical |
+| `DB_RESTORE_DRILL_STALE` | restore drill 経過日数 | > 40 日 | critical |
+
+**通知制御**
+
+| 機構 | 動作 |
+|---|---|
+| Cooldown | critical: 10 分, warn: 30 分, normal: 60 分（コード別上書き可） |
+| 復旧判定 | 2 tick 連続正常で `*_RESOLVED` を normal チャンネルに投稿 |
+| Storm 抑制 | 同一 tick で 5 codes 以上発火 → 個別通知抑制 + `OPS_STORM` 集約を alerts に投稿 |
+| Global rate limit | 60 秒に 1 通 |
+
+> 詳細: [`docs/ops/alerts.md`](docs/ops/alerts.md)
+
+### 外部からの VPS 監視（3 層 liveness）
+
+VPS 全損・outbound 断・inbound 断をそれぞれ異なる層で検知し、相互のブラインドスポットを補完する。
+
+```mermaid
+graph LR
+    subgraph "VPS"
+        L1["① payjp-ops\non-VPS, 5分"]
+    end
+
+    subgraph "Off-VPS SaaS"
+        L2["② Healthchecks.io\nheartbeat 5分\n15分沈黙でアラート"]
+        L3["③ HetrixTools\n3 regions, 1分\nkeyword + SSL"]
+    end
+
+    L1 -->|webhook| Discord["#payjp-ops-alerts"]
+    VPS -->|"curl hc-ping"| L2
+    L2 -->|沈黙検知| Discord
+    L3 -->|"HTTP probe"| VPS
+    L3 -->|Down 検知| Discord
+```
+
+| 層 | ブラインドスポット | 補完する層 |
 |---|---|---|
-| ディスク使用率 | `HOST_DISK_ROOT` | > 90% |
-| ロードアベレージ | `HOST_LOAD_HIGH` | > 4（2 コア） |
-| OOM kill | `HOST_OOM_KILL` | イベント検知 |
-| TLS 証明書有効期限 | `HOST_TLS_EXPIRING` | < 7 日 |
-| ドメイン有効期限 | `HOST_DOMAIN_EXPIRING` | < 7 日 |
-| Docker コンテナ異常終了 | `DOCKER_CONTAINER_EXIT` | 任意 |
-| API HTTP ステータス | `APP_HTTP_ERROR` | 3 回連続 5xx |
-| DB 接続プール | `DB_POOL_EXHAUSTED` | 接続数 > 90% |
-| バックアップ鮮度 | `DB_BACKUP_STALE` | > 25 時間 |
-| Nginx 5xx 率 | `NGINX_ERROR_RATE_HIGH` | > 1% |
+| ① 内部 (payjp-ops) | VPS 全損・outbound NW 断 | ② HC.io が沈黙検知 |
+| ② Healthchecks.io | inbound ブロック (UFW/DNS/TLS/BGP) | ③ HetrixTools が外部 probe |
+| ③ HetrixTools | outbound-only 障害・内部プロセス異常 | ① 内部チェック |
 
-### 通知
+> 詳細: [`docs/ops/external-monitoring.md`](docs/ops/external-monitoring.md)
 
-- 全アラートを Discord `#payjp-ops-alerts` チャンネルに集約
-- Critical/Warn → 赤 embed、Normal/Resolved → 緑 embed
-- グローバルレート制限: 60 秒に 1 通
+### 上流ステータス監視
 
-### バックアップ
+依存する外部サービスの障害を MonitoRSS（Discord bot）経由で RSS フィードから検知。
 
-- **ローカル:** `pg_dump` 14 日保持（毎日 03:00 JST）
-- **オフサイト:** age 暗号化 → Backblaze B2（Compliance Lock 30 日）
-- **月次復旧訓練:** 毎月第 1 日曜 04:00 に restore-drill 自動実行
+```mermaid
+graph LR
+    PAY["PAY.JP status\nRSS"] --> MRSS["MonitoRSS\nDiscord bot\n10分間隔"]
+    DIS["Discord status\nRSS"] --> MRSS
+    LE["Let's Encrypt status\nRSS"] --> MRSS
+    MRSS --> Alerts["#payjp-ops-alerts"]
+```
+
+| フィード | URL | プラットフォーム |
+|---|---|---|
+| PAY.JP | `https://status.pay.jp/history.rss` | Atlassian Statuspage |
+| Discord | `https://discordstatus.com/history.rss` | Atlassian Statuspage |
+| Let's Encrypt | `https://letsencrypt.status.io/` | status.io |
+
+> 詳細: [`docs/ops/external-monitoring.md`](docs/ops/external-monitoring.md)
+
+### バックアップ・リストアパイプライン
+
+ローカル → オフサイト → 月次復旧訓練の 3 段階で、バックアップの取得・保全・復元可能性を継続的に検証。
+
+```mermaid
+graph TD
+    CRON["毎日 03:00 JST\npayjp-ops-backup.timer"] --> DUMP["pg_dump → gzip"]
+    DUMP --> LOCAL["ローカル保存\n/var/backups/payjp-db/\n14日保持"]
+    LOCAL -->|OnSuccess| ENC["age encrypt\n→ rclone copyto"]
+    ENC --> B2["Backblaze B2\nCompliance Lock 30日"]
+
+    DRILL["毎月第1日曜 04:00 JST\nrestore-drill.timer"] --> DL["B2 download"]
+    DL --> DEC["age decrypt → gunzip"]
+    DEC --> SCRATCH["scratch postgres\nport 55432"]
+    SCRATCH --> SANITY["sanity check\nテーブル数 ≥ 1"]
+
+    MON["鮮度監視\ncheck-app.sh"] -.->|"> 26h"| LOCAL
+    MON -.->|"> 30h"| B2
+    MON -.->|"> 40日"| SANITY
+```
+
+| 監視コード | 閾値 | 対象 |
+|---|---|---|
+| `DB_BACKUP_STALE` | > 26 時間 | ローカルバックアップ鮮度 |
+| `DB_OFFSITE_STALE` | > 30 時間 | B2 オフサイト upload 鮮度 |
+| `DB_RESTORE_DRILL_STALE` | > 40 日 | 月次 restore drill 実施 |
+
+> 詳細: [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md)
 
 ### 障害復旧 CLI
 
