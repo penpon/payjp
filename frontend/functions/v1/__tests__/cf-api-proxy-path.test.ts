@@ -22,6 +22,7 @@ describe('isUnsafeV1ApiProxyRoute', () => {
 
   it('rejects slash or backslash inside a segment', () => {
     expect(isUnsafeV1ApiProxyRoute('foo%2fbar')).toBe(true);
+    expect(isUnsafeV1ApiProxyRoute('foo%2f..')).toBe(true);
     expect(isUnsafeV1ApiProxyRoute('x\\y')).toBe(true);
   });
 

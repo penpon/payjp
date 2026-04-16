@@ -54,6 +54,10 @@ describe('assertSafeProxyRouteSegments', () => {
     expect(assertSafeProxyRouteSegments(['%252e%252e'])).toMatchObject({ ok: false, reason: 'path_traversal' });
   });
 
+  it('rejects encoded slash inside a segment (cannot smuggle .. after origin)', () => {
+    expect(assertSafeProxyRouteSegments(['foo%2f..'])).toMatchObject({ ok: false, reason: 'path_traversal' });
+  });
+
   it('rejects empty segment (double slash)', () => {
     expect(assertSafeProxyRouteSegments(['foo', '', 'bar'])).toMatchObject({ ok: false, reason: 'empty_segment' });
   });

@@ -59,6 +59,10 @@ export function assertSafeProxyRouteSegments(routeParts: string[]): { ok: true }
     if (segment.includes('\0')) {
       return { ok: false, reason: 'null_byte' };
     }
+    // Reject slashes inside a segment (e.g. foo%2f..) — same boundary as cf-api-proxy-path.ts
+    if (segment.includes('/') || segment.includes('\\')) {
+      return { ok: false, reason: 'path_traversal' };
+    }
     if (segment === '.' || segment === '..') {
       return { ok: false, reason: 'path_traversal' };
     }
