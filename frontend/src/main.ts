@@ -350,6 +350,10 @@ function startCancelFlow(app: HTMLElement): void {
       dismiss?.();
       try {
         const result = await createCancelFormLink();
+        const parsed = new URL(result.formUrl);
+        if (parsed.protocol !== 'https:') {
+          throw new Error(`Unexpected formUrl protocol: ${parsed.protocol}`);
+        }
         window.location.href = result.formUrl;
       } catch (err) {
         console.error('[cancel] createCancelFormLink failed:', err);

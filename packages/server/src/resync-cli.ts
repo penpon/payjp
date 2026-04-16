@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   });
 
   const out = await runResyncCli(process.argv.slice(2), cliDeps);
-  console.log(JSON.stringify(out.result, null, 2));
+  console.log(JSON.stringify(out.result));
   process.exit(out.exitCode);
 }
 

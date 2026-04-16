@@ -489,14 +489,7 @@ async function updateMemberFromWebhook(db: DbPool, memberId: string, updates: Me
 
   const result = await db.query(`UPDATE members SET ${setClauses.join(', ')} WHERE id = $${i}`, values);
   if (result.rowCount === 0) {
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        service: 'sync-service',
-        message: 'updateMemberFromWebhook affected 0 rows — member may have been deleted',
-        memberId,
-      }),
-    );
+    throw new Error(`updateMemberFromWebhook affected 0 rows (memberId=${memberId}) — aborting transaction`);
   }
 }
 

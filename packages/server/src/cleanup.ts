@@ -28,6 +28,8 @@ async function main(): Promise<void> {
       const expired_oauth = await query('DELETE FROM oauth_states WHERE expires_at < NOW()');
       const expired_sessions = await query('DELETE FROM discord_link_sessions WHERE expires_at < NOW()');
       const expired_access_gate_sessions = await query('DELETE FROM access_gate_sessions WHERE expires_at < NOW()');
+      const expired_member_sessions = await query('DELETE FROM member_sessions WHERE expires_at < NOW()');
+      const expired_cancel_form_tokens = await query('DELETE FROM cancel_form_tokens WHERE expires_at < NOW()');
       const old_events = await query("DELETE FROM payjp_events WHERE received_at < NOW() - INTERVAL '90 days'");
       const old_logs = await query(
         "DELETE FROM member_impact_logs WHERE resolved_at IS NOT NULL AND resolved_at < NOW() - INTERVAL '90 days'",
@@ -36,6 +38,8 @@ async function main(): Promise<void> {
         oauth_states: expired_oauth.rowCount,
         discord_link_sessions: expired_sessions.rowCount,
         access_gate_sessions: expired_access_gate_sessions.rowCount,
+        member_sessions: expired_member_sessions.rowCount,
+        cancel_form_tokens: expired_cancel_form_tokens.rowCount,
         payjp_events: old_events.rowCount,
         member_impact_logs: old_logs.rowCount,
       };

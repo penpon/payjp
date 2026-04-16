@@ -34,6 +34,7 @@ async function main(): Promise<void> {
 
   // Security headers on every response (parity with packages/server/src/app.ts)
   app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('Cache-Control', 'no-store');
     reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     reply.header('X-Frame-Options', 'DENY');
     reply.header('X-Content-Type-Options', 'nosniff');

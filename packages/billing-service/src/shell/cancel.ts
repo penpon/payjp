@@ -45,7 +45,7 @@ function secureCompare(a: string, b: string): boolean {
 }
 
 function cancelLockKey(member: Member, fallbackDiscordUserId?: string): string {
-  return member.discord_user_id ?? fallbackDiscordUserId ?? member.id;
+  return `member:${member.discord_user_id ?? fallbackDiscordUserId ?? member.id}`;
 }
 
 async function applyImmediateCancelState(
@@ -62,7 +62,7 @@ async function applyImmediateCancelState(
       ok: false,
       statusCode: 503,
       errorCode: 'INFLIGHT_OPERATION',
-      message: 'Another operation is in progress',
+      message: `Your previous ${member.inflight_operation_type ?? 'unknown'} operation (${member.inflight_operation_id}) is still in progress`,
       operationId: member.inflight_operation_id,
     };
   }
@@ -115,7 +115,18 @@ async function applyImmediateCancelState(
   }
 
   const operationId = deps.generateOperationId();
-  await deps.db.setInflightOperation(member.id, operationId, 'cancel', now);
+  try {
+    await deps.db.setInflightOperation(member.id, operationId, 'cancel', now);
+  } catch (err) {
+    slog('error', 'setInflightOperation failed', { memberId: member.id, operationId, error: String(err) });
+    return {
+      ok: false,
+      statusCode: 503,
+      errorCode: 'DB_UPDATE_FAILED',
+      message: 'Failed to set inflight operation',
+      operationId,
+    };
+  }
 
   let canceledSubscription: Awaited<ReturnType<typeof deps.payjp.cancelSubscription>>;
   try {
@@ -236,10 +247,11 @@ async function finalizeImmediateCancel(
       try {
         await deps.db.updateMemberRoleState(member.id, 'unknown');
       } catch (roleStateErr) {
-        slog('error', 'Role revoke failed and role_state fallback update failed', {
+        slog('error', 'critical_failure: role revoke + role_state update both failed', {
           memberId: member.id,
           flow: ctx.flow,
           operationId: ctx.operationId,
+          issue: 'role_revoke_double_failure',
           error: String(err),
           roleStateError: String(roleStateErr),
         });
