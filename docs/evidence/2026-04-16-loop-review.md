@@ -44,4 +44,40 @@
 - Agent B の Critical 3 件は全て設計上意図的な挙動または実害のない偽陽性。
 - 2 件 (C-8 / C-9) は既にコード内コメントで設計意図が明記済み。
 - 1 件 (C-11) は grep 実証ベースで検証、将来の zod 導入で改善余地。
-- **追加修正不要。次 iteration から L1〜L5, A1〜A5 の 10 項目に進む。**
+
+## Iteration 2 — Logic (L1〜L5) + Security (A1〜A5)
+
+### 修正適用 (Fix)
+
+- **L2** `packages/billing-service/src/shell/cancel.ts:256-266` — role_state fallback update 失敗時の `catch {}` を `slog` 化。line 239 の対称 branch と同一パターンに揃え、debuggability 向上。挙動不変 (166 tests pass)。
+- **L4** `packages/sync-service/src/shell/webhook.ts:608-622` — `logUnmappedPlanWarning` の silent catch を `deps.log` で観測可能化。"Best-effort; daily resync will catch this" 設計は維持 (136 tests pass)。
+
+### コメント補強 (Annotate)
+
+- **L1** `packages/sync-service/src/shell/webhook.ts` MemberWebhookUpdateColumn — `cancel_requested_at` を webhook 更新列から意図的に除外している理由を FIND-L1 で明記。ユーザ起点 cancel vs PAY.JP 側イベントのセマンティック分離。
+- **L3** `packages/sync-service/src/core/index.ts` shouldGrantPaidDiscordAccess — `_accessEndAt` / `_now` が未使用である根拠を FIND-L3 で明記 (2weeks-spec.md §1/§5 の「即時剥奪」必須要件)。pure-core.test.ts:186-197 で明示的にアサート済。
+
+### 検証のみ、アクション不要 (no-op)
+
+- **L5** `isEventStale` の `<` 厳密比較 — event.id idempotency + advisory lock による serial 処理で正当。同秒イベントは idempotency check (event.id) で先に弾かれる。
+- **A1** `packages/auth-service/src/shell/index.ts` Discord token encrypt — 暗号化成功/失敗/key 未設定の全ケースで graceful degradation 正しく実装。link_session save 失敗時の revoke 経路も整合。
+- **A2** `packages/billing-service/src/shell/subscribe.ts` 3DS TOCTOU — operationId 保存 → 3DS verify → createCustomer の順序は `security.md` 準拠。`isThreeDSecureVerified` は `'verified'` のみ true を返す厳格実装。
+- **A3** `verifySharedPasscode` — sha256 ハッシュ長正規化 + `timingSafeEqual` による標準 constant-time 実装。
+- **A4** `payjp_events` audit insert TX 境界 — C-8 と実質同一、main update path のみ `withTransaction`、early-return は単独 INSERT + ON CONFLICT DO NOTHING で冪等。
+- **A5** `packages/admin-server/src/queries.ts:100-108` — 6 placeholder / 6 params / `next += 6` 整合、全 user input は parameterized bind で SQLi リスクなし。
+
+### 総合検証
+
+- `npm test`: 661 passed / 248 skipped / 0 failed (14s)
+- `biome check` (変更3ファイル): clean
+- 全 workspace typecheck: PASS (pre-commit hook)
+- `git diff main..HEAD` レビュー: surgical 3 commits、挙動変更ゼロ、docs + comment + logging のみ
+
+### Commits (本 iteration)
+
+- `f2e49d2` refactor(review): L1/L2/L4 observability + webhook semantic annotation
+- `2591466` refactor(review): L3 annotate shouldGrantPaidDiscordAccess spec rationale
+
+### 結論
+
+計 12 項目全てレビュー完了。4 項目で差分（2 fix + 2 annotate）、残り 8 項目は設計正当性を検証のみ。Go-Live 2026-04-20 前のコード品質保証として充分。CR 起票を要する仕様変更レベルの bug は未検出。
