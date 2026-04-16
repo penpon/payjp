@@ -62,6 +62,14 @@ describe('mapCancelError', () => {
     });
   });
 
+  it('maps DB_UPDATE_FAILED without operationId to inflight (support-only message)', () => {
+    const err = new CancelError(503, 'DB_UPDATE_FAILED', undefined, 'Failed to set inflight operation');
+    expect(mapCancelError(err)).toEqual({
+      kind: 'inflight',
+      message: '退会処理は完了しましたが、状態の記録に失敗しました。サポートまでお問い合わせください。',
+    });
+  });
+
   it('maps unknown 503 with operationId to inflight', () => {
     const err = new CancelError(503, 'PAYJP_UNCERTAIN', 'op-456', 'Uncertain');
     expect(mapCancelError(err)).toEqual({

@@ -326,6 +326,20 @@ describe('Failure Handling — Integration', () => {
       }
       expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
+
+    it('returns 503 without operationId when setInflightOperation fails (no persisted inflight row)', async () => {
+      const deps = makeSubscribeDeps();
+      (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db write timeout'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBeUndefined();
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -498,6 +512,21 @@ describe('Failure Handling — Integration', () => {
   // PROP-BILL-053d: Failure after cancel API
   // -------------------------------------------------------------------------
   describe('PROP-BILL-053d: Failure after cancel API', () => {
+    it('returns 503 without operationId when setInflightOperation fails (no persisted inflight row)', async () => {
+      const deps = makeCancelDeps();
+      (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db write timeout'));
+
+      const result = await handleCancel(makeCancelRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBeUndefined();
+      }
+      expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
+    });
+
     it('re-fetch subscription status; reconcile with canceled status → success', async () => {
       const deps = makeCancelDeps();
 
