@@ -959,6 +959,30 @@ describe('POST /v1/subscriptions/cancel/google-form-link', () => {
 describe('POST /v1/subscriptions/cancel/google-submit', () => {
   const URL = '/v1/subscriptions/cancel/google-submit';
 
+  it('returns 403 when Sec-Fetch-Site is cross-site', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'sec-fetch-site': 'cross-site',
+        'x-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': '00'.repeat(32),
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: 'placeholder-token',
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
   function createGoogleSubmitDeps() {
     const activeMember = makeMember({
       subscription_status: 'active',
