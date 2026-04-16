@@ -67,6 +67,34 @@ async function applyImmediateCancelState(
     };
   }
 
+  // V3-H1: Guard against canceled status with null cancel_requested_at
+  if (member.subscription_status === 'canceled' && member.cancel_requested_at === null) {
+    slog('warn', 'canceled status with null cancel_requested_at — normalizing', { memberId: member.id });
+    try {
+      const normalizedMember = await deps.db.updateMemberAfterCancel(member.id, {
+        cancel_requested_at: now,
+        subscription_status: 'canceled',
+        access_end_at: member.access_end_at ?? now,
+        next_billing_at: member.next_billing_at ?? member.access_end_at,
+        inflight_operation_id: null,
+        inflight_operation_type: null,
+        inflight_operation_started_at: null,
+      });
+      return { member: normalizedMember };
+    } catch (err) {
+      slog('error', 'Failed to normalize canceled+null state', {
+        memberId: member.id,
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to normalize cancel state',
+      };
+    }
+  }
+
   if (member.cancel_requested_at !== null) {
     if (member.subscription_status === 'canceled' && member.access_end_at !== null) {
       return { member };
@@ -243,6 +271,13 @@ async function finalizeImmediateCancel(
       await deps.db.updateMemberRoleState(member.id, 'revoked');
       roleRemovalAt = deps.clock();
     } catch (err) {
+      // V3-M2: Log role revoke failure regardless of role_state update outcome
+      slog('error', 'Discord role revoke failed', {
+        memberId: member.id,
+        flow: ctx.flow,
+        operationId: ctx.operationId,
+        error: String(err),
+      });
       try {
         await deps.db.updateMemberRoleState(member.id, 'unknown');
       } catch (roleStateErr) {
@@ -488,7 +523,22 @@ export async function handleGoogleCancelSubmit(
     }
 
     // §8 item 3: consume cancel form token before PAY.JP write, after lock acquisition
-    await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
+    // V3-M3: Add try/catch for consumeCancelFormToken to prevent silent propagation
+    try {
+      await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
+    } catch (err) {
+      slog('error', 'consumeCancelFormToken failed', {
+        memberId: lockedMember.id,
+        flow: 'google-submit',
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to consume token',
+      };
+    }
 
     const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
     if ('ok' in cancelState) {
@@ -545,7 +595,22 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     }
 
     // §8 item 3: consume link_session before PAY.JP write, after lock acquisition
-    await deps.db.consumeLinkSession(tokenHash, now);
+    // V3-M3: Add try/catch for consumeLinkSession to prevent silent propagation
+    try {
+      await deps.db.consumeLinkSession(tokenHash, now);
+    } catch (err) {
+      slog('error', 'consumeLinkSession failed', {
+        memberId: lockedMember.id,
+        flow: 'browser',
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to consume session',
+      };
+    }
 
     const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
     if ('ok' in cancelState) {

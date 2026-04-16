@@ -454,6 +454,23 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       if (member.payjp_subscription_id) {
         try {
           const existingSub = await payjp.fetchSubscription(member.payjp_subscription_id);
+          // V3-M4: Validate reconciled subscription status
+          if (existingSub.status !== 'active' && existingSub.status !== 'trial') {
+            await clearInflightOnDefinitePayjpFailure(
+              db,
+              member.id,
+              normalizedEmail,
+              operationId,
+              'createSubscription',
+            );
+            return {
+              ok: false,
+              statusCode: 422,
+              errorCode: 'PAYJP_ERROR',
+              message: 'Reconciled subscription not active',
+              operationId,
+            };
+          }
           subscription = existingSub;
         } catch (reconcileErr) {
           slog('error', 'Subscription reconciliation failed', {
