@@ -48,11 +48,14 @@ function cancelLockKey(member: Member): string {
   return `member:${member.id}`;
 }
 
-async function applyImmediateCancelState(
+type ImmediateCancelPrecheck = { next: 'finalize'; member: Member } | { next: 'payjp'; member: Member };
+
+/** Pre-PAY.JP guards only (subscription state, inflight, ids). Browser flow consumes link_session after this, before PAY.JP. */
+async function immediateCancelPrecheck(
   member: Member,
   deps: BillingDeps,
   now: Date,
-): Promise<{ member: Member; operationId?: string } | OperationError> {
+): Promise<ImmediateCancelPrecheck | OperationError> {
   if (!hasCancelableSubscription(member.subscription_status)) {
     return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No cancelable subscription found' };
   }
@@ -80,7 +83,7 @@ async function applyImmediateCancelState(
         inflight_operation_type: null,
         inflight_operation_started_at: null,
       });
-      return { member: normalizedMember };
+      return { next: 'finalize', member: normalizedMember };
     } catch (err) {
       slog('error', 'Failed to normalize canceled+null state', {
         memberId: member.id,
@@ -97,7 +100,7 @@ async function applyImmediateCancelState(
 
   if (member.cancel_requested_at !== null) {
     if (member.subscription_status === 'canceled' && member.access_end_at !== null) {
-      return { member };
+      return { next: 'finalize', member };
     }
     try {
       const normalizedMember = await deps.db.updateMemberAfterCancel(member.id, {
@@ -109,7 +112,7 @@ async function applyImmediateCancelState(
         inflight_operation_type: null,
         inflight_operation_started_at: null,
       });
-      return { member: normalizedMember };
+      return { next: 'finalize', member: normalizedMember };
     } catch (err) {
       slog('error', 'Failed to normalize already-canceled member state', {
         memberId: member.id,
@@ -142,6 +145,14 @@ async function applyImmediateCancelState(
     };
   }
 
+  return { next: 'payjp', member };
+}
+
+async function immediateCancelPayjpWrite(
+  member: Member,
+  deps: BillingDeps,
+  now: Date,
+): Promise<{ member: Member; operationId: string } | OperationError> {
   const operationId = deps.generateOperationId();
   try {
     await deps.db.setInflightOperation(member.id, operationId, 'cancel', now);
@@ -252,6 +263,21 @@ async function applyImmediateCancelState(
       operationId,
     };
   }
+}
+
+async function applyImmediateCancelState(
+  member: Member,
+  deps: BillingDeps,
+  now: Date,
+): Promise<{ member: Member; operationId?: string } | OperationError> {
+  const pre = await immediateCancelPrecheck(member, deps, now);
+  if ('ok' in pre) {
+    return pre;
+  }
+  if (pre.next === 'finalize') {
+    return { member: pre.member };
+  }
+  return immediateCancelPayjpWrite(pre.member, deps, now);
 }
 
 async function finalizeImmediateCancel(
@@ -592,13 +618,12 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
 
-    const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
-    if ('ok' in cancelState) {
-      return cancelState;
+    const pre = await immediateCancelPrecheck(lockedMember, deps, now);
+    if ('ok' in pre) {
+      return pre;
     }
 
-    // Keep link_session reusable when we only reject by pre-PAY.JP guards
-    // (e.g. existing inflight operation). Consume it only when proceeding past guards.
+    // §8 item 3: consume link session after lock and pre-PAY.JP guards, before PAY.JP write
     try {
       await deps.db.consumeLinkSession(tokenHash, now);
     } catch (err) {
@@ -613,6 +638,18 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         errorCode: 'DB_UPDATE_FAILED',
         message: 'Failed to consume session',
       };
+    }
+
+    if (pre.next === 'finalize') {
+      return await finalizeImmediateCancel(pre.member, deps, {
+        flow: 'browser',
+        operationId: undefined,
+      });
+    }
+
+    const cancelState = await immediateCancelPayjpWrite(pre.member, deps, now);
+    if ('ok' in cancelState) {
+      return cancelState;
     }
 
     return await finalizeImmediateCancel(cancelState.member, deps, {

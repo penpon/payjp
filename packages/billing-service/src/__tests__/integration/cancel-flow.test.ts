@@ -493,13 +493,13 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const idxRemoveRole = callOrder.indexOf('removeRole');
       const idxUpdateRoleState = callOrder.indexOf('updateMemberRoleState');
 
-      // Pre-PAY.JP guards (including inflight) run before session consumption.
-      // findSession → findMember(initial) → Lock → findMember(locked) → setInflight
-      //   → consumeSession → cancelSubscription → updateMember → removeRole → updateRoleState
+      // §8 item 3: consumeSession after pre-PAY.JP guards, before setInflight / PAY.JP.
+      // findSession → findMember(initial) → Lock → findMember(locked) → consumeSession
+      //   → setInflight → cancelSubscription → updateMember → removeRole → updateRoleState
       expect(idxFindSession).toBeLessThan(idxLock);
       expect(idxFindMember).toBeLessThan(idxLock);
-      expect(idxLock).toBeLessThan(idxInflight);
-      expect(idxInflight).toBeLessThan(idxConsumeSession);
+      expect(idxLock).toBeLessThan(idxConsumeSession);
+      expect(idxConsumeSession).toBeLessThan(idxInflight);
       expect(idxInflight).toBeLessThan(idxCancel);
       expect(idxCancel).toBeLessThan(idxUpdateMember);
       expect(idxUpdateMember).toBeLessThan(idxRemoveRole);
