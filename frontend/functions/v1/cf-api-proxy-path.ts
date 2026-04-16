@@ -21,7 +21,10 @@ export function isUnsafeV1ApiProxyRoute(route: string): boolean {
     } catch {
       return true;
     }
-    if (decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+    if (decoded.includes('/') || decoded.includes('\\')) {
+      return true;
+    }
+    if (decoded === '..') {
       return true;
     }
   }
