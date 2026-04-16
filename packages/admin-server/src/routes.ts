@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
+import { createCfAccessRemoteJwks, verifyCfAccessJwt } from './cf-access-jwt.js';
 import { isUuid, queryAdminOverview, queryMemberDetail, queryMemberImpactLogs, queryMembersList } from './queries.js';
 
 function parseBool(v: unknown): boolean | null {
@@ -42,8 +43,22 @@ function logAdminRequest(request: FastifyRequest, actor: string): void {
   request.log.info({ auditActor: actor, path: pathname }, 'admin request');
 }
 
+function logCfAccessJwtFailure(request: FastifyRequest, reason: string): void {
+  let pathname = '';
+  try {
+    pathname = new URL(request.url, 'http://_').pathname;
+  } catch {
+    pathname = '[invalid-url]';
+  }
+  request.log.warn({ path: pathname, cfAccessVerifyReason: reason }, 'admin request: Cloudflare Access JWT rejected');
+}
+
 export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Pool }): Promise<void> {
   const { pool } = opts;
+
+  const cfTeamDomain = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN?.trim() ?? '';
+  const cfAudience = process.env.CLOUDFLARE_ACCESS_AUDIENCE?.trim() ?? '';
+  const cfAccessJwks = cfTeamDomain && cfAudience ? createCfAccessRemoteJwks(cfTeamDomain) : undefined;
 
   app.addHook('preHandler', async (request, reply) => {
     if (request.method === 'OPTIONS') {
@@ -53,13 +68,29 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
       return reply.status(405).send({ error: 'read_only', message: 'Only GET is allowed' });
     }
 
-    // CF Access email header is stripped by nginx (prevents spoofing via SSH tunnel).
-    // Re-enable this path with Cf-Access-Jwt-Assertion JWT verification once
-    // cloudflared Tunnel is deployed (docs/ops/admin-access-cloudflare.md §3.3).
-    const cloudflareActor = parseHeaderValue(request.headers['cf-access-authenticated-user-email']);
-    if (cloudflareActor) {
-      logAdminRequest(request, cloudflareActor);
-      return;
+    if (cfTeamDomain && cfAudience) {
+      const jwtAssertion = parseHeaderValue(request.headers['cf-access-jwt-assertion']);
+      if (!jwtAssertion) {
+        return reply.status(401).send({
+          error: 'unauthorized_admin_request',
+          message: 'Cf-Access-Jwt-Assertion is required',
+        });
+      }
+      const verified = await verifyCfAccessJwt({
+        token: jwtAssertion,
+        teamDomain: cfTeamDomain,
+        audience: cfAudience,
+        ...(cfAccessJwks ? { jwks: cfAccessJwks } : {}),
+      });
+      if (verified.ok) {
+        logAdminRequest(request, verified.email);
+        return;
+      }
+      logCfAccessJwtFailure(request, verified.reason);
+      return reply.status(401).send({
+        error: 'unauthorized_admin_request',
+        message: 'Invalid Cloudflare Access token',
+      });
     }
 
     const localActor = parseHeaderValue(request.headers['x-admin-audit-actor']);
@@ -71,7 +102,7 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
 
     return reply.status(401).send({
       error: 'unauthorized_admin_request',
-      message: 'Cloudflare Access identity is required',
+      message: 'Authentication required',
     });
   });
 

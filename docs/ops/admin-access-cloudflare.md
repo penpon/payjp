@@ -165,6 +165,7 @@ Zero Trust > Access > Applications > `admin-and-line` > Policies > Include > Ema
 - **Cloudflare Access ログインループ**: IdP の redirect URI が `<team>.cloudflareaccess.com/cdn-cgi/access/callback` と一致しているか確認。
 - **502/521 on admin.and--line.com**: `systemctl status cloudflared` と `journalctl -u cloudflared -n 100` を確認。`ingress` の `service:` が nginx listen port と一致しているか確認。
 - **`CF-Access-Authenticated-User-Email` が空**: `admin-server` 到達前に Cloudflare Access を経由していない（Tunnel 外からの直接到達）。§4 の遮断を確認。
+- **401 on `/admin/*` after Access login**: `admin-api` に `CLOUDFLARE_ACCESS_TEAM_DOMAIN` と `CLOUDFLARE_ACCESS_AUDIENCE` を設定し、`Cf-Access-Jwt-Assertion` を検証できるようにする（`docs/ops/admin-console.md`）。
 
 ## 8. 関連文書
 

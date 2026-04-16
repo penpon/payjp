@@ -14,13 +14,15 @@ Phase A は **read-only** です（`docs/admin-console-boundary.md`）。
 |------|-----|------|
 | `DATABASE_URL` | `postgres://...` | 本番DBと同一スキーマ（マイグレーション実行） |
 | `ADMIN_FRONTEND_ORIGIN` | `https://admin.and--line.com` | CORS 許可オリジン（末尾スラッシュなし） |
-| `ADMIN_API_KEY` | `long-random-string` | ローカル検証時のフォールバック認証キー（Cloudflare Access 経由時は不要） |
+| `ADMIN_API_KEY` | `long-random-string` | ローカル検証時のフォールバック認証キー |
+| `CLOUDFLARE_ACCESS_TEAM_DOMAIN` | `myteam.cloudflareaccess.com` | Zero Trust チームホスト名（スキームなし）。本番で JWT 認証を使う場合に必須 |
+| `CLOUDFLARE_ACCESS_AUDIENCE` | （Access アプリの AUD タグ） | `Cf-Access-Jwt-Assertion` 検証の audience。`CLOUDFLARE_ACCESS_TEAM_DOMAIN` とセットで必須 |
 | `PORT` | `3011` | リッスンポート |
 
-`admin-api` は GET/HEAD リクエストで次のどちらかを要求します。
+`admin-api` は GET/HEAD リクエストで次のいずれかを要求します。
 
-1. Cloudflare Access の `CF-Access-Authenticated-User-Email` ヘッダ
-2. ローカル検証時の `X-Admin-Audit-Actor` + `X-Admin-Api-Key`（`ADMIN_API_KEY` と一致）
+1. **`CLOUDFLARE_ACCESS_TEAM_DOMAIN` と `CLOUDFLARE_ACCESS_AUDIENCE` が両方セットされている場合**: Cloudflare Access の `Cf-Access-Jwt-Assertion` をチーム JWKS で検証し、クレーム `email` を監査ログに使う（メールヘッダ単体は認証に使わない）。
+2. **上記が未設定の場合**: ローカル検証用に `X-Admin-Audit-Actor` + `X-Admin-Api-Key`（`ADMIN_API_KEY` と一致）
 
 認証済みリクエストでは `auditActor` をログに記録します。
 
