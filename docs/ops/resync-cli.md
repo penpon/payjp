@@ -103,7 +103,7 @@ npm run resync -- --operation-id <operationId>
 ```
 
 - `succeeded_count == processed_count` なら `inflight_operation_*` が解除済み、PAY.JP ↔ DB ↔ Discord が整合
-- exit code `0` = 全件成功、`1` = 一部失敗（JSON の `failed_count` 参照）、`2` = 引数エラー / 起動失敗
+- exit code `0` = 全件成功、`2` = 実行完了だが `failed_count > 0`（JSON の `failed_count` 参照）、`1` = CLI 実行エラー（入力不正／依存障害）
 
 ### 5. 失敗時分岐
 
