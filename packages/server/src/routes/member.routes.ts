@@ -61,9 +61,9 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
     if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
       return reply.status(403).send({ error: 'Forbidden' });
     }
-    // Reject cross-site loads (e.g. <img src> / no-cors) that omit Origin; mirrors GET /v1/subscriptions/status.
-    const secFetchSite = typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
-    if (secFetchSite === 'cross-site') {
+    // Reject cross-site browser requests even when Origin is present (credentialed fetch from another site).
+    // Mirrors GET /v1/subscriptions/status + isForbiddenCrossSiteFetch.
+    if (isForbiddenCrossSiteFetch(request)) {
       return reply.status(403).send({ error: 'Forbidden' });
     }
 

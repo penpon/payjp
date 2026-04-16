@@ -223,6 +223,24 @@ describe('GET /v1/members/me', () => {
     expect(res.json()).toEqual({ error: 'Forbidden' });
   });
 
+  it('returns 403 when Sec-Fetch-Site is cross-site even if Origin is present (credentialed cross-origin)', async () => {
+    const deps = makeDeps({ subscription_status: 'active' });
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/members/me',
+      headers: {
+        origin: 'https://evil.example',
+        'sec-fetch-site': 'cross-site',
+      },
+      cookies: { '__Host-member_session': MEMBER_SESSION_TOKEN },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'Forbidden' });
+  });
+
   it('allows server-side / same-tab callers without Origin or Sec-Fetch-Site', async () => {
     const deps = makeDeps({ subscription_status: 'active' });
     const app = buildApp(APP_CONFIG, deps);
