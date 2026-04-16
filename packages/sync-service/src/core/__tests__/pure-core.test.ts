@@ -230,6 +230,18 @@ describe('PROP-SYNC-006: validateCliArgs', () => {
   it('unknown arg → invalid', () => {
     expect(validateCliArgs(['--unknown']).ok).toBe(false);
   });
+
+  it('--operation-id with empty string value → invalid', () => {
+    expect(validateCliArgs(['--operation-id', '']).ok).toBe(false);
+  });
+
+  it('--discord-user-id with empty string value → invalid', () => {
+    expect(validateCliArgs(['--discord-user-id', '']).ok).toBe(false);
+  });
+
+  it('--operation-id without value (missing arg) → invalid', () => {
+    expect(validateCliArgs(['--operation-id']).ok).toBe(false);
+  });
 });
 
 // PROP-SYNC-007: determineCliExitCode

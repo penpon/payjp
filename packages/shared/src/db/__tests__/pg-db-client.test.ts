@@ -459,3 +459,72 @@ describe('PgDbClient - member_impact_logs', () => {
     expect(logs).toHaveLength(1);
   });
 });
+
+describe('PgDbClient - constraint violations', () => {
+  it('upsertProvisionalMember concurrent calls with same discord_user_id are idempotent', async () => {
+    const results = await Promise.all([
+      db.upsertProvisionalMember('discord-concurrent-01', 'a@example.com'),
+      db.upsertProvisionalMember('discord-concurrent-01', 'b@example.com'),
+    ]);
+    expect(results[0].discord_user_id).toBe('discord-concurrent-01');
+    expect(results[1].discord_user_id).toBe('discord-concurrent-01');
+    expect(results[0].id).toBe(results[1].id);
+  });
+
+  it('insertMemberImpactLog with non-existent member_id → FK violation', async () => {
+    const bogusId = 'a0000000-0000-4000-a000-ffffffffffff';
+    await expect(db.insertMemberImpactLog({ member_id: bogusId, issue_code: 'test_fk_violation' })).rejects.toThrow();
+  });
+
+  it('insertCancelFormToken with duplicate id → constraint error', async () => {
+    const member = await db.upsertProvisionalMember('discord-dup-token', 'dup-token@example.com');
+    const tokenId = 'a0000000-0000-4000-a000-000000000200';
+    const expiresAt = new Date(Date.now() + 900_000);
+    await db.insertCancelFormToken({ id: tokenId, memberId: member.id, email: member.email, expiresAt });
+    await expect(
+      db.insertCancelFormToken({ id: tokenId, memberId: member.id, email: member.email, expiresAt }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('PgDbClient - withTransactionLock', () => {
+  it('commits writes when callback succeeds', async () => {
+    const member = await db.upsertProvisionalMember('discord-tx-success', 'tx-ok@example.com');
+    await db.withTransactionLock('tx-success-key', async (txDb) => {
+      await txDb.updateMemberCustomerId(member.id, 'cus_tx_success');
+    });
+    const found = await db.findMemberByDiscordUserId('discord-tx-success');
+    expect(found!.payjp_customer_id).toBe('cus_tx_success');
+  });
+
+  it('rolls back writes when callback throws', async () => {
+    const member = await db.upsertProvisionalMember('discord-tx-rollback', 'tx-fail@example.com');
+    await expect(
+      db.withTransactionLock('tx-rollback-key', async (txDb) => {
+        await txDb.updateMemberCustomerId(member.id, 'cus_should_rollback');
+        throw new Error('deliberate failure');
+      }),
+    ).rejects.toThrow('deliberate failure');
+    const found = await db.findMemberByDiscordUserId('discord-tx-rollback');
+    expect(found!.payjp_customer_id).toBeNull();
+  });
+
+  it('serializes concurrent transactions on the same lock key', async () => {
+    const member = await db.upsertProvisionalMember('discord-tx-serial', 'tx-serial@example.com');
+    const order: string[] = [];
+    await Promise.all([
+      db.withTransactionLock('serial-key', async (txDb) => {
+        order.push('A-start');
+        await txDb.updateMemberCustomerId(member.id, 'cus_A');
+        order.push('A-end');
+      }),
+      db.withTransactionLock('serial-key', async (txDb) => {
+        order.push('B-start');
+        await txDb.updateMemberCustomerId(member.id, 'cus_B');
+        order.push('B-end');
+      }),
+    ]);
+    expect(order[0]).toMatch(/^[AB]-start$/);
+    expect(order[1]).toMatch(/^[AB]-end$/);
+  });
+});

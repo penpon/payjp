@@ -1053,3 +1053,90 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     expect(res.json().errorCode).toBe('INVALID_CANCEL_SIGNATURE');
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /v1/subscriptions/status — session fallback precedence
+// ---------------------------------------------------------------------------
+
+describe('GET /v1/subscriptions/status — session fallback', () => {
+  const STATUS_URL = '/v1/subscriptions/status';
+
+  it('prefers __Host-member_session over __Host-link_session when both present', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.subscription).not.toBeNull();
+    expect(deps.db.findMemberSession).toHaveBeenCalled();
+    expect(deps.db.findLinkSession).not.toHaveBeenCalled();
+  });
+
+  it('falls back to __Host-link_session when member_session is expired', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+      access_end_at: new Date('2025-06-01T00:00:00Z'),
+      payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+      payjp_customer_id: PAYJP_CUSTOMER_ID,
+    });
+    (deps.db.findMemberSession as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeMemberSession({ expires_at: new Date('2025-01-01T00:00:00Z') }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.subscription).not.toBeNull();
+    expect(deps.db.findLinkSession).toHaveBeenCalled();
+  });
+
+  it('returns subscription null when both sessions are invalid', async () => {
+    const deps = makeMockDeps({
+      subscription_status: 'active',
+      payjp_plan_id: PLAN_ID,
+    });
+    (deps.db.findMemberSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (deps.db.findLinkSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const app = createApp(deps);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: STATUS_URL,
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': 'invalid-token',
+        '__Host-link_session': 'invalid-token',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ subscription: null });
+  });
+});

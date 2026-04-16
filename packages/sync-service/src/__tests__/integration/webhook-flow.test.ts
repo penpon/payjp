@@ -573,3 +573,99 @@ describe('INT-SYNC-036: Concurrent webhooks serialization', () => {
     expect(res2.status).toBe(200);
   });
 });
+
+// =========================================================================
+// Malformed payload edge cases
+// =========================================================================
+describe('Webhook malformed payload edge cases', () => {
+  it('event missing data.status → failed processing (required field)', async () => {
+    const event = createValidEvent();
+    const data = event.data as Record<string, unknown>;
+    delete data.status;
+    const db = createMockDb({ member: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: event,
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
+    const statuses = inserted.map((e) => e.process_status);
+    expect(statuses).toContain('failed');
+  });
+
+  it('event missing data.id (subscription ID) → failed processing', async () => {
+    const event = createValidEvent();
+    const data = event.data as Record<string, unknown>;
+    delete data.id;
+    const db = createMockDb({ member: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: event,
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
+    const statuses = inserted.map((e) => e.process_status);
+    expect(statuses).toContain('failed');
+  });
+
+  it('event with data.metadata present but discord_user_id absent → member resolution by subscription_id', async () => {
+    const event = createValidEvent();
+    const data = event.data as Record<string, unknown>;
+    (data.metadata as Record<string, unknown>) = {};
+    const db = createMockDb({ member: null, memberBySub: MEMBER, memberRefetchInTx: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: event,
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect(deps.syncRole).toHaveBeenCalled();
+  });
+
+  it('event with data.metadata absent entirely → member resolution by subscription_id', async () => {
+    const event = createValidEvent();
+    const data = event.data as Record<string, unknown>;
+    delete data.metadata;
+    const db = createMockDb({ member: null, memberBySub: MEMBER, memberRefetchInTx: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: event,
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect(deps.syncRole).toHaveBeenCalled();
+  });
+
+  it('event with data.object !== "subscription" → ignored', async () => {
+    const event = createValidEvent();
+    (event.data as Record<string, unknown>).object = 'charge';
+    const db = createMockDb({ member: MEMBER });
+    const deps = createDeps(db);
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: event,
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect(deps.syncRole).not.toHaveBeenCalled();
+    const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
+    const statuses = inserted.map((e) => e.process_status);
+    expect(statuses).toContain('ignored');
+  });
+});
