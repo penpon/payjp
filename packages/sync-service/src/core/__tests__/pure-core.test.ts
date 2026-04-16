@@ -19,6 +19,7 @@ import {
   isEventStale,
   isInflightOperationStale,
   isStatusUnknown,
+  isValidWebhookBearerTokenValue,
   mapSubscriptionStatus,
   maskSensitiveLogFields,
   resolveEffectiveSubscriptionStatus,
@@ -31,6 +32,19 @@ import {
   validateRequiredFields,
   validateWebhookToken,
 } from '../index.js';
+
+describe('isValidWebhookBearerTokenValue', () => {
+  it('rejects CR/LF/NUL smuggling attempts', () => {
+    expect(isValidWebhookBearerTokenValue('a\nb')).toBe(false);
+    expect(isValidWebhookBearerTokenValue('a\rb')).toBe(false);
+    expect(isValidWebhookBearerTokenValue('a\0b')).toBe(false);
+  });
+
+  it('rejects oversized values', () => {
+    expect(isValidWebhookBearerTokenValue('a'.repeat(4097))).toBe(false);
+    expect(isValidWebhookBearerTokenValue('a'.repeat(4096))).toBe(true);
+  });
+});
 
 // PROP-SYNC-001: validateWebhookToken
 describe('PROP-SYNC-001: validateWebhookToken', () => {
@@ -61,6 +75,10 @@ describe('PROP-SYNC-001: validateWebhookToken', () => {
 
   it('both empty → false', () => {
     expect(validateWebhookToken('', '')).toBe(false);
+  });
+
+  it('rejects smuggled received token before compareFn', () => {
+    expect(validateWebhookToken('tok\n', 'tok\n')).toBe(false);
   });
 });
 
