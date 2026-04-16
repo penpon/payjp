@@ -118,12 +118,20 @@ const REQUIRED_ENV_VARS = [
 
 // REQ-SYNC-001: PROP-SYNC-001
 // Pure validation logic. Actual constant-time comparison delegated to shell via compareFn.
+/** Rejects empty, oversized, or smuggled (CR/LF/NUL) bearer values before comparison. */
+export function isValidWebhookBearerTokenValue(received: string): boolean {
+  if (typeof received !== 'string') return false;
+  if (received.length === 0 || received.length > 4096) return false;
+  if (/[\r\n\0]/.test(received)) return false;
+  return true;
+}
+
 export function validateWebhookToken(
   received: string,
   expected: string,
   compareFn: (a: string, b: string) => boolean = (a, b) => a === b,
 ): boolean {
-  if (received === '' || expected === '') return false;
+  if (!isValidWebhookBearerTokenValue(received) || expected === '') return false;
   return compareFn(received, expected);
 }
 

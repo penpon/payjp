@@ -49,7 +49,26 @@ function extractWebhookHeaders(
   headers: Record<string, string | string[] | undefined>,
 ): Record<string, string | undefined> {
   return {
-    'x-payjp-webhook-token':
-      typeof headers['x-payjp-webhook-token'] === 'string' ? headers['x-payjp-webhook-token'] : undefined,
+    'x-payjp-webhook-token': firstHeaderValue(headers, 'x-payjp-webhook-token'),
   };
+}
+
+/**
+ * Fastify may represent duplicate headers as `string[]`. A single string or one-element array is
+ * unambiguous; multiple elements are rejected (must not skip authentication).
+ */
+function firstHeaderValue(headers: Record<string, string | string[] | undefined>, name: string): string | undefined {
+  const v = headers[name];
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t === '' ? undefined : t;
+  }
+  if (Array.isArray(v)) {
+    if (v.length !== 1) return undefined;
+    const item = v[0];
+    if (typeof item !== 'string') return undefined;
+    const t = item.trim();
+    return t === '' ? undefined : t;
+  }
+  return undefined;
 }
