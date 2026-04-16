@@ -44,8 +44,8 @@ function secureCompare(a: string, b: string): boolean {
   return timingSafeEqual(left, right);
 }
 
-function cancelLockKey(member: Member, fallbackDiscordUserId?: string): string {
-  return `member:${member.discord_user_id ?? fallbackDiscordUserId ?? member.id}`;
+function cancelLockKey(member: Member): string {
+  return `member:${member.id}`;
 }
 
 async function applyImmediateCancelState(
@@ -544,7 +544,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
   }
 
-  const lockKey = cancelLockKey(member, linkSession.discord_user_id);
+  const lockKey = cancelLockKey(member);
   const lockAcquired = await deps.db.acquireAdvisoryLock(lockKey);
   if (!lockAcquired) {
     return { ok: false, statusCode: 503, errorCode: 'LOCK_UNAVAILABLE', message: 'Could not acquire advisory lock' };
