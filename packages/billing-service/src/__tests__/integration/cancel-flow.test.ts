@@ -6,7 +6,8 @@
 
 import type { CancelFormTokenRecord, LinkSessionRecord, Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
-import { handleCancel } from '../../shell/cancel.js';
+import { computeGoogleCancelSubmitSignature, createSignedCancelFormToken, normalizeEmail } from '../../core/index.js';
+import { handleCancel, handleGoogleCancelSubmit } from '../../shell/cancel.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
 // -------------------------------------------------------------------------
@@ -193,6 +194,32 @@ function makeCancelRequest(overrides: Record<string, string> = {}) {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
     ...overrides,
+  };
+}
+
+function makeGoogleCancelSubmitRequest(overrides: { token?: string; email?: string } = {}) {
+  const config = makeConfig();
+  const email = overrides.email ?? 'test@example.com';
+  const token =
+    overrides.token ??
+    createSignedCancelFormToken(
+      {
+        jti: makeCancelFormToken().id,
+        memberId: MEMBER_ID,
+        email: normalizeEmail(email),
+        exp: Math.floor(NOW.getTime() / 1000) + 3600,
+        nonce: 'nonce-google-cancel-test',
+      },
+      config.googleFormCancelTokenSecret,
+    );
+  const signature = computeGoogleCancelSubmitSignature(config.googleFormCancelSecret, { email, token });
+  return {
+    email,
+    name: 'Test',
+    reason: 'reason',
+    token,
+    secret: config.googleFormCancelSecret,
+    signature,
   };
 }
 
@@ -433,6 +460,22 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       }
       // inflight reject path keeps link_session unconsumed so the client can retry.
       expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
+    });
+
+    it('503 + existing operationId; cancel form token remains unconsumed when inflight exists (google-submit)', async () => {
+      const existingOpId = 'existing-cancel-op-789';
+      const deps = makeSuccessfulDeps({
+        inflight_operation_id: existingOpId,
+        inflight_operation_type: 'cancel',
+      });
+      const result = await handleGoogleCancelSubmit(makeGoogleCancelSubmitRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.operationId).toBe(existingOpId);
+        expect(result.errorCode).toBe('INFLIGHT_OPERATION');
+      }
+      expect(deps.db.consumeCancelFormToken).not.toHaveBeenCalled();
     });
   });
 

@@ -265,21 +265,6 @@ async function immediateCancelPayjpWrite(
   }
 }
 
-async function applyImmediateCancelState(
-  member: Member,
-  deps: BillingDeps,
-  now: Date,
-): Promise<{ member: Member; operationId?: string } | OperationError> {
-  const pre = await immediateCancelPrecheck(member, deps, now);
-  if ('ok' in pre) {
-    return pre;
-  }
-  if (pre.next === 'finalize') {
-    return { member: pre.member };
-  }
-  return immediateCancelPayjpWrite(pre.member, deps, now);
-}
-
 async function finalizeImmediateCancel(
   member: Member,
   deps: BillingDeps,
@@ -325,7 +310,7 @@ async function finalizeImmediateCancel(
     }
   } else if (member.role_state !== 'revoked' && member.discord_user_id) {
     // PAY.JP cancel succeeded but role mapping missing — partial success
-    // inflight already cleared by applyImmediateCancelState, so log and continue
+    // inflight already cleared by immediate cancel PAY.JP path, so log and continue
     slog('error', 'Role mapping missing for immediate revoke after cancel', {
       memberId: member.id,
       planId: member.payjp_plan_id,
@@ -546,7 +531,13 @@ export async function handleGoogleCancelSubmit(
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No member found for token' };
     }
 
-    // §8 item 3: consume cancel form token before PAY.JP write, after lock acquisition
+    const pre = await immediateCancelPrecheck(lockedMember, deps, now);
+    if ('ok' in pre) {
+      return pre;
+    }
+
+    // §8 item 3: consume cancel form token after pre-PAY.JP guards (same order as browser
+    // link_session), before PAY.JP write
     // V3-M3: Add try/catch for consumeCancelFormToken to prevent silent propagation
     try {
       await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
@@ -564,7 +555,14 @@ export async function handleGoogleCancelSubmit(
       };
     }
 
-    const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
+    if (pre.next === 'finalize') {
+      return await finalizeImmediateCancel(pre.member, deps, {
+        flow: 'google-submit',
+        operationId: undefined,
+      });
+    }
+
+    const cancelState = await immediateCancelPayjpWrite(pre.member, deps, now);
     if ('ok' in cancelState) {
       return cancelState;
     }
