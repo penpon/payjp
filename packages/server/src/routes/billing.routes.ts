@@ -286,6 +286,15 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       },
     },
     async (request, reply) => {
+      if (isForbiddenCrossSiteFetch(request)) {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Cross-site fetch is not allowed',
+        });
+      }
+
       const { body } = extractRequestContext(request);
 
       const h = request.headers;
