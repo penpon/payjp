@@ -249,10 +249,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           type: 'object',
           required: ['email', 'name', 'reason', 'token'],
           properties: {
-            email: { type: 'string', maxLength: 254 },
+            email: { type: 'string', minLength: 1, maxLength: 254 },
             name: { type: 'string', maxLength: 200 },
             reason: { type: 'string', maxLength: 5000 },
-            token: { type: 'string', maxLength: 4096 },
+            token: { type: 'string', minLength: 1, maxLength: 4096 },
           },
           additionalProperties: false,
         },

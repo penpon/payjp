@@ -916,6 +916,50 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     return deps;
   }
 
+  it('returns 400 when email is empty (schema rejects before handler)', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': '00'.repeat(32),
+      },
+      payload: {
+        email: '',
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: 'some-token',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when token is empty (schema rejects before handler)', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': '00'.repeat(32),
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token: '',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('returns 200 on valid secret + signature + token', async () => {
     const deps = createGoogleSubmitDeps();
     const app = createApp(deps);
