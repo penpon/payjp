@@ -23,6 +23,10 @@ yarn-error.log*
 dist/
 build/
 
+# Cloudflare Pages Functions — stray emit if `tsc` picks up `functions/` by mistake
+frontend/functions/**/*.js
+frontend/functions/**/*.d.ts
+
 # Environment
 .env
 .env.local
