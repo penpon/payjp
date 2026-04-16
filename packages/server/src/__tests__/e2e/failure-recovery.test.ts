@@ -215,7 +215,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
 
       const cliDeps = makeCliDeps(pool, {
         listPayjpCharges: vi.fn().mockResolvedValue({
-          data: [{ id: 'ch_found', metadata: { operation_id: operationId } }],
+          data: [{ id: 'ch_found', paid: true, metadata: { operation_id: operationId } }],
           has_more: false,
         }),
         createPayjpSubscription: vi.fn().mockResolvedValue({ id: 'sub_cli_recovered', status: 'active' }),
@@ -302,7 +302,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const createPayjpCharge = vi.fn().mockResolvedValue({ id: 'ch_should_not_create' });
       const cliDeps = makeCliDeps(pool, {
         listPayjpCharges: vi.fn().mockResolvedValue({
-          data: [{ id: 'ch_metadata_match', metadata: { operation_id: operationId } }],
+          data: [{ id: 'ch_metadata_match', paid: true, metadata: { operation_id: operationId } }],
           has_more: false,
         }),
         createPayjpCharge,
@@ -367,8 +367,8 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
       const cliDeps = makeCliDeps(pool, {
         listPayjpCharges: vi.fn().mockResolvedValue({
           data: [
-            { id: 'ch_ambiguous_1', metadata: { operation_id: operationId } },
-            { id: 'ch_ambiguous_2', metadata: { operation_id: operationId } },
+            { id: 'ch_ambiguous_1', paid: true, metadata: { operation_id: operationId } },
+            { id: 'ch_ambiguous_2', paid: true, metadata: { operation_id: operationId } },
           ],
           has_more: false,
         }),
@@ -445,7 +445,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
 
       const cliDeps = makeCliDeps(pool, {
         listPayjpCharges: vi.fn().mockResolvedValue({
-          data: [{ id: 'ch_for_ts_test', metadata: { operation_id: operationId } }],
+          data: [{ id: 'ch_for_ts_test', paid: true, metadata: { operation_id: operationId } }],
           has_more: false,
         }),
         getPayjpSubscription: vi.fn().mockResolvedValue({
@@ -495,7 +495,7 @@ describe.skipIf(!hasTestDb)('E2E 503 障害注入 + CLI リカバリ — T-P0-04
 
       const cliDeps = makeCliDeps(pool, {
         listPayjpCharges: vi.fn().mockResolvedValue({
-          data: [{ id: 'ch_format_test', metadata: { operation_id: operationId } }],
+          data: [{ id: 'ch_format_test', paid: true, metadata: { operation_id: operationId } }],
           has_more: false,
         }),
         getPayjpSubscription: vi.fn().mockResolvedValue({

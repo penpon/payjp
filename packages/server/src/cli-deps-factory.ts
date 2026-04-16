@@ -114,6 +114,7 @@ export function buildCliDepsFromPayjpApi(params: {
     return {
       data: r.data.map((ch) => ({
         id: ch.id as string,
+        paid: ch.paid === true,
         metadata: toMetadata(ch.metadata),
       })),
       has_more: r.has_more,
@@ -140,7 +141,17 @@ export function buildCliDepsFromPayjpApi(params: {
   const getPayjpSubscription: CliDeps['getPayjpSubscription'] = async (subscriptionId) => {
     try {
       return (await payjpApi.subscriptions.retrieve(subscriptionId)) as Record<string, unknown>;
-    } catch {
+    } catch (err) {
+      // H3 fix: transient PAY.JP エラーを silent null 化せず log 出力。
+      // CLI recovery の fail-close 判定で `null` を「未存在」と誤解する経路を防ぐ。
+      log({
+        timestamp: now().toISOString(),
+        service: 'cli-deps-factory',
+        endpoint: 'payjp/subscriptions.retrieve',
+        result: 'error',
+        subscription_id: subscriptionId,
+        error: String(err),
+      });
       return null;
     }
   };

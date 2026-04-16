@@ -372,6 +372,9 @@ async function queryUpdateMemberAfterSubscribe(
   memberId: string,
   params: Parameters<DbClient['updateMemberAfterSubscribe']>[1],
 ): Promise<Member> {
+  // NR-C1 fix: inflight_operation_* を同一 UPDATE 内で NULL 化してアトミック保証。
+  // 分割すると Step 11 成功 + Step 12 失敗の窓で課金完了済み + inflight 残留となり、
+  // 以降の再試行が `INFLIGHT_OPERATION 503` で永続ブロックされる。
   const result = await q.query(
     `UPDATE members SET
        payjp_initial_charge_id = $2,
@@ -384,6 +387,10 @@ async function queryUpdateMemberAfterSubscribe(
        next_billing_at = $9,
        role_state = $10,
        last_synced_at = $11,
+       inflight_operation_id = NULL,
+       inflight_operation_type = NULL,
+       inflight_operation_started_at = NULL,
+       inflight_subscribe_plan_id = NULL,
        updated_at = now()
      WHERE id = $1
      RETURNING *`,

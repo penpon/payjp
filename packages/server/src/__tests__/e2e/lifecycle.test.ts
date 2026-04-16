@@ -289,7 +289,7 @@ describe.skipIf(!hasTestDb)('E2E ライフサイクル横断シナリオ (Issue 
     // Step 2: CLI --operation-id でリカバリ
     const cliDeps = makeCliDeps(pool, {
       listPayjpCharges: vi.fn().mockResolvedValue({
-        data: [{ id: 'ch_recovered', metadata: { operation_id: operationId } }],
+        data: [{ id: 'ch_recovered', paid: true, metadata: { operation_id: operationId } }],
         has_more: false,
       }),
       createPayjpSubscription: vi.fn().mockResolvedValue({

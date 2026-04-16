@@ -403,11 +403,22 @@ async function handleStructuredAuthRequest(request: AuthRequest, config: AuthCon
     const stateHashVal = createHash('sha256').update(stateToken).digest('hex');
     const sessionHashVal = createHash('sha256').update(sessionToken).digest('hex');
 
-    await saveOAuthState(db, {
-      stateHash: stateHashVal,
-      oauthSessionHash: sessionHashVal,
-      expiresAt: new Date(Date.now() + 600_000),
-    });
+    // NR-M2: DB 障害時も secHeaders 付与で 503 返却。未処理例外 → Fastify 汎用 500 ではヘッダ欠落。
+    try {
+      await saveOAuthState(db, {
+        stateHash: stateHashVal,
+        oauthSessionHash: sessionHashVal,
+        expiresAt: new Date(Date.now() + 600_000),
+      });
+    } catch (err) {
+      structuredLog({
+        service: 'auth-service',
+        level: 'error',
+        event: 'saveOAuthState_failed',
+        error: String(err),
+      });
+      return { statusCode: 503, headers: secHeaders };
+    }
 
     const attrs = buildCookieAttributes('__Host-oauth_session', 600);
     const url = buildDiscordAuthorizationUrl(discordClientId, discordRedirectUri, stateToken);
