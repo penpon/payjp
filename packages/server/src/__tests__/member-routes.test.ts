@@ -422,3 +422,63 @@ describe('POST /v1/members/link-discord', () => {
     expect(deps.db.updateMemberDiscordUserId).toHaveBeenCalledWith(MEMBER_ID, DISCORD_USER_ID);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Discord role assignment retry behavior
+// ---------------------------------------------------------------------------
+
+describe('POST /v1/members/link-discord — role assignment retries', () => {
+  it('retries assignRole on failure and succeeds on third attempt', async () => {
+    const deps = makeDeps({
+      discord_user_id: null,
+      subscription_status: 'active',
+      payjp_plan_id: 'plan-001',
+    });
+    (deps.discord.assignRole as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('Discord 429'))
+      .mockRejectedValueOnce(new Error('Discord 500'))
+      .mockResolvedValueOnce(undefined);
+
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().roleGranted).toBe(true);
+    expect(deps.discord.assignRole).toHaveBeenCalledTimes(3);
+  }, 10_000);
+
+  it('returns roleGranted=false after all 3 retry attempts fail', async () => {
+    const deps = makeDeps({
+      discord_user_id: null,
+      subscription_status: 'active',
+      payjp_plan_id: 'plan-001',
+    });
+    (deps.discord.assignRole as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('Discord 429'))
+      .mockRejectedValueOnce(new Error('Discord 500'))
+      .mockRejectedValueOnce(new Error('Discord 503'));
+
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().roleGranted).toBe(false);
+    expect(deps.discord.assignRole).toHaveBeenCalledTimes(3);
+  }, 10_000);
+});

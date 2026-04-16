@@ -134,4 +134,26 @@ describe('api', () => {
       expect(mockLocation.href).toBe('/v1/auth/discord/start');
     });
   });
+
+  describe('checkSession — additional error paths', () => {
+    it('should throw SessionCheckError on 500', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 500 }));
+
+      const err = await checkSession().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(SessionCheckError);
+      expect((err as SessionCheckError).status).toBe(500);
+    });
+
+    it('should throw when response body is not valid JSON', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response('not json', { status: 200 }));
+
+      await expect(checkSession()).rejects.toThrow();
+    });
+
+    it('should throw when response body is empty string', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(new Response('', { status: 200 }));
+
+      await expect(checkSession()).rejects.toThrow();
+    });
+  });
 });

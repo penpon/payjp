@@ -127,14 +127,15 @@ describe('PROP-BILL-003: hasActiveSubscription', () => {
   const past = new Date('2026-03-01T00:00:00Z');
 
   it.each([
-    { status: 'active', accessEndAt: future, expected: true },
-    { status: 'trial', accessEndAt: future, expected: true },
-    { status: 'canceled', accessEndAt: future, expected: true },
-    { status: 'canceled', accessEndAt: past, expected: false },
-    { status: 'paused', accessEndAt: future, expected: false },
-    { status: 'deleted', accessEndAt: null, expected: false },
-    { status: null, accessEndAt: null, expected: false },
-  ])('status=$status, accessEndAt=$accessEndAt → $expected', ({ status, accessEndAt, expected }) => {
+    { status: 'active', accessEndAt: future, expected: true, label: '' },
+    { status: 'trial', accessEndAt: future, expected: true, label: '' },
+    { status: 'canceled', accessEndAt: future, expected: true, label: '' },
+    { status: 'canceled', accessEndAt: past, expected: false, label: '' },
+    { status: 'canceled', accessEndAt: now, expected: false, label: 'boundary: accessEndAt == now' },
+    { status: 'paused', accessEndAt: future, expected: false, label: '' },
+    { status: 'deleted', accessEndAt: null, expected: false, label: '' },
+    { status: null, accessEndAt: null, expected: false, label: '' },
+  ])('status=$status, accessEndAt=$accessEndAt → $expected $label', ({ status, accessEndAt, expected }) => {
     expect(hasActiveSubscription(status, accessEndAt, now)).toBe(expected);
   });
 });
@@ -198,6 +199,20 @@ describe('PROP-BILL-008: calculateTrialEnd', () => {
     // JS Date month overflow: Apr 31 → May 1, so implementation must handle
     // Expected: Apr 30 (last day of April)
     expect(result.getUTCMonth()).toBe(3); // April = 3 (0-indexed)
+  });
+
+  it('handles Feb 28 (non-leap) + 3 months → May 28', () => {
+    const now = new Date('2026-02-28T00:00:00Z');
+    const result = calculateTrialEnd(now);
+    expect(result.getUTCMonth()).toBe(4); // May = 4
+    expect(result.getUTCDate()).toBe(28);
+  });
+
+  it('handles Feb 29 (leap year) + 3 months → May 29', () => {
+    const now = new Date('2028-02-29T00:00:00Z');
+    const result = calculateTrialEnd(now);
+    expect(result.getUTCMonth()).toBe(4); // May = 4
+    expect(result.getUTCDate()).toBe(29);
   });
 });
 
