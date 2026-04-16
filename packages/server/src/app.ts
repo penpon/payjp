@@ -44,7 +44,10 @@ function clientErrorMessageForStatus(statusCode: number): string | undefined {
 }
 
 export function buildApp(config: AppConfig, billingDeps?: BillingDeps, syncDeps?: SyncDeps) {
-  const app = Fastify({ logger: false });
+  // trustProxy: @fastify/rate-limit keys on `request.ip` (default). Behind nginx/Cloudflare the
+  // TCP peer is the proxy; without trustProxy every client shares one bucket (global DoS on limits).
+  // X-Forwarded-For from a trusted edge must be honored for per-client rate limiting.
+  const app = Fastify({ logger: false, trustProxy: true });
 
   app.register(fastifyCookie);
   // REQ-AUTH-008: Origin validation is primarily handled by auth-service's isSameOrigin.
