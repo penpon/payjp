@@ -49,7 +49,6 @@ type MemberDetailResponse = {
     inflight_operation_type: string | null;
     inflight_operation_started_at: string | null;
     inflight_subscribe_plan_id: string | null;
-    privacy_consented_at: string | null;
     updated_at: string;
   };
 };

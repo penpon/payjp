@@ -234,7 +234,6 @@ describe('PgDbClient - updateMemberAfterSubscribe', () => {
       next_billing_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       role_state: 'granted',
       last_synced_at: now,
-      privacy_consented_at: now,
     });
 
     expect(updated.subscription_status).toBe('active');
@@ -374,7 +373,7 @@ describe('PgDbClient - payjp_events', () => {
       id: 'evt_test_001',
       event_type: 'subscription.created',
       payload: { foo: 'bar' },
-      processing_result: 'processed',
+      process_status: 'succeeded',
       data_metadata_operation_id: 'op-001',
     });
     expect(inserted).toBe(true);
@@ -382,7 +381,7 @@ describe('PgDbClient - payjp_events', () => {
     const found = await db.findPayjpEventById('evt_test_001');
     expect(found).not.toBeNull();
     expect(found!.event_type).toBe('subscription.created');
-    expect(found!.processing_result).toBe('processed');
+    expect(found!.process_status).toBe('succeeded');
   });
 
   it('insertPayjpEvent is idempotent (ON CONFLICT DO NOTHING)', async () => {
@@ -390,13 +389,13 @@ describe('PgDbClient - payjp_events', () => {
       id: 'evt_test_002',
       event_type: 'subscription.created',
       payload: {},
-      processing_result: 'processed',
+      process_status: 'succeeded',
     });
     const second = await db.insertPayjpEvent({
       id: 'evt_test_002',
       event_type: 'subscription.updated',
       payload: {},
-      processing_result: 'ignored',
+      process_status: 'ignored',
     });
     expect(second).toBe(false);
 

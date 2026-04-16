@@ -1,6 +1,6 @@
 /**
  * Read-only admin API — Phase A (see docs/admin-console-boundary.md).
- * Binds ADMIN_FRONTEND_ORIGIN for CORS; trust Cloudflare Access at the edge.
+ * Binds ADMIN_FRONTEND_ORIGIN for CORS and enforces request identity headers.
  */
 import cors from '@fastify/cors';
 import { createPool, runMigrations } from '@hayane/shared';
@@ -43,21 +43,6 @@ async function main(): Promise<void> {
     return payload;
   });
 
-  app.addHook('onRequest', async (request) => {
-    const actor =
-      request.headers['cf-access-authenticated-user-email'] ?? request.headers['x-admin-audit-actor'] ?? undefined;
-    if (typeof actor === 'string' && actor.length > 0) {
-      // Log pathname only — raw `request.url` can include PII (e.g. `?q=user@example.com`)
-      let pathname = '';
-      try {
-        pathname = new URL(request.url, 'http://_').pathname;
-      } catch {
-        pathname = '[invalid-url]';
-      }
-      request.log.info({ auditActor: actor, path: pathname }, 'admin request');
-    }
-  });
-
   await registerAdminRoutes(app, { pool });
 
   const port = Number.parseInt(process.env.PORT ?? '3011', 10);
@@ -66,6 +51,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // bind to 0.0.0.0 inside the container: reachable only via the `admin-frontend` docker network.
+  // docker-compose.yml publishes nothing to the host (`expose: 3011`, no `ports:`), and nginx is
+  // the sole ingress via cloudflared tunnel at 127.0.0.1:8443. Switching to '127.0.0.1' would cut
+  // off nginx → admin-api traffic inside docker networking.
   await app.listen({ port, host: '0.0.0.0' });
 }
 

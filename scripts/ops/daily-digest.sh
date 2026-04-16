@@ -28,7 +28,7 @@ psql_q() {
 
 gather_kpi() {
   local wf impact api_5xx nginx_dir cutoff
-  wf=$(psql_q "SELECT count(*) FROM payjp_events WHERE processing_result='failed' AND received_at > now() - interval '24 hours'")
+  wf=$(psql_q "SELECT count(*) FROM payjp_events WHERE process_status='failed' AND received_at > now() - interval '24 hours'")
   impact=$(psql_q "SELECT count(*) FROM member_impact_logs WHERE resolved_at IS NULL")
   api_5xx="?"
   nginx_dir=$(sudo -n docker volume inspect --format '{{.Mountpoint}}' "$NGINX_VOLUME" 2>/dev/null) || nginx_dir=""

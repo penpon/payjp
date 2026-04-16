@@ -70,7 +70,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
       const now = billingDeps.clock();
       const tokenHash = memberSessionTokenHash(memberSessionToken);
       const session = await billingDeps.db.findMemberSession(tokenHash);
-      if (!session || session.expires_at < now) {
+      if (!session || session.expires_at <= now) {
         // Clear stale cookie to avoid repeated DB lookups
         const clearAttrs = buildCookieAttributes('__Host-member_session', 0);
         reply.header('Set-Cookie', serializeCookieAttributes(clearAttrs, ''));
@@ -131,14 +131,14 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
         // Validate member_session
         const msHash = memberSessionTokenHash(memberSessionToken);
         const memberSession = await billingDeps.db.findMemberSession(msHash);
-        if (!memberSession || memberSession.expires_at < now) {
+        if (!memberSession || memberSession.expires_at <= now) {
           return reply.status(401).send({ ok: false, errorCode: 'INVALID_MEMBER_SESSION' });
         }
 
         // Early validation of link_session (before lock). Full re-validation under lock below.
         const lsHash = linkSessionTokenHash(linkSessionToken);
         const linkSessionPreCheck = await billingDeps.db.findLinkSession(lsHash);
-        if (!linkSessionPreCheck || linkSessionPreCheck.expires_at < now) {
+        if (!linkSessionPreCheck || linkSessionPreCheck.expires_at <= now) {
           return reply.status(401).send({ ok: false, errorCode: 'INVALID_LINK_SESSION' });
         }
 
@@ -156,7 +156,7 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
         try {
           // Re-validate link_session under lock to prevent TOCTOU race
           const linkSession = await billingDeps.db.findLinkSession(lsHash);
-          if (!linkSession || linkSession.expires_at < now || linkSession.used_at !== null) {
+          if (!linkSession || linkSession.expires_at <= now || linkSession.used_at !== null) {
             return reply.status(401).send({ ok: false, errorCode: 'INVALID_LINK_SESSION' });
           }
           const discordUserId = linkSession.discord_user_id;

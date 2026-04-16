@@ -205,7 +205,7 @@ describe('POST /v1/payjp/webhook', () => {
       findEventResult: {
         id: EVENT_ID,
         event_type: 'subscription.updated',
-        processing_result: 'processed',
+        process_status: 'succeeded',
         received_at: new Date(),
       },
     });

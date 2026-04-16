@@ -14,9 +14,15 @@ Phase A は **read-only** です（`docs/admin-console-boundary.md`）。
 |------|-----|------|
 | `DATABASE_URL` | `postgres://...` | 本番DBと同一スキーマ（マイグレーション実行） |
 | `ADMIN_FRONTEND_ORIGIN` | `https://admin.and--line.com` | CORS 許可オリジン（末尾スラッシュなし） |
+| `ADMIN_API_KEY` | `long-random-string` | ローカル検証時のフォールバック認証キー（Cloudflare Access 経由時は不要） |
 | `PORT` | `3011` | リッスンポート |
 
-Cloudflare Access 通過後、オプションで `CF-Access-Authenticated-User-Email` が admin-api に届く場合、リクエストログに `auditActor` として記録されます。ローカル検証用に `X-Admin-Audit-Actor` も同様に扱います。
+`admin-api` は GET/HEAD リクエストで次のどちらかを要求します。
+
+1. Cloudflare Access の `CF-Access-Authenticated-User-Email` ヘッダ
+2. ローカル検証時の `X-Admin-Audit-Actor` + `X-Admin-Api-Key`（`ADMIN_API_KEY` と一致）
+
+認証済みリクエストでは `auditActor` をログに記録します。
 
 ## フロント（ビルド）
 

@@ -108,8 +108,6 @@ export interface BillingConfig {
   googleFormCancelSecret: string;
   googleFormCancelTokenSecret: string;
   googleFormCancelTokenTtlSeconds: number;
-  /** Months of notice before `access_end_at` (JST calendar) when self-serve cancel opens; MVP fixed to 1. */
-  cancelNoticeCycles: number;
   /**
    * When set (non-empty), new checkouts require a valid `__Host-access_gate` session (shared passcode flow).
    * Normalized at API startup (trimmed; empty disables the gate). Do not rely on whitespace-only values.

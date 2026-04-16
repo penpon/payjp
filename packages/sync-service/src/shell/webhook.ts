@@ -32,6 +32,31 @@ function constantTimeCompare(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
+// FIND-L1: cancel_requested_at is intentionally EXCLUDED from webhook updates.
+// Semantic: cancel_requested_at means "the user requested cancellation through our flow"
+// (billing-service/src/shell/cancel.ts sets it via our clock()). A PAY.JP subscription.canceled
+// event does NOT imply user-initiated cancel (could be admin-driven or billing failure in PAY.JP).
+// For out-of-band external cancels, the manual resync CLI (sync-service/shell/cli.ts) sets it on
+// admin acknowledgment. Keep webhook writes pure-state-sync, not user-intent inference.
+type MemberWebhookUpdateColumn =
+  | 'subscription_status'
+  | 'payjp_plan_id'
+  | 'access_end_at'
+  | 'next_billing_at'
+  | 'last_payjp_event_created_at'
+  | 'payjp_subscription_id';
+
+type MemberWebhookUpdates = Partial<Record<MemberWebhookUpdateColumn, unknown>>;
+
+const MEMBER_WEBHOOK_UPDATE_COLUMNS: ReadonlyArray<MemberWebhookUpdateColumn> = [
+  'subscription_status',
+  'payjp_plan_id',
+  'access_end_at',
+  'next_billing_at',
+  'last_payjp_event_created_at',
+  'payjp_subscription_id',
+];
+
 export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDeps): Promise<WebhookResponse> {
   const receivedToken = req.headers['x-payjp-webhook-token'] ?? '';
 
@@ -58,6 +83,12 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
   const event = req.body as WebhookEvent;
 
+  // Early-return paths below (ignored / validation-fail / idempotency-hit / subscription.created /
+  // member-not-found) intentionally write a single audit row OUTSIDE a transaction: each is a lone
+  // INSERT with no subsequent write, and ON CONFLICT (id) DO NOTHING provides idempotency.
+  // The main update path (lock → stale check → UPDATE members → INSERT payjp_events) is wrapped
+  // in `withTransaction` below (see line ~208).
+
   // REQ-SYNC-002/003/004: Ignore checks
   const ignoreReason = determineIgnoreReason(event, deps.expectedLivemode);
   if (ignoreReason) {
@@ -66,7 +97,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         id: event.id ?? `unknown-${crypto.randomUUID()}`,
         event_type: event.type ?? 'unknown',
         payload: event,
-        processing_result: 'ignored',
+        process_status: 'ignored',
         ignore_reason: ignoreReason,
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
@@ -84,7 +115,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         id: event.id ?? `unknown-${crypto.randomUUID()}`,
         event_type: event.type ?? 'unknown',
         payload: event,
-        processing_result: 'failed',
+        process_status: 'failed',
         fail_reason: `missing_fields:${fieldResult.missingFields.join(',')}`,
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
@@ -111,7 +142,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         id: event.id!,
         event_type: event.type!,
         payload: event,
-        processing_result: 'ignored',
+        process_status: 'ignored',
         ignore_reason: 'subscription_created',
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
@@ -137,7 +168,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
           id: event.id!,
           event_type: event.type!,
           payload: event,
-          processing_result: 'failed',
+          process_status: 'failed',
           fail_reason: 'member_resolution_conflict',
           data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
         });
@@ -155,7 +186,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         id: event.id!,
         event_type: event.type!,
         payload: event,
-        processing_result: 'failed',
+        process_status: 'failed',
         fail_reason: 'member_not_found',
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
@@ -206,7 +237,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
           id: event.id!,
           event_type: event.type!,
           payload: event,
-          processing_result: 'failed',
+          process_status: 'failed',
           fail_reason: 'member_not_found',
           data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
         });
@@ -221,7 +252,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
           id: event.id!,
           event_type: event.type!,
           payload: event,
-          processing_result: 'ignored',
+          process_status: 'ignored',
           member_id: lockedMember.id as string,
           ignore_reason: 'stale_event',
           data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
@@ -236,7 +267,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
           id: event.id!,
           event_type: event.type!,
           payload: event,
-          processing_result: 'failed',
+          process_status: 'failed',
           member_id: lockedMember.id as string,
           fail_reason: `unknown_status:${dataStatus}`,
           data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
@@ -253,7 +284,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
       const newPlanId = event.data?.plan?.id ?? oldPlanId;
       const planChanged = shouldSwapRole(oldPlanId, newPlanId);
 
-      const updates: Record<string, unknown> = {
+      const updates: MemberWebhookUpdates = {
         last_payjp_event_created_at: event.created!,
         subscription_status: newStatus,
       };
@@ -281,7 +312,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
         id: event.id!,
         event_type: event.type!,
         payload: event,
-        processing_result: 'processed',
+        process_status: 'succeeded',
         member_id: lockedMember.id as string,
         data_metadata_operation_id: event.data?.metadata?.operation_id ?? null,
       });
@@ -369,10 +400,9 @@ class MemberResolutionConflictError extends Error {
 }
 
 async function findPayjpEvent(db: DbPool, eventId: string): Promise<Record<string, unknown> | null> {
-  const result = await db.query(
-    'SELECT id, event_type, processing_result, received_at FROM payjp_events WHERE id = $1',
-    [eventId],
-  );
+  const result = await db.query('SELECT id, event_type, process_status, received_at FROM payjp_events WHERE id = $1', [
+    eventId,
+  ]);
   return (result.rows[0] as Record<string, unknown>) ?? null;
 }
 
@@ -391,14 +421,14 @@ async function insertPayjpEvent(db: DbPool, event: PayjpEventInsert): Promise<vo
   };
 
   await db.query(
-    `INSERT INTO payjp_events (id, event_type, payload, processing_result, member_id, processed_at, data_metadata_operation_id)
+    `INSERT INTO payjp_events (id, event_type, payload, process_status, member_id, processed_at, data_metadata_operation_id)
      VALUES ($1, $2, $3, $4, $5, now(), $6)
      ON CONFLICT (id) DO NOTHING`,
     [
       event.id,
       event.event_type,
       JSON.stringify(enrichedPayload),
-      event.processing_result,
+      event.process_status,
       event.member_id ?? null,
       event.data_metadata_operation_id ?? null,
     ],
@@ -440,25 +470,15 @@ async function resolveMember(
   return candidates[0];
 }
 
-// Whitelist of allowed column names for member updates from webhook
-const ALLOWED_UPDATE_COLUMNS = new Set([
-  'subscription_status',
-  'payjp_plan_id',
-  'access_end_at',
-  'next_billing_at',
-  'last_payjp_event_created_at',
-  'payjp_subscription_id',
-]);
-
-async function updateMemberFromWebhook(db: DbPool, memberId: string, updates: Record<string, unknown>): Promise<void> {
+async function updateMemberFromWebhook(db: DbPool, memberId: string, updates: MemberWebhookUpdates): Promise<void> {
   const setClauses: string[] = [];
   const values: unknown[] = [];
   let i = 1;
 
-  for (const [key, value] of Object.entries(updates)) {
-    if (!ALLOWED_UPDATE_COLUMNS.has(key)) continue;
-    setClauses.push(`${key} = $${i}`);
-    values.push(value);
+  for (const column of MEMBER_WEBHOOK_UPDATE_COLUMNS) {
+    if (!(column in updates)) continue;
+    setClauses.push(`${column} = $${i}`);
+    values.push(updates[column]);
     i++;
   }
 
@@ -591,8 +611,17 @@ async function logUnmappedPlanWarning(
     await deps.db.query("UPDATE members SET role_state = 'unknown', updated_at = now() WHERE id = $1", [
       lockedMember.id,
     ]);
-  } catch {
-    // Best-effort; daily resync will catch this
+  } catch (err) {
+    // Best-effort; daily resync will catch this. Log for observability without altering control flow.
+    deps.log({
+      timestamp: formatRfc3339Utc(new Date()),
+      service: 'sync-service',
+      endpoint: '/v1/payjp/webhook',
+      result: 'warning',
+      error: 'unmapped_plan_role_state_update_failed',
+      member_id: lockedMember.id as string,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    } as unknown as LogEntry);
   }
 }
 

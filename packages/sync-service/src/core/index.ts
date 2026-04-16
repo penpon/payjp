@@ -200,7 +200,14 @@ export function shouldGrantRole(status: string | null): boolean {
   return GRANT_STATUSES.has(status);
 }
 
-/** Paid Discord role should be present only for active/trial members. */
+/**
+ * Paid Discord role should be present only for active/trial members.
+ *
+ * FIND-L3: `_accessEndAt` / `_now` are intentionally unused. Per 2weeks-spec.md §1/§5,
+ * canceled状態への遷移は Discord ロールの「即時剥奪」を必須要件とする。`access_end_at` は
+ * 契約終了予定日の記録用であり、grant 判定には使用しない (subscribe の重複ガード line 189 は別用途)。
+ * Parameters are retained for API consistency with callers that pass merged state.
+ */
 export function shouldGrantPaidDiscordAccess(
   status: string | null,
   _accessEndAt: Date | string | null,

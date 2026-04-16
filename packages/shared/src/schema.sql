@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS members (
   inflight_operation_type         TEXT CHECK (inflight_operation_type IN ('subscribe', 'cancel')),
   inflight_operation_started_at   TIMESTAMPTZ,
   inflight_subscribe_plan_id      TEXT,
-  privacy_consented_at            TIMESTAMPTZ,
   created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -38,7 +37,7 @@ CREATE TABLE IF NOT EXISTS payjp_events (
   id                TEXT PRIMARY KEY,   -- payjp_event_id (冪等キー)
   event_type        TEXT NOT NULL,
   payload           JSONB NOT NULL,
-  processing_result TEXT NOT NULL CHECK (processing_result IN ('processed', 'ignored', 'failed')),
+  process_status    TEXT NOT NULL CHECK (process_status IN ('succeeded', 'ignored', 'failed')),
   data_metadata_operation_id TEXT,
   member_id         UUID REFERENCES members(id),
   received_at       TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -2,7 +2,14 @@
 # State-file cooldown + global rate-limit + per-tick storm collapse for payjp-ops.
 # Source this — do NOT execute. Requires common.sh already sourced.
 
-: "${OPS_STATE_DIR:=/var/lib/payjp-ops}"
+# State directory: root/system jobs use /var/lib; normal users cannot mkdir there.
+if [[ -z "${OPS_STATE_DIR:-}" ]]; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    OPS_STATE_DIR=/var/lib/payjp-ops
+  else
+    OPS_STATE_DIR="${XDG_STATE_HOME:-${HOME:-/tmp}/.local/state}/payjp-ops"
+  fi
+fi
 : "${TICK_ID:=$(date +%s)}"
 
 ops_state_init() {

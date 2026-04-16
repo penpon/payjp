@@ -147,7 +147,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
   // グループ 2: バリデーション失敗 → 200 + ignored (PAY.JP リトライ増幅防止)
   // =========================================================================
   describe('バリデーション失敗 → 200 + ignored', () => {
-    it('3. livemode: true (expectedLivemode=false と不一致) → 200 + processing_result = ignored', async () => {
+    it('3. livemode: true (expectedLivemode=false と不一致) → 200 + process_status = ignored', async () => {
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_${randomUUID().slice(0, 8)}`;
       const event = makeWebhookEvent({ id: eventId, livemode: true });
@@ -165,12 +165,12 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true });
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('ignored');
+      expect(rows.rows[0].process_status).toBe('ignored');
     });
 
-    it('4. 未知の event.type (charge.succeeded) → 200 + processing_result = ignored', async () => {
+    it('4. 未知の event.type (charge.succeeded) → 200 + process_status = ignored', async () => {
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_${randomUUID().slice(0, 8)}`;
       const event = makeWebhookEvent({ id: eventId, type: 'charge.succeeded' });
@@ -187,12 +187,12 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('ignored');
+      expect(rows.rows[0].process_status).toBe('ignored');
     });
 
-    it('5. data.object が subscription でない → 200 + processing_result = ignored', async () => {
+    it('5. data.object が subscription でない → 200 + process_status = ignored', async () => {
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_${randomUUID().slice(0, 8)}`;
       const event = makeWebhookEvent({ id: eventId, data: { object: 'customer' } });
@@ -209,12 +209,12 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('ignored');
+      expect(rows.rows[0].process_status).toBe('ignored');
     });
 
-    it('6. subscription.created イベント → 200 + processing_result = ignored かつ members 更新なし', async () => {
+    it('6. subscription.created イベント → 200 + process_status = ignored かつ members 更新なし', async () => {
       const discordUserId = `discord-sc-${randomUUID().slice(0, 8)}`;
       await insertMember(pool, { discordUserId });
 
@@ -238,9 +238,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('ignored');
+      expect(rows.rows[0].process_status).toBe('ignored');
 
       // members が更新されていないこと
       const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
@@ -255,7 +255,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
   // グループ 3: 必須フィールドバリデーション
   // =========================================================================
   describe('必須フィールドバリデーション', () => {
-    it('7. event.id が欠損している場合 → 200 + processing_result = failed', async () => {
+    it('7. event.id が欠損している場合 → 200 + process_status = failed', async () => {
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       // id を undefined にするため、makeWebhookEvent の戻り値から id を削除
       const event = makeWebhookEvent() as Record<string, unknown>;
@@ -274,12 +274,12 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
       expect(res.statusCode).toBe(200);
 
       // id が unknown-* で始まるレコードが 1 件挿入されていること
-      const rows = await pool.query("SELECT processing_result FROM payjp_events WHERE id LIKE 'unknown-%'");
+      const rows = await pool.query("SELECT process_status FROM payjp_events WHERE id LIKE 'unknown-%'");
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('failed');
+      expect(rows.rows[0].process_status).toBe('failed');
     });
 
-    it('8. subscription.updated で data.status が欠損 → 200 + processing_result = failed かつ members 更新なし', async () => {
+    it('8. subscription.updated で data.status が欠損 → 200 + process_status = failed かつ members 更新なし', async () => {
       const discordUserId = `discord-ns-${randomUUID().slice(0, 8)}`;
       await insertMember(pool, { discordUserId, subscriptionStatus: 'trial' });
 
@@ -310,9 +310,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('failed');
+      expect(rows.rows[0].process_status).toBe('failed');
 
       // members の subscription_status は変更されていないこと
       const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
@@ -326,7 +326,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
   // グループ 4: 不明 status の fail-close
   // =========================================================================
   describe('不明 status の fail-close', () => {
-    it('9. data.status が不明な値 → processing_result = failed かつ syncRole が revoke で呼ばれる', async () => {
+    it('9. data.status が不明な値 → process_status = failed かつ syncRole が revoke で呼ばれる', async () => {
       const discordUserId = `discord-us-${randomUUID().slice(0, 8)}`;
       await insertMember(pool, { discordUserId, subscriptionStatus: 'active' });
 
@@ -354,9 +354,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('failed');
+      expect(rows.rows[0].process_status).toBe('failed');
 
       for (const roleId of Object.values(E2E_PLAN_ROLE_MAPPING)) {
         expect(syncRole).toHaveBeenCalledWith(discordUserId, 'revoke', roleId);
@@ -399,13 +399,13 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      // 同秒は stale ではないので processed になること
-      expect(rows.rows[0].processing_result).toBe('processed');
+      // 同秒は stale ではないので succeeded になること
+      expect(rows.rows[0].process_status).toBe('succeeded');
     });
 
-    it('11. event.created < member.last_payjp_event_created_at (古いイベント) → processing_result = ignored', async () => {
+    it('11. event.created < member.last_payjp_event_created_at (古いイベント) → process_status = ignored', async () => {
       const discordUserId = `discord-st-${randomUUID().slice(0, 8)}`;
       const newerTimestamp = DEFAULT_EVENT_CREATED + 500;
       await insertMember(pool, { discordUserId, lastEventCreatedAt: newerTimestamp });
@@ -435,9 +435,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('ignored');
+      expect(rows.rows[0].process_status).toBe('ignored');
     });
   });
 
@@ -538,9 +538,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('processed');
+      expect(rows.rows[0].process_status).toBe('succeeded');
 
       const member = await pool.query('SELECT subscription_status FROM members WHERE discord_user_id = $1', [
         discordUserId,
@@ -548,7 +548,7 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
       expect(member.rows[0].subscription_status).toBe('active');
     });
 
-    it('15. 逆引きでも一致する member が存在しない → processing_result = failed', async () => {
+    it('15. 逆引きでも一致する member が存在しない → process_status = failed', async () => {
       const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool, syncRole) });
       const eventId = `evnt_${randomUUID().slice(0, 8)}`;
       const event = makeWebhookEvent({
@@ -570,12 +570,12 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('failed');
+      expect(rows.rows[0].process_status).toBe('failed');
     });
 
-    it('16. metadata と逆引きが異なる discord_user_id を指す → processing_result = failed', async () => {
+    it('16. metadata と逆引きが異なる discord_user_id を指す → process_status = failed', async () => {
       // 2 人の member を登録 — それぞれ別の subscription_id
       const userA = `discord-ca-${randomUUID().slice(0, 8)}`;
       const userB = `discord-cb-${randomUUID().slice(0, 8)}`;
@@ -606,9 +606,9 @@ describe.skipIf(!hasTestDb)('E2E Webhook — 認証・バリデーション・�
 
       expect(res.statusCode).toBe(200);
 
-      const rows = await pool.query('SELECT processing_result FROM payjp_events WHERE id = $1', [eventId]);
+      const rows = await pool.query('SELECT process_status FROM payjp_events WHERE id = $1', [eventId]);
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0].processing_result).toBe('failed');
+      expect(rows.rows[0].process_status).toBe('failed');
     });
   });
 

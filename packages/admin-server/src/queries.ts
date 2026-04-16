@@ -28,7 +28,6 @@ export interface AdminMemberDetail extends AdminMemberListRow {
   inflight_operation_type: string | null;
   inflight_operation_started_at: string | null;
   inflight_subscribe_plan_id: string | null;
-  privacy_consented_at: string | null;
   updated_at: string;
 }
 
@@ -185,7 +184,6 @@ export async function queryMemberDetail(pool: Pool, memberId: string): Promise<A
       m.inflight_operation_type,
       m.inflight_operation_started_at,
       m.inflight_subscribe_plan_id,
-      m.privacy_consented_at,
       m.updated_at
     FROM members m
     WHERE m.id = $1::uuid

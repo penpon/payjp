@@ -16,6 +16,7 @@ import {
   hasInflightOperation,
   isSameOrigin,
   linkSessionTokenHash,
+  maskSensitiveLogFields,
   memberSessionTokenHash,
   normalizeEmail,
   verifyGoogleCancelSubmitSignature,
@@ -33,7 +34,8 @@ import type {
 } from './types.js';
 
 function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
-  console[level](JSON.stringify({ level, service: 'billing-cancel', message, ...ctx }));
+  const entry = maskSensitiveLogFields({ level, service: 'billing-cancel', message, ...ctx });
+  console[level](JSON.stringify(entry));
 }
 
 function secureCompare(a: string, b: string): boolean {
@@ -253,7 +255,14 @@ async function finalizeImmediateCancel(
   } else if (member.role_state !== 'revoked' && member.discord_user_id) {
     try {
       await deps.db.updateMemberRoleState(member.id, 'unknown');
-    } catch {}
+    } catch (roleStateErr) {
+      slog('error', 'Role mapping missing and role_state fallback update failed', {
+        memberId: member.id,
+        flow: ctx.flow,
+        operationId: ctx.operationId,
+        roleStateError: String(roleStateErr),
+      });
+    }
     return {
       ok: false,
       statusCode: 503,
@@ -540,7 +549,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return cancelState;
     }
 
-    return finalizeImmediateCancel(cancelState.member, deps, {
+    return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'browser',
       operationId: cancelState.operationId,
       finalizeSuccess: async () => {

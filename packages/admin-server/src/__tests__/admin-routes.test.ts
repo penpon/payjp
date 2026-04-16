@@ -9,11 +9,49 @@ async function makeApp(mockQuery: ReturnType<typeof vi.fn>) {
   return app;
 }
 
+const ACCESS_HEADERS = {
+  'cf-access-authenticated-user-email': 'operator@example.com',
+};
+
 describe('admin routes (read-only)', () => {
   it('rejects POST with 405', async () => {
     const app = await makeApp(vi.fn());
     const res = await app.inject({ method: 'POST', url: '/admin/overview', payload: {} });
     expect(res.statusCode).toBe(405);
+  });
+
+  it('rejects GET without auth headers', async () => {
+    const app = await makeApp(vi.fn());
+    const res = await app.inject({ method: 'GET', url: '/admin/overview' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts local fallback headers when ADMIN_API_KEY matches', async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = 'local-secret';
+    try {
+      const mockQuery = vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ c: '0' }] })
+        .mockResolvedValueOnce({ rows: [{ c: '0' }] });
+      const app = await makeApp(mockQuery);
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/overview',
+        headers: {
+          'x-admin-audit-actor': 'local-operator@example.com',
+          'x-admin-api-key': 'local-secret',
+        },
+      });
+      expect(res.statusCode).toBe(200);
+    } finally {
+      if (original === undefined) {
+        delete process.env.ADMIN_API_KEY;
+      } else {
+        process.env.ADMIN_API_KEY = original;
+      }
+    }
   });
 
   it('GET /admin/overview aggregates status rows', async () => {
@@ -28,7 +66,7 @@ describe('admin routes (read-only)', () => {
       .mockResolvedValueOnce({ rows: [{ c: '3' }] })
       .mockResolvedValueOnce({ rows: [{ c: '1' }] });
     const app = await makeApp(mockQuery);
-    const res = await app.inject({ method: 'GET', url: '/admin/overview' });
+    const res = await app.inject({ method: 'GET', url: '/admin/overview', headers: ACCESS_HEADERS });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
     expect(body.ok).toBe(true);
@@ -58,7 +96,11 @@ describe('admin routes (read-only)', () => {
         ],
       });
     const app = await makeApp(mockQuery);
-    const res = await app.inject({ method: 'GET', url: '/admin/members?limit=10&page=1' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/members?limit=10&page=1',
+      headers: ACCESS_HEADERS,
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { total: number; members: unknown[]; limit: number };
     expect(body.total).toBe(1);
@@ -68,7 +110,11 @@ describe('admin routes (read-only)', () => {
 
   it('GET /admin/members/:id returns 400 for invalid uuid', async () => {
     const app = await makeApp(vi.fn());
-    const res = await app.inject({ method: 'GET', url: '/admin/members/not-a-uuid' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/members/not-a-uuid',
+      headers: ACCESS_HEADERS,
+    });
     expect(res.statusCode).toBe(400);
   });
 });

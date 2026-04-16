@@ -177,7 +177,40 @@ journalctl -u payjp-ops-restore-drill.service -fn 80
 
 ---
 
-## 鍵ローテーション手順 (post-MVP)
+## 鍵ローテーション計画 (年次)
+
+### サイクル
+
+| 対象 | 頻度 | 次回目安 | トリガー |
+|---|---|---|---|
+| age keypair | **年次**（毎年 4 月、Go-Live 周年） | 2027-04 | 定期 or 漏洩疑い時は即時 |
+| B2 `payjp-backup-write` application key | **年次**（age と同月に揃える） | 2027-04 | 定期 or B2 console に不審 access event |
+| B2 `payjp-drill-read` application key | **年次**（age と同月に揃える） | 2027-04 | 同上 |
+| B2 master account key | **2 年毎**（retention + recovery 優先） | 2028-04 | アカウント譲渡時は即時 |
+
+### 緊急 rotation トリガー
+
+以下のいずれかに該当する場合、計画外の即時 rotation を行う：
+
+- 1Password item の access log に不審 access
+- B2 console の application key usage log で想定外の IP / scope 呼び出し
+- VPS の `journalctl` で `AGE-SECRET-KEY-` や keyID が平文で出力された痕跡
+- 運用担当者の入れ替わり（MVP は 1 名体制のため該当せず）
+
+### rotation 後の検証
+
+いずれのローテーション後も、**翌月次 drill を手動 trigger で前倒し実施**：
+
+```bash
+sudo systemctl start payjp-ops-restore-drill.service
+journalctl -u payjp-ops-restore-drill.service -fn 80
+```
+
+drill 成功 + Discord `#payjp-ops-alerts` に critical 発火なしを確認してから旧 key を安全廃棄。
+
+---
+
+## 鍵ローテーション手順
 
 ### age keypair を新しくする
 

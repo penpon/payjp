@@ -72,8 +72,10 @@ services:
       - /etc/letsencrypt/archive/www.and--line.com:/etc/letsencrypt/archive/www.and--line.com:ro
       - nginx_logs:/var/log/nginx
     depends_on:
-      - api
-      - admin-api
+      api:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -88,6 +90,13 @@ services:
       - /tmp
       - /var/cache/nginx
       - /run
+    healthcheck:
+      # Loopback /healthz in nginx.conf (no redirect; busybox wget cannot disable redirect follow)
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   admin-api:
     logging: *default-logging
@@ -120,6 +129,16 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('net').connect(3011,'127.0.0.1').on('connect',function(){this.end();process.exit(0)}).on('error',function(){process.exit(1)})\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   api:
     logging: *default-logging
@@ -167,6 +186,16 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
 volumes:
   postgres_data:
