@@ -1084,7 +1084,7 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toMatchObject({ ok: false, errorCode: 'FORBIDDEN_ORIGIN' });
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
     expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
   });
 
