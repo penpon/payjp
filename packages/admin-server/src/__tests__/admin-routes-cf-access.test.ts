@@ -80,12 +80,25 @@ describe('admin routes — Cloudflare Access JWT', () => {
 
   it('401 when verifyCfAccessJwt returns failure', async () => {
     vi.mocked(verifyCfAccessJwt).mockResolvedValue({ ok: false, reason: 'expired' });
-    const app = await makeApp(vi.fn());
+    const logLines: string[] = [];
+    const app = Fastify({
+      logger: {
+        level: 'warn',
+        stream: {
+          write(msg: string) {
+            logLines.push(msg);
+          },
+        },
+      },
+    });
+    await registerAdminRoutes(app, { pool: { query: vi.fn() } as unknown as Pool });
     const res = await app.inject({
       method: 'GET',
       url: '/admin/overview',
       headers: { 'cf-access-jwt-assertion': 'bad.token' },
     });
     expect(res.statusCode).toBe(401);
+    const parsed = logLines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(parsed.some((o) => o.cfAccessVerifyReason === 'expired')).toBe(true);
   });
 });

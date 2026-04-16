@@ -43,6 +43,16 @@ function logAdminRequest(request: FastifyRequest, actor: string): void {
   request.log.info({ auditActor: actor, path: pathname }, 'admin request');
 }
 
+function logCfAccessJwtFailure(request: FastifyRequest, reason: string): void {
+  let pathname = '';
+  try {
+    pathname = new URL(request.url, 'http://_').pathname;
+  } catch {
+    pathname = '[invalid-url]';
+  }
+  request.log.warn({ path: pathname, cfAccessVerifyReason: reason }, 'admin request: Cloudflare Access JWT rejected');
+}
+
 export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Pool }): Promise<void> {
   const { pool } = opts;
 
@@ -78,6 +88,7 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
         logAdminRequest(request, verified.email);
         return;
       }
+      logCfAccessJwtFailure(request, verified.reason);
       return reply.status(401).send({
         error: 'unauthorized_admin_request',
         message: 'Invalid Cloudflare Access token',
