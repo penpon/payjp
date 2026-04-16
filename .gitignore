@@ -33,6 +33,7 @@ entities.json
 
 # VCSDD state must live only at repo root
 scripts/**/.vcsdd/
+packages/**/.vcsdd/
 
 # Logs
 logs/
@@ -65,6 +66,9 @@ feature/
 # Docker / DB volume
 postgres-data/
 docker-data/
+
+# Claude Code
+.claude/scheduled_tasks.lock
 
 # Serena
 .serena/
