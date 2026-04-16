@@ -7,7 +7,6 @@ import type { BillingDeps } from '@hayane/billing-service';
 import { accessGateSessionTokenHash, isSameOrigin, verifySharedPasscode } from '@hayane/billing-service';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
-import { isForbiddenCrossSiteFetch } from '../cross-site-fetch.js';
 
 export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
   const { billingDeps } = opts;
@@ -58,7 +57,12 @@ export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps
         return reply.status(403).send({ error: 'Forbidden' });
       }
 
-      if (isForbiddenCrossSiteFetch(request)) {
+      // Cross-site fetches that omit Origin (e.g. <img> / no-cors) cannot prove the request
+      // came from our frontend. When Origin is present and matches, allow even if
+      // Sec-Fetch-Site is `cross-site` (some navigations still send the document Origin).
+      const secFetchSite =
+        typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
+      if (secFetchSite === 'cross-site' && !origin) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
 
