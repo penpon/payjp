@@ -205,6 +205,28 @@ describe('GET /v1/access-gate/session', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ gateEnforced: true, unlocked: true });
   });
+
+  it('returns 403 when Sec-Fetch-Site is cross-site (prevents embedding probe)', async () => {
+    const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/access-gate/session',
+      headers: { 'sec-fetch-site': 'cross-site' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 403 when Origin is not the configured frontend', async () => {
+    const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/access-gate/session',
+      headers: { origin: 'https://evil.com' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
 });
 
 describe('POST /v1/access-gate/verify', () => {

@@ -16,6 +16,14 @@ export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps
     '/v1/access-gate/session',
     { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+      if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+      if (isForbiddenCrossSiteFetch(request)) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
       const now = billingDeps.clock();
       const code = billingDeps.config.subscribeGateCode ?? '';
       if (!code) {
