@@ -45,25 +45,11 @@ export async function syncRoutes(app: FastifyInstance, opts: { syncDeps: SyncDep
   );
 }
 
-/**
- * Single value for `X-Payjp-Webhook-Token`. Rejects ambiguous / combined values:
- * - RFC 7230 combines duplicate header fields with ", " — that must not be accepted as one token
- *   (otherwise `expected, guess` can compare equal to `expected` in the HMAC digest step).
- * - Multiple header field lines become `string[]` in Fastify — reject unless exactly one.
- */
-function parseSingleWebhookTokenHeader(raw: string | string[] | undefined): string | undefined {
-  if (raw === undefined) return undefined;
-  const s = Array.isArray(raw) ? (raw.length === 1 ? raw[0] : undefined) : raw;
-  if (typeof s !== 'string') return undefined;
-  const trimmed = s.trim();
-  if (trimmed === '' || trimmed.includes(',')) return undefined;
-  return trimmed;
-}
-
 function extractWebhookHeaders(
   headers: Record<string, string | string[] | undefined>,
 ): Record<string, string | undefined> {
   return {
-    'x-payjp-webhook-token': parseSingleWebhookTokenHeader(headers['x-payjp-webhook-token']),
+    'x-payjp-webhook-token':
+      typeof headers['x-payjp-webhook-token'] === 'string' ? headers['x-payjp-webhook-token'] : undefined,
   };
 }
