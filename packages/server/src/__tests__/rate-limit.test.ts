@@ -170,6 +170,47 @@ function makeSyncDeps(): SyncDeps {
 }
 
 describe('rate limit enforcement', () => {
+  it('uses X-Forwarded-For for per-client keys when trustProxy is on (distinct clients are not pooled)', async () => {
+    const deps = makeMockDeps();
+    const syncDeps = makeSyncDeps();
+    const app = buildApp(APP_CONFIG, deps, syncDeps);
+    const url = '/v1/subscriptions/status';
+    const max = 15;
+
+    const headersBase: Record<string, string> = {
+      origin: FRONTEND_BASE_URL,
+      'content-type': 'application/json',
+    };
+    const cookies: Record<string, string> = { '__Host-link_session': LINK_SESSION_TOKEN };
+
+    // Exhaust client A's budget
+    for (let i = 0; i < max; i++) {
+      const res = await app.inject({
+        method: 'GET',
+        url,
+        headers: { ...headersBase, 'x-forwarded-for': '203.0.113.10' },
+        cookies,
+      });
+      expect(res.statusCode).not.toBe(429);
+    }
+    const aExceeded = await app.inject({
+      method: 'GET',
+      url,
+      headers: { ...headersBase, 'x-forwarded-for': '203.0.113.10' },
+      cookies,
+    });
+    expect(aExceeded.statusCode).toBe(429);
+
+    // Client B should still be allowed (not sharing the proxy-only bucket)
+    const bFirst = await app.inject({
+      method: 'GET',
+      url,
+      headers: { ...headersBase, 'x-forwarded-for': '203.0.113.20' },
+      cookies,
+    });
+    expect(bFirst.statusCode).not.toBe(429);
+  });
+
   const RATE_LIMIT_CASES: { method: 'GET' | 'POST'; url: string; max: number }[] = [
     { method: 'POST', url: '/v1/subscriptions', max: 5 },
     { method: 'POST', url: '/v1/subscriptions/cancel', max: 5 },
