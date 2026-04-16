@@ -255,7 +255,14 @@ async function finalizeImmediateCancel(
   } else if (member.role_state !== 'revoked' && member.discord_user_id) {
     try {
       await deps.db.updateMemberRoleState(member.id, 'unknown');
-    } catch {}
+    } catch (roleStateErr) {
+      slog('error', 'Role mapping missing and role_state fallback update failed', {
+        memberId: member.id,
+        flow: ctx.flow,
+        operationId: ctx.operationId,
+        roleStateError: String(roleStateErr),
+      });
+    }
     return {
       ok: false,
       statusCode: 503,

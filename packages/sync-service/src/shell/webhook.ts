@@ -32,6 +32,12 @@ function constantTimeCompare(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
+// FIND-L1: cancel_requested_at is intentionally EXCLUDED from webhook updates.
+// Semantic: cancel_requested_at means "the user requested cancellation through our flow"
+// (billing-service/src/shell/cancel.ts sets it via our clock()). A PAY.JP subscription.canceled
+// event does NOT imply user-initiated cancel (could be admin-driven or billing failure in PAY.JP).
+// For out-of-band external cancels, the manual resync CLI (sync-service/shell/cli.ts) sets it on
+// admin acknowledgment. Keep webhook writes pure-state-sync, not user-intent inference.
 type MemberWebhookUpdateColumn =
   | 'subscription_status'
   | 'payjp_plan_id'
@@ -605,8 +611,17 @@ async function logUnmappedPlanWarning(
     await deps.db.query("UPDATE members SET role_state = 'unknown', updated_at = now() WHERE id = $1", [
       lockedMember.id,
     ]);
-  } catch {
-    // Best-effort; daily resync will catch this
+  } catch (err) {
+    // Best-effort; daily resync will catch this. Log for observability without altering control flow.
+    deps.log({
+      timestamp: formatRfc3339Utc(new Date()),
+      service: 'sync-service',
+      endpoint: '/v1/payjp/webhook',
+      result: 'warning',
+      error: 'unmapped_plan_role_state_update_failed',
+      member_id: lockedMember.id as string,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    } as unknown as LogEntry);
   }
 }
 
