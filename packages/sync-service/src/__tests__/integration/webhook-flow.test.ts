@@ -204,6 +204,28 @@ describe('INT-SYNC-003: Webhook stale event', () => {
   });
 });
 
+// Missing event.id on ignored path: must synthesize id for payjp_events insert (no ReferenceError)
+describe('INT-SYNC-003b: Webhook ignored event without event.id', () => {
+  it('livemode mismatch + missing id → 200, insert uses unknown-* id', async () => {
+    const db = createMockDb();
+    const deps = createDeps(db);
+    const event = createValidEvent({ livemode: false });
+    delete (event as { id?: string }).id;
+    const req: WebhookRequest = {
+      headers: { 'x-payjp-webhook-token': 'valid-token' },
+      body: event,
+      remoteIp: '1.2.3.4',
+    };
+
+    const res = await handleWebhook(req, deps);
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).ok).toBe(true);
+    const inserted = (db as unknown as { _insertedEvents: Array<Record<string, unknown>> })._insertedEvents;
+    expect(inserted).toHaveLength(1);
+    expect(String(inserted[0]?.id)).toMatch(/^unknown-/);
+  });
+});
+
 // INT-SYNC-004: Webhook same-second event
 describe('INT-SYNC-004: Webhook same-second event', () => {
   it('event.created == last → processed normally', async () => {
