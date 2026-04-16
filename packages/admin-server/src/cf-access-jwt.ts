@@ -1,5 +1,14 @@
 import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from 'jose';
 
+/**
+ * Returns a remote JWKS resolver for Cloudflare Access. Create once per process and reuse
+ * across requests so jose can cache fetched keys (each `createRemoteJWKSet` has its own cache).
+ */
+export function createCfAccessRemoteJwks(teamDomain: string): JWTVerifyGetKey {
+  const team = teamDomain.trim();
+  return createRemoteJWKSet(new URL(`https://${team}/cdn-cgi/access/certs`));
+}
+
 export type CfAccessVerifyResult = { ok: true; email: string } | { ok: false; reason: string };
 
 export type VerifyCfAccessJwtParams = {
@@ -24,7 +33,7 @@ export async function verifyCfAccessJwt(params: VerifyCfAccessJwtParams): Promis
     return { ok: false, reason: 'empty_team_domain' };
   }
   const issuer = `https://${team}`;
-  const JWKS = params.jwks ?? createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
+  const JWKS = params.jwks ?? createCfAccessRemoteJwks(params.teamDomain);
 
   try {
     const { payload } = await jwtVerify(params.token, JWKS, {

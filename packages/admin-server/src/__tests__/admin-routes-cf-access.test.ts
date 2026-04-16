@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../cf-access-jwt.js', () => ({
+  createCfAccessRemoteJwks: vi.fn(() => ({})),
   verifyCfAccessJwt: vi.fn(),
 }));
 

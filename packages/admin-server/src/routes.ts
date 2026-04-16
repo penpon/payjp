@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
-import { verifyCfAccessJwt } from './cf-access-jwt.js';
+import { createCfAccessRemoteJwks, verifyCfAccessJwt } from './cf-access-jwt.js';
 import { isUuid, queryAdminOverview, queryMemberDetail, queryMemberImpactLogs, queryMembersList } from './queries.js';
 
 function parseBool(v: unknown): boolean | null {
@@ -46,6 +46,10 @@ function logAdminRequest(request: FastifyRequest, actor: string): void {
 export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Pool }): Promise<void> {
   const { pool } = opts;
 
+  const cfTeamDomain = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN?.trim() ?? '';
+  const cfAudience = process.env.CLOUDFLARE_ACCESS_AUDIENCE?.trim() ?? '';
+  const cfAccessJwks = cfTeamDomain && cfAudience ? createCfAccessRemoteJwks(cfTeamDomain) : undefined;
+
   app.addHook('preHandler', async (request, reply) => {
     if (request.method === 'OPTIONS') {
       return;
@@ -68,6 +72,7 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
         token: jwtAssertion,
         teamDomain,
         audience: accessAudience,
+        ...(cfAccessJwks ? { jwks: cfAccessJwks } : {}),
       });
       if (verified.ok) {
         logAdminRequest(request, verified.email);
