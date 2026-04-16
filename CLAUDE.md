@@ -147,7 +147,13 @@ Triples complement prose diary entries — use them for relationships that will 
 
 **GitHub:** `gh` CLI via Bash (PR / Issue / CI status)
 
-**Specialized agents & skills** for non-trivial scope (PAY.JP domain, PostgreSQL, security audit, a11y, TDD discipline, frontend debugging, etc.) — see `.claude/rules/agents.md` for the scenario-to-agent mapping.
+**Specialized agents & skills** for non-trivial scope (PAY.JP domain, PostgreSQL, security audit, a11y, TDD discipline, frontend debugging, etc.) — see `.claude/rules/agents.md` for the scenario-to-agent mapping (includes model selection guidelines).
+
+### Token Optimization
+
+- When spawning subagents, follow the model selection table in `.claude/rules/agents.md` (search=haiku, review/edit=sonnet)
+- Avoid editing CLAUDE.md or changing MCP config mid-session — triggers cache invalidation
+- Inactivity >5 min also expires cache TTL, causing full context reload
 
 ## Custom Commands
 

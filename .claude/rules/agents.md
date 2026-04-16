@@ -6,6 +6,17 @@ Invoke via:
 - **Skill tool** (`skill: "<plugin>:<skill>"`) for `superpowers:*`, `chrome-devtools-mcp:*`
 - **Slash commands** (`/command`) for `/code-review`, `/feature-dev`, `/vcsdd-*`, etc.
 
+## Subagent Model Selection (Token Optimization)
+
+Keep Opus for the main thread. Downgrade subagents by task type.
+
+| Task | model param | Rationale |
+|---|---|---|
+| Explore / Grep / Glob / file search | `model: "haiku"` | Read-only, Opus unnecessary |
+| Code review / static analysis | `model: "sonnet"` | Needs judgment, not full Opus |
+| Background code edits | `model: "sonnet"` | Clear instructions, sonnet sufficient |
+| Design decisions / complex refactors | `model: "opus"` or omit | Requires deep reasoning |
+
 ---
 
 ## Domain expertise
