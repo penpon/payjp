@@ -549,7 +549,7 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return cancelState;
     }
 
-    return finalizeImmediateCancel(cancelState.member, deps, {
+    return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'browser',
       operationId: cancelState.operationId,
       finalizeSuccess: async () => {
