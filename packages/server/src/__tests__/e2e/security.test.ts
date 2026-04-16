@@ -585,6 +585,66 @@ describe.skipIf(!hasTestDb)('E2E Security — 悪意ある入力防御', () => {
       expect(res.statusCode).toBe(403);
       assertNoInternalInfo(res.body);
     });
+
+    /**
+     * CSRF: evil.com must not obtain a prefilled cancel URL via the victim's member_session.
+     * Browsers send Sec-Fetch-Site: cross-site for cross-origin POSTs; the route must reject before
+     * issuing formUrl / signed cancel token (defense-in-depth with Origin + cookie).
+     */
+    it('POST /v1/subscriptions/cancel/google-form-link: cross-site (Sec-Fetch-Site) → 403; same-site → 200', async () => {
+      const discordUserId = `discord-gfl-${randomUUID().slice(0, 8)}`;
+      const app = buildE2EApp(pgDb, { syncDeps: buildSyncDepsForE2E(pool) });
+      const email = `${discordUserId}@e2e-test.example.com`;
+      const { rawToken } = await insertLinkedSession(pgDb, discordUserId);
+      const subscribeRes = await app.inject({
+        method: 'POST',
+        url: '/v1/subscriptions',
+        headers: { 'content-type': 'application/json', origin: 'https://example.com' },
+        cookies: { '__Host-link_session': rawToken },
+        body: JSON.stringify({
+          planId: E2E_BILLING_CONFIG.allowedPlanIds[0],
+          email,
+          payjpToken: 'tok_test_e2e',
+          privacyConsented: true,
+        }),
+      });
+      expect(subscribeRes.statusCode).toBe(200);
+      const setCookieRaw = subscribeRes.headers['set-cookie'];
+      const memberMatch = String(setCookieRaw).match(/__Host-member_session=([^;]+)/);
+      expect(memberMatch).toBeTruthy();
+      const memberSessionToken = memberMatch![1];
+
+      const crossSite = await app.inject({
+        method: 'POST',
+        url: '/v1/subscriptions/cancel/google-form-link',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://example.com',
+          'sec-fetch-site': 'cross-site',
+        },
+        cookies: { '__Host-member_session': memberSessionToken },
+        payload: {},
+      });
+      expect(crossSite.statusCode).toBe(403);
+      expect((crossSite.json() as { errorCode?: string }).errorCode).toBe('FORBIDDEN_ORIGIN');
+      assertNoInternalInfo(crossSite.body);
+
+      const sameSite = await app.inject({
+        method: 'POST',
+        url: '/v1/subscriptions/cancel/google-form-link',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://example.com',
+          'sec-fetch-site': 'same-origin',
+        },
+        cookies: { '__Host-member_session': memberSessionToken },
+        payload: {},
+      });
+      expect(sameSite.statusCode).toBe(200);
+      const okBody = sameSite.json() as { ok?: boolean; formUrl?: string };
+      expect(okBody.ok).toBe(true);
+      expect(okBody.formUrl).toContain('docs.google.com/forms');
+    });
   });
 
   // ---------------------------------------------------------------------------
