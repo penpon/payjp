@@ -210,6 +210,24 @@ describe('GET /v1/members/me', () => {
 });
 
 describe('POST /v1/members/link-discord', () => {
+  it('returns 403 when Sec-Fetch-Site is cross-site', async () => {
+    const deps = makeDeps({ subscription_status: 'active' });
+    const app = buildApp(APP_CONFIG, deps);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/members/link-discord',
+      headers: { origin: FRONTEND_BASE_URL, 'sec-fetch-site': 'cross-site' },
+      cookies: {
+        '__Host-member_session': MEMBER_SESSION_TOKEN,
+        '__Host-link_session': LINK_SESSION_TOKEN,
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ ok: false, errorCode: 'FORBIDDEN_ORIGIN' });
+  });
+
   it('returns INVALID_MEMBER_SESSION when member_session expires exactly now', async () => {
     const deps = makeDeps({ subscription_status: 'active' });
     (deps.db.findMemberSession as ReturnType<typeof vi.fn>).mockResolvedValue(makeMemberSession({ expires_at: NOW }));

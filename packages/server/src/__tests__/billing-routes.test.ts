@@ -256,12 +256,20 @@ function cancelPayload() {
 }
 
 /** Common inject options for subscribe endpoint（`__Host-link_session` は後方互換のため付与しているが必須ではない） */
-function subscribeInjectOpts(url: string, payload: Record<string, unknown>, overrides: { origin?: string } = {}) {
-  const { origin = FRONTEND_BASE_URL } = overrides;
+function subscribeInjectOpts(
+  url: string,
+  payload: Record<string, unknown>,
+  overrides: { origin?: string; secFetchSite?: string } = {},
+) {
+  const { origin = FRONTEND_BASE_URL, secFetchSite } = overrides;
+  const headers: Record<string, string> = { origin, 'content-type': 'application/json' };
+  if (secFetchSite !== undefined) {
+    headers['sec-fetch-site'] = secFetchSite;
+  }
   return {
     method: 'POST' as const,
     url,
-    headers: { origin, 'content-type': 'application/json' },
+    headers,
     payload,
     cookies: { '__Host-link_session': LINK_SESSION_TOKEN },
   };
@@ -271,9 +279,14 @@ function subscribeInjectOpts(url: string, payload: Record<string, unknown>, over
 function injectOpts(
   url: string,
   payload: Record<string, unknown>,
-  overrides: { origin?: string; withCookie?: boolean; withMemberCookie?: boolean } = {},
+  overrides: {
+    origin?: string;
+    withCookie?: boolean;
+    withMemberCookie?: boolean;
+    secFetchSite?: string;
+  } = {},
 ): InjectOptions {
-  const { origin = FRONTEND_BASE_URL, withCookie = true, withMemberCookie = false } = overrides;
+  const { origin = FRONTEND_BASE_URL, withCookie = true, withMemberCookie = false, secFetchSite } = overrides;
   const cookies: Record<string, string> = {};
   if (withCookie) {
     cookies['__Host-link_session'] = LINK_SESSION_TOKEN;
@@ -282,10 +295,15 @@ function injectOpts(
     cookies['__Host-member_session'] = MEMBER_SESSION_TOKEN;
   }
 
+  const headers: Record<string, string> = { origin, 'content-type': 'application/json' };
+  if (secFetchSite !== undefined) {
+    headers['sec-fetch-site'] = secFetchSite;
+  }
+
   const injectOptions: InjectOptions = {
     method: 'POST' as const,
     url,
-    headers: { origin, 'content-type': 'application/json' },
+    headers,
     payload,
   };
 
@@ -357,6 +375,16 @@ describe('POST /v1/subscriptions', () => {
     const app = createApp();
     const res = await app.inject(
       subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { origin: 'https://evil.com' }),
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
+  it('returns 403 when Sec-Fetch-Site is cross-site (defense when Origin is omitted)', async () => {
+    const app = createApp();
+    const res = await app.inject(
+      subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload(), { secFetchSite: 'cross-site' }),
     );
 
     expect(res.statusCode).toBe(403);
@@ -732,6 +760,14 @@ describe('POST /v1/subscriptions/cancel', () => {
     expect(res.headers['set-cookie']).toBeUndefined();
   });
 
+  it('returns 403 when Sec-Fetch-Site is cross-site', async () => {
+    const app = createApp(makeCancelDeps());
+    const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload(), { secFetchSite: 'cross-site' }));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
   it('returns 409 when no active subscription', async () => {
     const deps = makeCancelDeps();
     (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValue(makeMember());
@@ -873,6 +909,16 @@ describe('POST /v1/subscriptions/cancel/google-form-link', () => {
     const app = createApp(makeMockDeps());
     const res = await app.inject(
       injectOpts(URL, {}, { origin: 'https://evil.com', withCookie: false, withMemberCookie: true }),
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
+  it('returns 403 when Sec-Fetch-Site is cross-site', async () => {
+    const app = createApp(makeMockDeps());
+    const res = await app.inject(
+      injectOpts(URL, {}, { withCookie: false, withMemberCookie: true, secFetchSite: 'cross-site' }),
     );
 
     expect(res.statusCode).toBe(403);

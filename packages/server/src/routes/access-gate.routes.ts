@@ -6,7 +6,13 @@ import { randomBytes } from 'node:crypto';
 import type { BillingDeps } from '@hayane/billing-service';
 import { accessGateSessionTokenHash, isSameOrigin, verifySharedPasscode } from '@hayane/billing-service';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+
+/** Reject cross-site browser requests that omit Origin (e.g. form posts). curl omits Sec-Fetch-Site. */
+function isForbiddenCrossSiteFetch(request: FastifyRequest): boolean {
+  const secFetchSite = typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
+  return secFetchSite === 'cross-site';
+}
 
 export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
   const { billingDeps } = opts;
@@ -54,6 +60,10 @@ export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps
     async (request, reply) => {
       const origin = request.headers.origin ?? null;
       if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
+      if (isForbiddenCrossSiteFetch(request)) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
 
