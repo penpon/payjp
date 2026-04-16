@@ -3,6 +3,7 @@ import { formatRfc3339Utc, isSameOrigin, linkSessionTokenHash, memberSessionToke
 import { buildCookieAttributes, decryptToken, serializeCookieAttributes } from '@hayane/shared';
 import { resolveRoleIdForPlan } from '@hayane/sync-service';
 import type { FastifyInstance } from 'fastify';
+import { isForbiddenCrossSiteFetch } from '../cross-site-fetch.js';
 
 function hasLinkableSubscription(status: string | null): boolean {
   if (status === 'active' || status === 'trial') return true;
@@ -120,6 +121,10 @@ export async function memberRoutes(app: FastifyInstance, opts: { billingDeps: Bi
     async (request, reply) => {
       const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
       if (!isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+        return reply.status(403).send({ ok: false, errorCode: 'FORBIDDEN_ORIGIN' });
+      }
+
+      if (isForbiddenCrossSiteFetch(request)) {
         return reply.status(403).send({ ok: false, errorCode: 'FORBIDDEN_ORIGIN' });
       }
 

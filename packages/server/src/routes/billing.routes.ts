@@ -19,6 +19,7 @@ import {
 import type { Member } from '@hayane/shared';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { isForbiddenCrossSiteFetch } from '../cross-site-fetch.js';
 
 function extractRequestContext(request: FastifyRequest): {
   body: Record<string, unknown> | null;
@@ -81,6 +82,15 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       },
     },
     async (request, reply) => {
+      if (isForbiddenCrossSiteFetch(request)) {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Cross-site fetch is not allowed',
+        });
+      }
+
       const { body, origin, linkSessionToken, accessGateSessionToken } = extractRequestContext(request);
 
       const req: SubscribeRequest = {
@@ -139,9 +149,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       // Reject cross-site fetches even when Origin is absent (img/script/no-cors).
       // Browsers set Sec-Fetch-Site to `cross-site` for such loads; legitimate same-origin
       // navigations/fetches send `same-origin` or `same-site`. curl/server-side callers omit it.
-      const secFetchSite =
-        typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
-      if (secFetchSite === 'cross-site') {
+      if (isForbiddenCrossSiteFetch(request)) {
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 403,
@@ -209,6 +217,15 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     '/v1/subscriptions/cancel/google-form-link',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
     async (request, reply) => {
+      if (isForbiddenCrossSiteFetch(request)) {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Cross-site fetch is not allowed',
+        });
+      }
+
       const { origin, memberSessionToken } = extractRequestContext(request);
 
       const req: CancelFormLinkRequest = {
@@ -309,6 +326,15 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
+      if (isForbiddenCrossSiteFetch(request)) {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Cross-site fetch is not allowed',
+        });
+      }
+
       const { origin, linkSessionToken } = extractRequestContext(request);
 
       const req: CancelRequest = {

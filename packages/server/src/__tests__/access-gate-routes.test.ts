@@ -245,6 +245,18 @@ describe('POST /v1/access-gate/verify', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('returns 403 when Sec-Fetch-Site is cross-site', async () => {
+    const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/access-gate/verify',
+      headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' },
+      body: JSON.stringify({ passcode: GATE_CODE }),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('accepts passcode with surrounding whitespace after trim', async () => {
     const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
     const app = buildApp(APP_CONFIG, deps);
