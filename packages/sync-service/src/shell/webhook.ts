@@ -1,7 +1,7 @@
 /**
  * sync-service Webhook Handler — Phase 2b (Green)
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { LogEntry } from '@hayane/shared';
 import {
   buildTokenMismatchLog,
@@ -94,7 +94,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
   if (ignoreReason) {
     try {
       await insertPayjpEvent(deps.db, {
-        id: event.id ?? `unknown-${crypto.randomUUID()}`,
+        id: event.id ?? `unknown-${randomUUID()}`,
         event_type: event.type ?? 'unknown',
         payload: event,
         process_status: 'ignored',
@@ -112,7 +112,7 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
   if (!fieldResult.ok) {
     try {
       await insertPayjpEvent(deps.db, {
-        id: event.id ?? `unknown-${crypto.randomUUID()}`,
+        id: event.id ?? `unknown-${randomUUID()}`,
         event_type: event.type ?? 'unknown',
         payload: event,
         process_status: 'failed',
