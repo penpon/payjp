@@ -5,7 +5,7 @@ export default defineConfig({
     name: '@hayane/frontend',
     globals: true,
     environment: 'happy-dom',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'functions/**/*.test.ts'],
     testTimeout: 30000,
   },
 });

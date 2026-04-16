@@ -10,6 +10,8 @@
  *   CF_API_ORIGIN  e.g. https://api.example.com  (no trailing slash)
  */
 
+import { prepareV1ProxyTarget } from './v1-proxy.js';
+
 interface Env {
   CF_API_ORIGIN: string;
 }
@@ -21,12 +23,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return new Response('CF_API_ORIGIN is not configured', { status: 502 });
   }
 
-  const origin = env.CF_API_ORIGIN.replace(/\/$/, '');
-  const route = Array.isArray(params.route) ? params.route.join('/') : (params.route ?? '');
-  const incomingUrl = new URL(request.url);
-  const targetUrl = `${origin}/v1/${route}${incomingUrl.search}`;
+  const rawRoute = params.route;
+  const routeSegments = Array.isArray(rawRoute) ? rawRoute : rawRoute != null && rawRoute !== '' ? [rawRoute] : [];
 
-  const proxyRequest = new Request(targetUrl, {
+  const incomingUrl = new URL(request.url);
+  const prepared = prepareV1ProxyTarget(env.CF_API_ORIGIN, routeSegments, incomingUrl.search);
+  if (!prepared.ok) {
+    return new Response(prepared.body, { status: prepared.status });
+  }
+
+  const proxyRequest = new Request(prepared.targetUrl, {
     method: request.method,
     headers: request.headers,
     body: request.body,
