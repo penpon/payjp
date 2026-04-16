@@ -284,9 +284,16 @@ function injectOpts(
     withCookie?: boolean;
     withMemberCookie?: boolean;
     secFetchSite?: string;
+    omitOrigin?: boolean;
   } = {},
 ): InjectOptions {
-  const { origin = FRONTEND_BASE_URL, withCookie = true, withMemberCookie = false, secFetchSite } = overrides;
+  const {
+    origin = FRONTEND_BASE_URL,
+    withCookie = true,
+    withMemberCookie = false,
+    secFetchSite,
+    omitOrigin = false,
+  } = overrides;
   const cookies: Record<string, string> = {};
   if (withCookie) {
     cookies['__Host-link_session'] = LINK_SESSION_TOKEN;
@@ -295,7 +302,10 @@ function injectOpts(
     cookies['__Host-member_session'] = MEMBER_SESSION_TOKEN;
   }
 
-  const headers: Record<string, string> = { origin, 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (!omitOrigin) {
+    headers.origin = origin;
+  }
   if (secFetchSite !== undefined) {
     headers['sec-fetch-site'] = secFetchSite;
   }
@@ -768,6 +778,14 @@ describe('POST /v1/subscriptions/cancel', () => {
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
   });
 
+  it('returns 403 when Origin header is omitted', async () => {
+    const app = createApp(makeCancelDeps());
+    const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload(), { omitOrigin: true }));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
   it('returns 409 when no active subscription', async () => {
     const deps = makeCancelDeps();
     (deps.db.findMemberByDiscordUserId as ReturnType<typeof vi.fn>).mockResolvedValue(makeMember());
@@ -920,6 +938,14 @@ describe('POST /v1/subscriptions/cancel/google-form-link', () => {
     const res = await app.inject(
       injectOpts(URL, {}, { withCookie: false, withMemberCookie: true, secFetchSite: 'cross-site' }),
     );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
+  });
+
+  it('returns 403 when Origin header is omitted', async () => {
+    const app = createApp(makeMockDeps());
+    const res = await app.inject(injectOpts(URL, {}, { withCookie: false, withMemberCookie: true, omitOrigin: true }));
 
     expect(res.statusCode).toBe(403);
     expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
