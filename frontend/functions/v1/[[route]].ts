@@ -10,6 +10,8 @@
  *   CF_API_ORIGIN  e.g. https://api.example.com  (no trailing slash)
  */
 
+import { isUnsafeV1ApiProxyRoute } from './cf-api-proxy-path.js';
+
 interface Env {
   CF_API_ORIGIN: string;
 }
@@ -23,6 +25,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const origin = env.CF_API_ORIGIN.replace(/\/$/, '');
   const route = Array.isArray(params.route) ? params.route.join('/') : (params.route ?? '');
+  if (isUnsafeV1ApiProxyRoute(route)) {
+    return new Response('Bad Request', { status: 400 });
+  }
   const incomingUrl = new URL(request.url);
   const targetUrl = `${origin}/v1/${route}${incomingUrl.search}`;
 
