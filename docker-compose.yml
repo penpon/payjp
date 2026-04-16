@@ -118,6 +118,9 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       ADMIN_FRONTEND_ORIGIN: ${ADMIN_FRONTEND_ORIGIN:-https://admin.and--line.com}
+      # Optional: set both to enable Cf-Access-Jwt-Assertion verification (production behind Cloudflare Access).
+      CLOUDFLARE_ACCESS_TEAM_DOMAIN: ${CLOUDFLARE_ACCESS_TEAM_DOMAIN:-}
+      CLOUDFLARE_ACCESS_AUDIENCE: ${CLOUDFLARE_ACCESS_AUDIENCE:-}
       PORT: "3011"
     depends_on:
       db:

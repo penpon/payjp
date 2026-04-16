@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import type { Pool } from 'pg';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { registerAdminRoutes } from '../routes.js';
 
 async function makeApp(mockQuery: ReturnType<typeof vi.fn>) {
@@ -9,9 +9,30 @@ async function makeApp(mockQuery: ReturnType<typeof vi.fn>) {
   return app;
 }
 
-const ACCESS_HEADERS = {
-  'cf-access-authenticated-user-email': 'operator@example.com',
+/** Default local auth for tests (JWT env vars unset). Must match `beforeAll` ADMIN_API_KEY. */
+const LOCAL_AUTH_HEADERS = {
+  'x-admin-audit-actor': 'operator@example.com',
+  'x-admin-api-key': 'test-local-key',
 };
+
+const originalAdminApiKey = process.env.ADMIN_API_KEY;
+const originalCfTeam = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
+const originalCfAud = process.env.CLOUDFLARE_ACCESS_AUDIENCE;
+
+beforeAll(() => {
+  delete process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
+  delete process.env.CLOUDFLARE_ACCESS_AUDIENCE;
+  process.env.ADMIN_API_KEY = 'test-local-key';
+});
+
+afterAll(() => {
+  if (originalAdminApiKey === undefined) delete process.env.ADMIN_API_KEY;
+  else process.env.ADMIN_API_KEY = originalAdminApiKey;
+  if (originalCfTeam === undefined) delete process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
+  else process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN = originalCfTeam;
+  if (originalCfAud === undefined) delete process.env.CLOUDFLARE_ACCESS_AUDIENCE;
+  else process.env.CLOUDFLARE_ACCESS_AUDIENCE = originalCfAud;
+});
 
 const VALID_UUID = 'a0000000-0000-4000-a000-000000000099';
 
@@ -92,7 +113,7 @@ describe('admin routes (read-only)', () => {
       .mockResolvedValueOnce({ rows: [{ c: '3' }] })
       .mockResolvedValueOnce({ rows: [{ c: '1' }] });
     const app = await makeApp(mockQuery);
-    const res = await app.inject({ method: 'GET', url: '/admin/overview', headers: ACCESS_HEADERS });
+    const res = await app.inject({ method: 'GET', url: '/admin/overview', headers: LOCAL_AUTH_HEADERS });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
     expect(body.ok).toBe(true);
@@ -125,7 +146,7 @@ describe('admin routes (read-only)', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members?limit=10&page=1',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { total: number; members: unknown[]; limit: number };
@@ -139,7 +160,7 @@ describe('admin routes (read-only)', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members/not-a-uuid',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(400);
   });
@@ -148,7 +169,7 @@ describe('admin routes (read-only)', () => {
 describe('admin routes — HTTP method enforcement', () => {
   it.each(['PUT', 'PATCH', 'DELETE'] as const)('%s → 405', async (method) => {
     const app = await makeApp(vi.fn());
-    const res = await app.inject({ method, url: '/admin/overview', headers: ACCESS_HEADERS });
+    const res = await app.inject({ method, url: '/admin/overview', headers: LOCAL_AUTH_HEADERS });
     expect(res.statusCode).toBe(405);
   });
 
@@ -159,7 +180,7 @@ describe('admin routes — HTTP method enforcement', () => {
       .mockResolvedValueOnce({ rows: [{ c: '0' }] })
       .mockResolvedValueOnce({ rows: [{ c: '0' }] });
     const app = await makeApp(mockQuery);
-    const res = await app.inject({ method: 'HEAD', url: '/admin/overview', headers: ACCESS_HEADERS });
+    const res = await app.inject({ method: 'HEAD', url: '/admin/overview', headers: LOCAL_AUTH_HEADERS });
     expect(res.statusCode).toBe(200);
   });
 });
@@ -223,7 +244,7 @@ describe('admin routes — GET /admin/members/:memberId', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/admin/members/${VALID_UUID}`,
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { ok: boolean; member: { id: string } };
@@ -237,7 +258,7 @@ describe('admin routes — GET /admin/members/:memberId', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/admin/members/${VALID_UUID}`,
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: 'not_found' });
@@ -262,7 +283,7 @@ describe('admin routes — GET /admin/members/:memberId/impact-logs', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/admin/members/${VALID_UUID}/impact-logs`,
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { ok: boolean; impactLogs: unknown[] };
@@ -276,7 +297,7 @@ describe('admin routes — GET /admin/members/:memberId/impact-logs', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/admin/members/${VALID_UUID}/impact-logs?resolved=all`,
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const sql = mockQuery.mock.calls[0]?.[0] as string;
@@ -290,7 +311,7 @@ describe('admin routes — GET /admin/members/:memberId/impact-logs', () => {
     await app.inject({
       method: 'GET',
       url: `/admin/members/${VALID_UUID}/impact-logs?resolved=true`,
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     const sql = mockQuery.mock.calls[0]?.[0] as string;
     expect(sql).toContain('resolved_at IS NOT NULL');
@@ -301,7 +322,7 @@ describe('admin routes — GET /admin/members/:memberId/impact-logs', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members/not-uuid/impact-logs',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(400);
   });
@@ -321,7 +342,7 @@ describe('admin routes — pagination boundary values', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members?page=0&limit=10',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const params = mockQuery.mock.calls[1]?.[1] as unknown[];
@@ -335,7 +356,7 @@ describe('admin routes — pagination boundary values', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members?page=1&limit=-1',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const params = mockQuery.mock.calls[1]?.[1] as unknown[];
@@ -349,7 +370,7 @@ describe('admin routes — pagination boundary values', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members?page=1&limit=999',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const params = mockQuery.mock.calls[1]?.[1] as unknown[];
@@ -363,7 +384,7 @@ describe('admin routes — pagination boundary values', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members?page=abc',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { page: number };
@@ -376,7 +397,7 @@ describe('admin routes — pagination boundary values', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/members?page=999999',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { members: unknown[] };
@@ -398,7 +419,7 @@ describe('admin routes — filter parameters', () => {
     await app.inject({
       method: 'GET',
       url: '/admin/members?subscription_status=active',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     const sql = mockQuery.mock.calls[0]?.[0] as string;
     expect(sql).toContain('subscription_status IS NOT DISTINCT FROM');
@@ -412,7 +433,7 @@ describe('admin routes — filter parameters', () => {
     await app.inject({
       method: 'GET',
       url: '/admin/members?role_state=granted',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     const sql = mockQuery.mock.calls[0]?.[0] as string;
     expect(sql).toContain('role_state =');
@@ -426,7 +447,7 @@ describe('admin routes — filter parameters', () => {
     await app.inject({
       method: 'GET',
       url: '/admin/members?has_inflight=true',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     const sql = mockQuery.mock.calls[0]?.[0] as string;
     expect(sql).toContain('inflight_operation_id IS NOT NULL');
@@ -438,7 +459,7 @@ describe('admin routes — filter parameters', () => {
     await app.inject({
       method: 'GET',
       url: '/admin/members?has_inflight=false',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     const sql = mockQuery.mock.calls[0]?.[0] as string;
     expect(sql).toContain('inflight_operation_id IS NULL');
@@ -450,7 +471,7 @@ describe('admin routes — filter parameters', () => {
     await app.inject({
       method: 'GET',
       url: '/admin/members?q=%25_test',
-      headers: ACCESS_HEADERS,
+      headers: LOCAL_AUTH_HEADERS,
     });
     const params = mockQuery.mock.calls[0]?.[1] as unknown[];
     const likeParam = params[0] as string;
