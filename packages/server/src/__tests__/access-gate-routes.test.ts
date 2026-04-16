@@ -267,7 +267,7 @@ describe('POST /v1/access-gate/verify', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('returns 403 when Sec-Fetch-Site is cross-site', async () => {
+  it('returns 403 when Sec-Fetch-Site is cross-site and Origin is absent', async () => {
     const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
     const app = buildApp(APP_CONFIG, deps);
     const res = await app.inject({
@@ -277,6 +277,27 @@ describe('POST /v1/access-gate/verify', () => {
       body: JSON.stringify({ passcode: GATE_CODE }),
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('allows verify when Sec-Fetch-Site is cross-site but Origin matches frontend (navigation POST)', async () => {
+    const insertAccessGateSession = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      config: { subscribeGateCode: GATE_CODE },
+      db: { insertAccessGateSession },
+    });
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/access-gate/verify',
+      headers: {
+        'content-type': 'application/json',
+        origin: FRONTEND_BASE_URL,
+        'sec-fetch-site': 'cross-site',
+      },
+      body: JSON.stringify({ passcode: GATE_CODE }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(insertAccessGateSession).toHaveBeenCalledTimes(1);
   });
 
   it('accepts passcode with surrounding whitespace after trim', async () => {
