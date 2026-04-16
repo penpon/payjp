@@ -10,7 +10,7 @@
  *   CF_API_ORIGIN  e.g. https://api.example.com  (no trailing slash)
  */
 
-import { isUnsafeV1ApiProxyRoute } from './cf-api-proxy-path.js';
+import { assertSafeProxyRouteSegments, parseApiOrigin } from './api-proxy-validation.js';
 
 interface Env {
   CF_API_ORIGIN: string;
@@ -40,17 +40,21 @@ function parseStrictHttpsOrigin(raw: string): string | null {
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, params } = context;
 
-  const origin = parseStrictHttpsOrigin(env.CF_API_ORIGIN ?? '');
-  if (!origin) {
-    return new Response('CF_API_ORIGIN is not a valid https origin', { status: 502 });
+  const parsed = parseApiOrigin(env.CF_API_ORIGIN);
+  if (!parsed.ok) {
+    const body = parsed.reason === 'missing' ? 'CF_API_ORIGIN is not configured' : 'CF_API_ORIGIN is invalid';
+    return new Response(body, { status: 502 });
   }
 
-  const route = Array.isArray(params.route) ? params.route.join('/') : (params.route ?? '');
-  if (isUnsafeV1ApiProxyRoute(route)) {
+  const routeParts = Array.isArray(params.route) ? params.route : params.route ? [params.route] : [];
+  const safe = assertSafeProxyRouteSegments(routeParts);
+  if (!safe.ok) {
     return new Response('Bad Request', { status: 400 });
   }
+
+  const route = routeParts.join('/');
   const incomingUrl = new URL(request.url);
-  const targetUrl = `${origin}/v1/${route}${incomingUrl.search}`;
+  const targetUrl = `${parsed.origin}/v1/${route}${incomingUrl.search}`;
 
   const proxyRequest = new Request(targetUrl, {
     method: request.method,
