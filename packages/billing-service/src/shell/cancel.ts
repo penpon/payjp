@@ -326,6 +326,7 @@ async function finalizeImmediateCancel(
         statusCode: 503,
         errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
         message: 'Discord role revoke failed after cancel',
+        ...(ctx.operationId !== undefined ? { operationId: ctx.operationId } : {}),
       };
     }
   } else if (member.role_state !== 'revoked' && member.discord_user_id) {
@@ -353,6 +354,7 @@ async function finalizeImmediateCancel(
       statusCode: 503,
       errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
       message: 'Discord role mapping missing for immediate revoke',
+      ...(ctx.operationId !== undefined ? { operationId: ctx.operationId } : {}),
     };
   }
 

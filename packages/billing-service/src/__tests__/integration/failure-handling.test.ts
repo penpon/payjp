@@ -571,7 +571,8 @@ describe('Failure Handling — Integration', () => {
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
         expect(result.errorCode).toBe('DISCORD_ROLE_REVOKE_FAILED');
-        expect(result.operationId).toBeUndefined();
+        // PAY.JP cancel + DB update succeeded (inflight cleared); include operationId for recovery correlation.
+        expect(result.operationId).toBe(OPERATION_ID);
       }
       expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'unknown');
       // §8 item 3: link_session is consumed before PAY.JP write, regardless of outcome
