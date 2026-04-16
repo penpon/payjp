@@ -396,6 +396,20 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       expect(cancelIdx).toBeGreaterThanOrEqual(0);
       expect(inflightIdx).toBeLessThan(cancelIdx);
     });
+
+    it('returns 503 without operationId when setInflightOperation fails (no persisted inflight row)', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db write failed'));
+
+      const result = await handleCancel(makeCancelRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBeUndefined();
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
