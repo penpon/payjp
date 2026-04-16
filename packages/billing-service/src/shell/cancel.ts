@@ -5,7 +5,7 @@
  * - Google Form path: POST /v1/subscriptions/cancel/google-form-link
  * - Apps Script callback: POST /v1/subscriptions/cancel/google-submit
  */
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Member } from '@hayane/shared';
 import {
   buildCancelFormLinkResponse,
@@ -20,6 +20,7 @@ import {
   memberSessionTokenHash,
   normalizeEmail,
   verifyGoogleCancelSubmitSignature,
+  verifySharedPasscode,
   verifySignedCancelFormToken,
 } from '../core/index.js';
 import { isUncertainError } from './errors.js';
@@ -36,17 +37,6 @@ import type {
 function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<string, unknown> = {}): void {
   const entry = maskSensitiveLogFields({ level, service: 'billing-cancel', message, ...ctx });
   console[level](JSON.stringify(entry));
-}
-
-function secureCompare(a: string, b: string): boolean {
-  // Empty vs empty would hash to identical digests; reject so a missing/empty
-  // shared secret cannot authenticate (mirrors verifySharedPasscode guard).
-  if (a.length === 0 || b.length === 0) {
-    return false;
-  }
-  const left = createHash('sha256').update(a).digest();
-  const right = createHash('sha256').update(b).digest();
-  return timingSafeEqual(left, right);
 }
 
 function cancelLockKey(member: Member): string {
@@ -455,7 +445,7 @@ export async function handleGoogleCancelSubmit(
 ): Promise<CancelResult> {
   const now = deps.clock();
 
-  if (!secureCompare(req.secret, deps.config.googleFormCancelSecret)) {
+  if (!verifySharedPasscode(req.secret, deps.config.googleFormCancelSecret)) {
     return { ok: false, statusCode: 401, errorCode: 'INVALID_GOOGLE_SECRET', message: 'Invalid Google secret' };
   }
 
