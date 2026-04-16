@@ -6,13 +6,8 @@ import { randomBytes } from 'node:crypto';
 import type { BillingDeps } from '@hayane/billing-service';
 import { accessGateSessionTokenHash, isSameOrigin, verifySharedPasscode } from '@hayane/billing-service';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-
-/** Reject cross-site browser requests that omit Origin (e.g. form posts). curl omits Sec-Fetch-Site. */
-function isForbiddenCrossSiteFetch(request: FastifyRequest): boolean {
-  const secFetchSite = typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
-  return secFetchSite === 'cross-site';
-}
+import type { FastifyInstance } from 'fastify';
+import { isForbiddenCrossSiteFetch } from '../cross-site-fetch.js';
 
 export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
   const { billingDeps } = opts;

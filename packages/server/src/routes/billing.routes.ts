@@ -19,12 +19,7 @@ import {
 import type { Member } from '@hayane/shared';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-
-/** Reject cross-site browser requests that omit Origin (e.g. form posts). curl omits Sec-Fetch-Site. */
-function isForbiddenCrossSiteFetch(request: FastifyRequest): boolean {
-  const secFetchSite = typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
-  return secFetchSite === 'cross-site';
-}
+import { isForbiddenCrossSiteFetch } from '../cross-site-fetch.js';
 
 function extractRequestContext(request: FastifyRequest): {
   body: Record<string, unknown> | null;
@@ -154,9 +149,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       // Reject cross-site fetches even when Origin is absent (img/script/no-cors).
       // Browsers set Sec-Fetch-Site to `cross-site` for such loads; legitimate same-origin
       // navigations/fetches send `same-origin` or `same-site`. curl/server-side callers omit it.
-      const secFetchSite =
-        typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : '';
-      if (secFetchSite === 'cross-site') {
+      if (isForbiddenCrossSiteFetch(request)) {
         return sendBillingResponse(reply, {
           ok: false,
           statusCode: 403,
