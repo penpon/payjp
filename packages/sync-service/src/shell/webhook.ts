@@ -198,7 +198,8 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
   // --- Transactional section: lock + stale check + status update + event insert ---
   // Uses withTransaction to guarantee all queries run on the same connection (BEGIN/COMMIT/ROLLBACK)
-  const lockKey = (member.discord_user_id as string | null) ?? (member.id as string);
+  // Lock key must match billing-service ("member:<UUID>") to ensure mutual exclusion
+  const lockKey = `member:${member.id as string}`;
 
   type TxResult =
     | { type: 'member_not_found' }

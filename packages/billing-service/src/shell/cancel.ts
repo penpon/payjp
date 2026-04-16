@@ -48,11 +48,14 @@ function cancelLockKey(member: Member): string {
   return `member:${member.id}`;
 }
 
-async function applyImmediateCancelState(
+type ImmediateCancelPrecheck = { next: 'finalize'; member: Member } | { next: 'payjp'; member: Member };
+
+/** Pre-PAY.JP guards only (subscription state, inflight, ids). Browser flow consumes link_session after this, before PAY.JP. */
+async function immediateCancelPrecheck(
   member: Member,
   deps: BillingDeps,
   now: Date,
-): Promise<{ member: Member; operationId?: string } | OperationError> {
+): Promise<ImmediateCancelPrecheck | OperationError> {
   if (!hasCancelableSubscription(member.subscription_status)) {
     return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No cancelable subscription found' };
   }
@@ -67,9 +70,37 @@ async function applyImmediateCancelState(
     };
   }
 
+  // V3-H1: Guard against canceled status with null cancel_requested_at
+  if (member.subscription_status === 'canceled' && member.cancel_requested_at === null) {
+    slog('warn', 'canceled status with null cancel_requested_at — normalizing', { memberId: member.id });
+    try {
+      const normalizedMember = await deps.db.updateMemberAfterCancel(member.id, {
+        cancel_requested_at: now,
+        subscription_status: 'canceled',
+        access_end_at: member.access_end_at ?? now,
+        next_billing_at: member.next_billing_at ?? member.access_end_at,
+        inflight_operation_id: null,
+        inflight_operation_type: null,
+        inflight_operation_started_at: null,
+      });
+      return { next: 'finalize', member: normalizedMember };
+    } catch (err) {
+      slog('error', 'Failed to normalize canceled+null state', {
+        memberId: member.id,
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to normalize cancel state',
+      };
+    }
+  }
+
   if (member.cancel_requested_at !== null) {
     if (member.subscription_status === 'canceled' && member.access_end_at !== null) {
-      return { member };
+      return { next: 'finalize', member };
     }
     try {
       const normalizedMember = await deps.db.updateMemberAfterCancel(member.id, {
@@ -81,7 +112,7 @@ async function applyImmediateCancelState(
         inflight_operation_type: null,
         inflight_operation_started_at: null,
       });
-      return { member: normalizedMember };
+      return { next: 'finalize', member: normalizedMember };
     } catch (err) {
       slog('error', 'Failed to normalize already-canceled member state', {
         memberId: member.id,
@@ -114,6 +145,14 @@ async function applyImmediateCancelState(
     };
   }
 
+  return { next: 'payjp', member };
+}
+
+async function immediateCancelPayjpWrite(
+  member: Member,
+  deps: BillingDeps,
+  now: Date,
+): Promise<{ member: Member; operationId: string } | OperationError> {
   const operationId = deps.generateOperationId();
   try {
     await deps.db.setInflightOperation(member.id, operationId, 'cancel', now);
@@ -128,9 +167,34 @@ async function applyImmediateCancelState(
     };
   }
 
+  // `prepareImmediateCancel` guarantees this, but TS can't narrow across function boundaries.
+  const subscriptionId = member.payjp_subscription_id;
+  if (subscriptionId === null) {
+    slog('error', 'payjp_subscription_id is null after inflight set (unexpected)', {
+      memberId: member.id,
+      operationId,
+    });
+    try {
+      await deps.db.clearInflightOperation(member.id);
+    } catch (clearErr) {
+      slog('error', 'clearInflightOperation failed after unexpected null payjp_subscription_id', {
+        memberId: member.id,
+        operationId,
+        error: String(clearErr),
+      });
+    }
+    return {
+      ok: false,
+      statusCode: 409,
+      errorCode: 'NO_PAYJP_SUBSCRIPTION',
+      message: 'payjp_subscription_id is null',
+      operationId,
+    };
+  }
+
   let canceledSubscription: Awaited<ReturnType<typeof deps.payjp.cancelSubscription>>;
   try {
-    canceledSubscription = await deps.payjp.cancelSubscription(member.payjp_subscription_id);
+    canceledSubscription = await deps.payjp.cancelSubscription(subscriptionId);
   } catch (err) {
     if (isUncertainError(err)) {
       slog('error', 'PAY.JP cancelSubscription uncertain failure', {
@@ -155,7 +219,7 @@ async function applyImmediateCancelState(
       error: String(err),
     });
     try {
-      const refetched = await deps.payjp.fetchSubscription(member.payjp_subscription_id);
+      const refetched = await deps.payjp.fetchSubscription(subscriptionId);
       if (refetched.status !== 'canceled') {
         try {
           await deps.db.clearInflightOperation(member.id);
@@ -196,7 +260,7 @@ async function applyImmediateCancelState(
     canceledSubscription.current_period_end != null && canceledSubscription.current_period_end !== 0
       ? new Date(canceledSubscription.current_period_end * 1000)
       : member.next_billing_at;
-  const periodEnd = nextBillingAt ?? now;
+  const periodEnd = nextBillingAt ?? member.access_end_at ?? now;
 
   try {
     const updatedMember = await deps.db.updateMemberAfterCancel(member.id, {
@@ -232,7 +296,6 @@ async function finalizeImmediateCancel(
   ctx: {
     flow: 'browser' | 'google-submit';
     operationId?: string;
-    finalizeSuccess?: () => Promise<void>;
   },
 ): Promise<CancelResult> {
   const roleId = member.payjp_plan_id ? (deps.config.planRoleMapping[member.payjp_plan_id] ?? null) : null;
@@ -244,6 +307,13 @@ async function finalizeImmediateCancel(
       await deps.db.updateMemberRoleState(member.id, 'revoked');
       roleRemovalAt = deps.clock();
     } catch (err) {
+      // V3-M2: Log role revoke failure regardless of role_state update outcome
+      slog('error', 'Discord role revoke failed', {
+        memberId: member.id,
+        flow: ctx.flow,
+        operationId: ctx.operationId,
+        error: String(err),
+      });
       try {
         await deps.db.updateMemberRoleState(member.id, 'unknown');
       } catch (roleStateErr) {
@@ -261,10 +331,18 @@ async function finalizeImmediateCancel(
         statusCode: 503,
         errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
         message: 'Discord role revoke failed after cancel',
-        operationId: ctx.operationId,
       };
     }
   } else if (member.role_state !== 'revoked' && member.discord_user_id) {
+    // PAY.JP cancel succeeded but role mapping missing — partial success
+    // inflight already cleared by immediate cancel PAY.JP path, so log and continue
+    slog('error', 'Role mapping missing for immediate revoke after cancel', {
+      memberId: member.id,
+      planId: member.payjp_plan_id,
+      flow: ctx.flow,
+      operationId: ctx.operationId,
+      issue: 'unmapped_plan_after_cancel',
+    });
     try {
       await deps.db.updateMemberRoleState(member.id, 'unknown');
     } catch (roleStateErr) {
@@ -280,28 +358,7 @@ async function finalizeImmediateCancel(
       statusCode: 503,
       errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
       message: 'Discord role mapping missing for immediate revoke',
-      operationId: ctx.operationId,
     };
-  }
-
-  if (ctx.finalizeSuccess) {
-    try {
-      await ctx.finalizeSuccess();
-    } catch (err) {
-      slog('error', 'Finalize-after-success step failed', {
-        memberId: member.id,
-        flow: ctx.flow,
-        operationId: ctx.operationId,
-        error: String(err),
-      });
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'DB_UPDATE_FAILED',
-        message: 'Failed to finalize cancel state',
-        operationId: ctx.operationId,
-      };
-    }
   }
 
   return { ok: true, data: buildCancelResponse(member, roleRemovalAt) };
@@ -499,7 +556,38 @@ export async function handleGoogleCancelSubmit(
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No member found for token' };
     }
 
-    const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
+    const pre = await immediateCancelPrecheck(lockedMember, deps, now);
+    if ('ok' in pre) {
+      return pre;
+    }
+
+    // §8 item 3: consume cancel form token after pre-PAY.JP guards (same order as browser
+    // link_session), before PAY.JP write
+    // V3-M3: Add try/catch for consumeCancelFormToken to prevent silent propagation
+    try {
+      await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
+    } catch (err) {
+      slog('error', 'consumeCancelFormToken failed', {
+        memberId: lockedMember.id,
+        flow: 'google-submit',
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to consume token',
+      };
+    }
+
+    if (pre.next === 'finalize') {
+      return await finalizeImmediateCancel(pre.member, deps, {
+        flow: 'google-submit',
+        operationId: undefined,
+      });
+    }
+
+    const cancelState = await immediateCancelPayjpWrite(pre.member, deps, now);
     if ('ok' in cancelState) {
       return cancelState;
     }
@@ -507,9 +595,6 @@ export async function handleGoogleCancelSubmit(
     return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'google-submit',
       operationId: cancelState.operationId,
-      finalizeSuccess: async () => {
-        await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
-      },
     });
   } finally {
     try {
@@ -556,7 +641,36 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
 
-    const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
+    const pre = await immediateCancelPrecheck(lockedMember, deps, now);
+    if ('ok' in pre) {
+      return pre;
+    }
+
+    // §8 item 3: consume link session after lock and pre-PAY.JP guards, before PAY.JP write
+    try {
+      await deps.db.consumeLinkSession(tokenHash, now);
+    } catch (err) {
+      slog('error', 'consumeLinkSession failed', {
+        memberId: lockedMember.id,
+        flow: 'browser',
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to consume session',
+      };
+    }
+
+    if (pre.next === 'finalize') {
+      return await finalizeImmediateCancel(pre.member, deps, {
+        flow: 'browser',
+        operationId: undefined,
+      });
+    }
+
+    const cancelState = await immediateCancelPayjpWrite(pre.member, deps, now);
     if ('ok' in cancelState) {
       return cancelState;
     }
@@ -564,9 +678,6 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'browser',
       operationId: cancelState.operationId,
-      finalizeSuccess: async () => {
-        await deps.db.consumeLinkSession(tokenHash, now);
-      },
     });
   } finally {
     try {

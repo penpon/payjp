@@ -175,7 +175,14 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     // Step 6: Existing subscription short-circuit (after gate; does not leak existence pre-gate)
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
+      // Non-fatal: session token issuance failure should not fail an already-active subscription response.
       const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
+      if (memberSessionToken === undefined) {
+        slog('warn', 'session_token_issuance_failed_step6', {
+          email: normalizedEmail,
+          memberId: member.id,
+        });
+      }
       return {
         ok: true,
         data: response,
@@ -209,6 +216,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
     } catch (err) {
       slog('error', 'PAY.JP token fetch failed', { email: normalizedEmail, operationId, error: String(err) });
+      if (isUncertainError(err)) {
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'PAYJP_UNCERTAIN',
+          message: 'Uncertain failure during token verification',
+          operationId,
+        };
+      }
       try {
         await db.clearInflightOperation(member.id);
       } catch (clearErr) {
@@ -356,6 +372,16 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         if (member.payjp_initial_charge_id) {
           try {
             const existingCharge = await payjp.fetchCharge(member.payjp_initial_charge_id);
+            if (!existingCharge.paid) {
+              await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createCharge');
+              return {
+                ok: false,
+                statusCode: 422,
+                errorCode: 'PAYJP_ERROR',
+                message: 'Stored charge was not paid',
+                operationId,
+              };
+            }
             initialChargeId = existingCharge.id;
           } catch (reconcileErr) {
             slog('error', 'Charge reconciliation failed', {
@@ -390,6 +416,16 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             statusCode: 503,
             errorCode: 'PAYJP_ERROR',
             message: 'No charge ID available',
+            operationId,
+          };
+        }
+        if (!charge.paid) {
+          await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createCharge');
+          return {
+            ok: false,
+            statusCode: 422,
+            errorCode: 'PAYJP_ERROR',
+            message: 'Charge was not paid',
             operationId,
           };
         }
@@ -444,6 +480,23 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       if (member.payjp_subscription_id) {
         try {
           const existingSub = await payjp.fetchSubscription(member.payjp_subscription_id);
+          // V3-M4: Validate reconciled subscription status
+          if (existingSub.status !== 'active' && existingSub.status !== 'trial') {
+            await clearInflightOnDefinitePayjpFailure(
+              db,
+              member.id,
+              normalizedEmail,
+              operationId,
+              'createSubscription',
+            );
+            return {
+              ok: false,
+              statusCode: 422,
+              errorCode: 'PAYJP_ERROR',
+              message: 'Reconciled subscription not active',
+              operationId,
+            };
+          }
           subscription = existingSub;
         } catch (reconcileErr) {
           slog('error', 'Subscription reconciliation failed', {

@@ -201,7 +201,7 @@ function makeMockDeps(memberOverrides: Partial<Member> = {}): BillingDeps {
     clearMemberDiscordUserId: vi.fn().mockResolvedValue(undefined),
     acquireAdvisoryLock: vi.fn().mockResolvedValue(true),
     releaseAdvisoryLock: vi.fn().mockResolvedValue(undefined),
-    withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn({})),
+    withTransactionLock: vi.fn().mockImplementation((_key: string, fn: (txDb: unknown) => Promise<unknown>) => fn(db)),
   };
 
   const payjp: PayjpClient = {
@@ -948,6 +948,49 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     expect(deps.discord.removeRole).toHaveBeenCalledWith('guild-001', DISCORD_USER_ID, 'role-plan-001');
     expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'revoked');
     expect(deps.db.consumeCancelFormToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('orders google-submit as consumeCancelFormToken -> setInflightOperation -> cancelSubscription', async () => {
+    const deps = createGoogleSubmitDeps();
+    const app = createApp(deps);
+    const callOrder: string[] = [];
+    (deps.db.consumeCancelFormToken as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callOrder.push('consumeCancelFormToken');
+    });
+    (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callOrder.push('setInflightOperation');
+    });
+    (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callOrder.push('cancelSubscription');
+      return makePayjpSubscription({ status: 'canceled' });
+    });
+
+    const linkRes = await app.inject(
+      injectOpts('/v1/subscriptions/cancel/google-form-link', {}, { withCookie: false, withMemberCookie: true }),
+    );
+    const formUrl = (linkRes.json() as { formUrl: string }).formUrl;
+    const token = decodeURIComponent(formUrl.match(/[?&]entry\.2222222222=([^&]+)/)?.[1] ?? '');
+    const signature = computeGoogleCancelSubmitSignature('google-shared-secret', { email: EMAIL, token });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-cancel-secret': 'google-shared-secret',
+        'x-cancel-signature': signature,
+      },
+      payload: {
+        email: EMAIL,
+        name: 'Test User',
+        reason: 'Need to cancel',
+        token,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(callOrder.indexOf('consumeCancelFormToken')).toBeLessThan(callOrder.indexOf('setInflightOperation'));
+    expect(callOrder.indexOf('setInflightOperation')).toBeLessThan(callOrder.indexOf('cancelSubscription'));
   });
 
   it('accepts legacy X-Google-Cancel-Secret when X-Cancel-Secret is absent (signature still required)', async () => {

@@ -4,7 +4,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import type { BillingDeps } from '@hayane/billing-service';
-import { accessGateSessionTokenHash, verifySharedPasscode } from '@hayane/billing-service';
+import { accessGateSessionTokenHash, isSameOrigin, verifySharedPasscode } from '@hayane/billing-service';
 import { buildCookieAttributes, serializeCookieAttributes } from '@hayane/shared';
 import type { FastifyInstance } from 'fastify';
 
@@ -52,6 +52,11 @@ export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps
       },
     },
     async (request, reply) => {
+      const origin = request.headers.origin ?? null;
+      if (origin && !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
       const expected = billingDeps.config.subscribeGateCode ?? '';
       if (!expected) {
         return reply.status(404).send({ error: 'Not Found' });
@@ -82,10 +87,18 @@ export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps
       const ttl = billingDeps.config.accessGateSessionTtlSeconds;
       const sessionExpires = new Date(now.getTime() + ttl * 1000);
 
-      await billingDeps.db.insertAccessGateSession({
-        accessGateSessionTokenHash: sessionHash,
-        expiresAt: sessionExpires,
-      });
+      try {
+        await billingDeps.db.insertAccessGateSession({
+          accessGateSessionTokenHash: sessionHash,
+          expiresAt: sessionExpires,
+        });
+      } catch {
+        return reply.status(503).send({
+          ok: false,
+          errorCode: 'DB_ERROR',
+          message: 'Failed to create access gate session',
+        });
+      }
 
       const attrs = buildCookieAttributes('__Host-access_gate', ttl);
       reply.header('Set-Cookie', serializeCookieAttributes(attrs, rawSession));

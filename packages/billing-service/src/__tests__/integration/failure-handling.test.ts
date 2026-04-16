@@ -311,6 +311,21 @@ describe('Failure Handling — Integration', () => {
       // clearInflightOperation は呼ばれない (inflight を保持)
       expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
+
+    it('fetchToken uncertain failure returns 503 PAYJP_UNCERTAIN and retains inflight', async () => {
+      const deps = makeSubscribeDeps();
+      (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError('fetch failed'));
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('PAYJP_UNCERTAIN');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -409,6 +424,47 @@ describe('Failure Handling — Integration', () => {
         expect(result.statusCode).toBe(422);
         expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
       }
+    });
+
+    it('definite createCharge failure + existing unpaid charge → 422 and clear inflight', async () => {
+      const deps = makeSubscribeDeps({ payjp_initial_charge_id: 'ch_existing_unpaid' });
+      const definiteError = Object.assign(new Error('definite charge error'), { status: 402 });
+      (deps.payjp.createCharge as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
+      (deps.payjp.fetchCharge as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'ch_existing_unpaid',
+        amount: 1000,
+        paid: false,
+        metadata: {},
+      });
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(422);
+        expect(result.errorCode).toBe('PAYJP_ERROR');
+        expect(result.message).toBe('Stored charge was not paid');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+    });
+
+    it('definite createCharge failure + existing paid charge → continues subscription flow', async () => {
+      const deps = makeSubscribeDeps({ payjp_initial_charge_id: 'ch_existing_paid' });
+      const definiteError = Object.assign(new Error('definite charge error'), { status: 402 });
+      (deps.payjp.createCharge as ReturnType<typeof vi.fn>).mockRejectedValue(definiteError);
+      (deps.payjp.fetchCharge as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'ch_existing_paid',
+        amount: 1000,
+        paid: true,
+        metadata: {},
+      });
+
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+
+      expect(result.ok).toBe(true);
+      expect(deps.payjp.createSubscription).toHaveBeenCalledTimes(1);
+      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -515,10 +571,11 @@ describe('Failure Handling — Integration', () => {
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
         expect(result.errorCode).toBe('DISCORD_ROLE_REVOKE_FAILED');
-        expect(result.operationId).toBe(OPERATION_ID);
+        expect(result.operationId).toBeUndefined();
       }
       expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'unknown');
-      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
+      // §8 item 3: link_session is consumed before PAY.JP write, regardless of outcome
+      expect(deps.db.consumeLinkSession).toHaveBeenCalled();
     });
   });
 

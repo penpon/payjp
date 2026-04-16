@@ -13,6 +13,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  if (!process.argv.includes('--yes') && process.env.INVALIDATE_CONFIRM !== '1') {
+    process.stderr.write(
+      'This will TRUNCATE access_gate_sessions, invalidating ALL active sessions.\nPass --yes or set INVALIDATE_CONFIRM=1 to confirm.\n',
+    );
+    process.exit(1);
+  }
+
   const pool = new pg.Pool({ connectionString: databaseUrl });
   try {
     await pool.query('TRUNCATE access_gate_sessions');

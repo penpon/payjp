@@ -138,13 +138,14 @@ export function makePlainDiscordClient(): DiscordClient {
 export function buildSyncDepsForE2EPlain(
   pool: pg.Pool,
   syncRole: (userId: string, action: 'grant' | 'revoke', roleId: string) => Promise<void> = async () => {},
+  planRoleMapping: Record<string, string> = E2E_PLAN_ROLE_MAPPING,
 ): SyncDeps {
   const webhookDeps: WebhookHandlerDeps = {
     db: createPgPool(pool),
     payjpWebhookToken: E2E_WEBHOOK_TOKEN,
     expectedLivemode: false,
     discordGuildId: E2E_BILLING_CONFIG.discordGuildId,
-    planRoleMapping: E2E_PLAN_ROLE_MAPPING,
+    planRoleMapping,
     syncRole,
     log: () => {},
   };

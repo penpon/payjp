@@ -71,9 +71,9 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           type: 'object',
           required: ['planId', 'email', 'payjpToken', 'privacyConsented'],
           properties: {
-            planId: { type: 'string', maxLength: 50 },
-            email: { type: 'string', maxLength: 254 },
-            payjpToken: { type: 'string', maxLength: 100 },
+            planId: { type: 'string', minLength: 1, maxLength: 50 },
+            email: { type: 'string', minLength: 1, maxLength: 254 },
+            payjpToken: { type: 'string', minLength: 1, maxLength: 100 },
             privacyConsented: { type: 'boolean' },
           },
           additionalProperties: false,
@@ -305,7 +305,9 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
 
   app.post(
     '/v1/subscriptions/cancel',
-    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    {
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
     async (request, reply) => {
       const { origin, linkSessionToken } = extractRequestContext(request);
 

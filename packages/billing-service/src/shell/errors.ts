@@ -37,6 +37,10 @@ export function isUncertainError(err: unknown): boolean {
   ) {
     return true;
   }
+  // Deterministic PAY.JP token lookup failure used in local/e2e mocks.
+  if (msg.includes('no such token')) {
+    return false;
+  }
 
   // HTTP status code detection (PAY.JP SDK may attach status to error)
   const status =

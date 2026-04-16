@@ -233,6 +233,18 @@ describe('POST /v1/access-gate/verify', () => {
     expect((res.json() as { errorCode?: string }).errorCode).toBe('INVALID_GATE_PASSCODE');
   });
 
+  it('returns 403 on cross-origin request', async () => {
+    const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/access-gate/verify',
+      headers: { 'content-type': 'application/json', origin: 'https://evil.com' },
+      body: JSON.stringify({ passcode: GATE_CODE }),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('accepts passcode with surrounding whitespace after trim', async () => {
     const deps = makeDeps({ config: { subscribeGateCode: GATE_CODE } });
     const app = buildApp(APP_CONFIG, deps);
@@ -262,6 +274,22 @@ describe('POST /v1/access-gate/verify', () => {
     expect(insertAccessGateSession).toHaveBeenCalledTimes(1);
     const setCookie = res.headers['set-cookie'] as string;
     expect(String(setCookie)).toContain('__Host-access_gate=');
+  });
+
+  it('returns 503 + DB_ERROR when access gate session insert fails', async () => {
+    const deps = makeDeps({
+      config: { subscribeGateCode: GATE_CODE },
+      db: { insertAccessGateSession: vi.fn().mockRejectedValue(new Error('db unavailable')) },
+    });
+    const app = buildApp(APP_CONFIG, deps);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/access-gate/verify',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ passcode: GATE_CODE }),
+    });
+    expect(res.statusCode).toBe(503);
+    expect((res.json() as { errorCode?: string }).errorCode).toBe('DB_ERROR');
   });
 });
 

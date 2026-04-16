@@ -6,7 +6,8 @@
 
 import type { CancelFormTokenRecord, LinkSessionRecord, Member } from '@hayane/shared';
 import { describe, expect, it, vi } from 'vitest';
-import { handleCancel } from '../../shell/cancel.js';
+import { computeGoogleCancelSubmitSignature, createSignedCancelFormToken, normalizeEmail } from '../../core/index.js';
+import { handleCancel, handleGoogleCancelSubmit } from '../../shell/cancel.js';
 import type { BillingConfig, BillingDeps, DbClient, DiscordClient, PayjpClient } from '../../shell/types.js';
 
 // -------------------------------------------------------------------------
@@ -193,6 +194,32 @@ function makeCancelRequest(overrides: Record<string, string> = {}) {
     origin: 'https://frontend.example.com',
     linkSessionToken: LINK_SESSION_TOKEN,
     ...overrides,
+  };
+}
+
+function makeGoogleCancelSubmitRequest(overrides: { token?: string; email?: string } = {}) {
+  const config = makeConfig();
+  const email = overrides.email ?? 'test@example.com';
+  const token =
+    overrides.token ??
+    createSignedCancelFormToken(
+      {
+        jti: makeCancelFormToken().id,
+        memberId: MEMBER_ID,
+        email: normalizeEmail(email),
+        exp: Math.floor(NOW.getTime() / 1000) + 3600,
+        nonce: 'nonce-google-cancel-test',
+      },
+      config.googleFormCancelTokenSecret,
+    );
+  const signature = computeGoogleCancelSubmitSignature(config.googleFormCancelSecret, { email, token });
+  return {
+    email,
+    name: 'Test',
+    reason: 'reason',
+    token,
+    secret: config.googleFormCancelSecret,
+    signature,
   };
 }
 
@@ -419,7 +446,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
   // PROP-BILL-061: Cancel inflight guard
   // -------------------------------------------------------------------------
   describe('PROP-BILL-061: Cancel inflight guard', () => {
-    it('503 + existing operationId; link session not consumed (retry same token)', async () => {
+    it('503 + existing operationId; link session remains reusable when inflight exists', async () => {
       const existingOpId = 'existing-cancel-op-456';
       const deps = makeSuccessfulDeps({
         inflight_operation_id: existingOpId,
@@ -431,7 +458,24 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
         expect(result.statusCode).toBe(503);
         expect(result.operationId).toBe(existingOpId);
       }
+      // inflight reject path keeps link_session unconsumed so the client can retry.
       expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
+    });
+
+    it('503 + existing operationId; cancel form token remains unconsumed when inflight exists (google-submit)', async () => {
+      const existingOpId = 'existing-cancel-op-789';
+      const deps = makeSuccessfulDeps({
+        inflight_operation_id: existingOpId,
+        inflight_operation_type: 'cancel',
+      });
+      const result = await handleGoogleCancelSubmit(makeGoogleCancelSubmitRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.operationId).toBe(existingOpId);
+        expect(result.errorCode).toBe('INFLIGHT_OPERATION');
+      }
+      expect(deps.db.consumeCancelFormToken).not.toHaveBeenCalled();
     });
   });
 
@@ -492,16 +536,17 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const idxRemoveRole = callOrder.indexOf('removeRole');
       const idxUpdateRoleState = callOrder.indexOf('updateMemberRoleState');
 
-      // findSession → findMember(initial) → Lock → findMember(locked) → setInflight
-      //   → cancelSubscription → updateMember → removeRole → updateRoleState → consumeSession
+      // §8 item 3: consumeSession after pre-PAY.JP guards, before setInflight / PAY.JP.
+      // findSession → findMember(initial) → Lock → findMember(locked) → consumeSession
+      //   → setInflight → cancelSubscription → updateMember → removeRole → updateRoleState
       expect(idxFindSession).toBeLessThan(idxLock);
       expect(idxFindMember).toBeLessThan(idxLock);
-      expect(idxLock).toBeLessThan(idxInflight);
+      expect(idxLock).toBeLessThan(idxConsumeSession);
+      expect(idxConsumeSession).toBeLessThan(idxInflight);
       expect(idxInflight).toBeLessThan(idxCancel);
       expect(idxCancel).toBeLessThan(idxUpdateMember);
       expect(idxUpdateMember).toBeLessThan(idxRemoveRole);
       expect(idxRemoveRole).toBeLessThan(idxUpdateRoleState);
-      expect(idxUpdateRoleState).toBeLessThan(idxConsumeSession);
     });
   });
 });

@@ -92,31 +92,84 @@ export async function runResyncCli(args: string[], deps: CliDeps): Promise<CliOu
   const mode = parsed.mode!;
 
   if (mode === 'operation-id') {
-    const result = await handleOperationRecovery(parsed.value!, deps, startedAt);
-    processed = 1;
-    if (result.success) succeeded = 1;
-    else failed = 1;
-  } else if (mode === 'discord-user-id') {
-    const result = await handleUserReconciliation(parsed.value!, deps);
-    if (result.notFound) {
-      // Member not found → CLI error (exit 1)
-      const finishedAt = deps.now();
-      return {
-        exitCode: 1,
-        result: buildCliResult({
-          mode,
-          target: parsed.value!,
-          processedCount: 0,
-          succeededCount: 0,
-          failedCount: 0,
-          startedAt,
-          finishedAt,
-        }),
-      };
+    // V3-M7: Add try/catch for handleOperationRecovery
+    try {
+      const result = await handleOperationRecovery(parsed.value!, deps, startedAt);
+      processed = 1;
+      if (result.success) succeeded = 1;
+      else failed = 1;
+    } catch (err) {
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/resync',
+        result: 'error',
+        error: 'handleOperationRecovery_failed',
+        operation_id: parsed.value,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      try {
+        const idRes = await deps.db.query('SELECT id FROM members WHERE inflight_operation_id = $1', [parsed.value]);
+        const row = idRes.rows[0] as { id: string } | undefined;
+        if (row) {
+          await insertImpactLog(deps.db, row.id, 'cli_operation_recovery_failed', parsed.value, {
+            error: String(err),
+          });
+        }
+      } catch {
+        /* ignore secondary DB errors */
+      }
+      processed = 1;
+      failed = 1;
     }
-    processed = 1;
-    if (result.success) succeeded = 1;
-    else failed = 1;
+  } else if (mode === 'discord-user-id') {
+    // V3-M7: Add try/catch for handleUserReconciliation
+    try {
+      const result = await handleUserReconciliation(parsed.value!, deps);
+      if (result.notFound) {
+        // Member not found → CLI error (exit 1)
+        const finishedAt = deps.now();
+        return {
+          exitCode: 1,
+          result: buildCliResult({
+            mode,
+            target: parsed.value!,
+            processedCount: 0,
+            succeededCount: 0,
+            failedCount: 0,
+            startedAt,
+            finishedAt,
+          }),
+        };
+      }
+      processed = 1;
+      if (result.success) succeeded = 1;
+      else failed = 1;
+    } catch (err) {
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/resync',
+        result: 'error',
+        error: 'handleUserReconciliation_failed',
+        discord_user_id: parsed.value,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      try {
+        const idRes = await deps.db.query('SELECT id FROM members WHERE discord_user_id = $1', [parsed.value]);
+        const row = idRes.rows[0] as { id: string } | undefined;
+        if (row) {
+          await insertImpactLog(deps.db, row.id, 'cli_user_reconciliation_failed', undefined, {
+            error: String(err),
+            discord_user_id: parsed.value,
+          });
+        }
+      } catch {
+        /* ignore secondary DB errors */
+      }
+      processed = 1;
+      failed = 1;
+    }
   } else {
     // --all
     const result = await handleAllReconciliation(deps);
@@ -194,6 +247,16 @@ async function handleOperationRecovery(
     return handleCancelRecovery(member, operationId, deps, resyncStartedAt);
   }
 
+  deps.log({
+    timestamp: formatRfc3339Utc(deps.now()),
+    service: 'sync-service',
+    endpoint: 'cli/resync',
+    result: 'error',
+    error: 'unknown_operation_type',
+    member_id: member.id as string,
+    operation_id: operationId,
+    operation_type: operationType,
+  });
   return { success: false };
 }
 
@@ -232,7 +295,11 @@ async function handleSubscribeRecovery(
 
   if (!chargeId && isFirstTime) {
     // Step 3: Search charges
-    const inflightStartedAt = member.inflight_operation_started_at as Date;
+    const inflightStartedAt = member.inflight_operation_started_at as Date | null;
+    if (!inflightStartedAt) {
+      await insertImpactLog(deps.db, memberId, 'subscribe_recovery_no_inflight_started_at', operationId);
+      return { success: false };
+    }
     const inflightUnix = Math.floor(inflightStartedAt.getTime() / 1000);
     const searchParams = buildChargeSearchParams(customerId, inflightUnix);
 
@@ -268,17 +335,51 @@ async function handleSubscribeRecovery(
     } else {
       // proceed: create charge (plan-based amount)
       const amount = deps.planInitialChargeAmounts[planId] ?? 1000;
-      const charge = await deps.createPayjpCharge({
-        customer: customerId,
-        amount,
-        currency: deps.initialChargeCurrency,
-        metadata: { ...metaBase },
-      });
-      chargeId = charge.id;
-      await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
-        chargeId,
-        memberId,
-      ]);
+      // V3-M9: Add try/catch for createPayjpCharge
+      try {
+        const charge = await deps.createPayjpCharge({
+          customer: customerId,
+          amount,
+          currency: deps.initialChargeCurrency,
+          metadata: { ...metaBase },
+        });
+        chargeId = charge.id;
+        try {
+          await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
+            chargeId,
+            memberId,
+          ]);
+        } catch (dbErr) {
+          deps.log({
+            timestamp: formatRfc3339Utc(deps.now()),
+            service: 'sync-service',
+            endpoint: 'cli/subscribe-recovery',
+            result: 'error',
+            error: 'payjp_createCharge_db_update_failed',
+            member_id: memberId,
+            operation_id: operationId,
+            payjp_charge_id: chargeId,
+            errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          });
+          await insertImpactLog(deps.db, memberId, 'subscribe_recovery_payjp_charge_db_update_failed', operationId, {
+            payjp_charge_id: chargeId,
+          });
+          return { success: false };
+        }
+      } catch (err) {
+        deps.log({
+          timestamp: formatRfc3339Utc(deps.now()),
+          service: 'sync-service',
+          endpoint: 'cli/subscribe-recovery',
+          result: 'failure',
+          error: 'payjp_createCharge_failed',
+          member_id: memberId,
+          operation_id: operationId,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+        await insertImpactLog(deps.db, memberId, 'subscribe_recovery_payjp_charge_failed', operationId);
+        return { success: false };
+      }
     }
   }
 
@@ -318,12 +419,52 @@ async function handleSubscribeRecovery(
       if (isFirstTime) {
         subParams.trial_end = Math.floor(calculateTrialEnd(deps.now()).getTime() / 1000);
       }
-      const sub = await deps.createPayjpSubscription(subParams);
-      subscriptionId = sub.id;
-      await deps.db.query(
-        'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
-        [subscriptionId, sub.status, memberId],
-      );
+      // V3-M9: Add try/catch for createPayjpSubscription
+      try {
+        const sub = await deps.createPayjpSubscription(subParams);
+        subscriptionId = sub.id;
+        try {
+          await deps.db.query(
+            'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
+            [subscriptionId, sub.status, memberId],
+          );
+        } catch (dbErr) {
+          deps.log({
+            timestamp: formatRfc3339Utc(deps.now()),
+            service: 'sync-service',
+            endpoint: 'cli/subscribe-recovery',
+            result: 'error',
+            error: 'payjp_createSubscription_db_update_failed',
+            member_id: memberId,
+            operation_id: operationId,
+            payjp_subscription_id: subscriptionId,
+            errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          });
+          await insertImpactLog(
+            deps.db,
+            memberId,
+            'subscribe_recovery_payjp_subscription_db_update_failed',
+            operationId,
+            {
+              payjp_subscription_id: subscriptionId,
+            },
+          );
+          return { success: false };
+        }
+      } catch (err) {
+        deps.log({
+          timestamp: formatRfc3339Utc(deps.now()),
+          service: 'sync-service',
+          endpoint: 'cli/subscribe-recovery',
+          result: 'failure',
+          error: 'payjp_createSubscription_failed',
+          member_id: memberId,
+          operation_id: operationId,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+        await insertImpactLog(deps.db, memberId, 'subscribe_recovery_payjp_subscription_failed', operationId);
+        return { success: false };
+      }
     }
   }
 
@@ -441,11 +582,28 @@ async function handleCancelRecovery(
   }
 
   if (payjpSub.status !== 'canceled') {
-    await deps.cancelPayjpSubscription(subscriptionId);
+    // V3-M9: Add try/catch for PAY.JP API call
+    try {
+      await deps.cancelPayjpSubscription(subscriptionId);
+    } catch (err) {
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/cancel-recovery',
+        result: 'failure',
+        error: 'payjp_cancel_failed',
+        member_id: memberId,
+        operation_id: operationId,
+        payjp_subscription_id: subscriptionId,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      await insertImpactLog(deps.db, memberId, 'cancel_recovery_payjp_call_failed', operationId);
+      return { success: false };
+    }
   }
 
   // Step 5: Clear inflight on confirmed integrity
-  if (canResolveInflightOperation('canceled', subscriptionId, subscriptionId, customerId)) {
+  if (canResolveInflightOperation('canceled', payjpSub.id as string, subscriptionId, customerId)) {
     const periodEndUnix = (payjpSub as { current_period_end?: number }).current_period_end;
     const periodEndDate = periodEndUnix != null && periodEndUnix !== 0 ? new Date(periodEndUnix * 1000) : deps.now();
     await deps.db.query(
@@ -506,10 +664,31 @@ async function handleAllReconciliation(
       const result = await reconcileMember(member, deps);
       if (result.success) succeeded++;
       else failed++;
-    } catch {
+    } catch (err) {
       failed++;
-      // REQ-SYNC-030: Continue processing
-      await insertImpactLog(deps.db, member.id as string, 'resync_individual_error', undefined);
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/resync',
+        result: 'error',
+        error: 'reconcile_member_threw',
+        member_id: member.id as string,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      // REQ-SYNC-030: Continue processing — best-effort impact log
+      try {
+        await insertImpactLog(deps.db, member.id as string, 'resync_individual_error', undefined);
+      } catch (impactErr) {
+        deps.log({
+          timestamp: formatRfc3339Utc(deps.now()),
+          service: 'sync-service',
+          endpoint: 'cli/resync',
+          result: 'error',
+          error: 'impact_log_insert_failed_in_error_path',
+          member_id: member.id as string,
+          errorMessage: impactErr instanceof Error ? impactErr.message : String(impactErr),
+        });
+      }
     }
   }
 
@@ -518,13 +697,19 @@ async function handleAllReconciliation(
 
 async function reconcileMember(member: Record<string, unknown>, deps: CliDeps): Promise<RecoveryResult> {
   const memberId = member.id as string;
-  const discordUserId = member.discord_user_id as string;
+  // V3-M8: Handle nullable discord_user_id (DROP NOT NULL in migration)
+  const discordUserId = member.discord_user_id as string | null;
   const subscriptionId = member.payjp_subscription_id as string | null;
   const planId = member.payjp_plan_id as string | null;
 
   // Skip members with inflight operations — these must be resolved via --operation-id (count as failure for --all)
   if (member.inflight_operation_id) {
     return { success: false };
+  }
+
+  // V3-M8: Skip role sync if discord_user_id is null
+  if (!discordUserId) {
+    return { success: true };
   }
 
   let discordSyncAttempted = false;
@@ -622,8 +807,19 @@ async function syncRoleIds(
   for (const roleId of roleIds) {
     try {
       await deps.syncRole(discordUserId, action, roleId);
-    } catch {
+    } catch (err) {
       allOk = false;
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/syncRoleIds',
+        result: 'error',
+        error: 'sync_role_failed',
+        discord_user_id: discordUserId,
+        action,
+        role_id: roleId,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
     }
   }
   return allOk;
