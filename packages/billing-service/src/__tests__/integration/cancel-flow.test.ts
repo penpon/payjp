@@ -419,7 +419,7 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
   // PROP-BILL-061: Cancel inflight guard
   // -------------------------------------------------------------------------
   describe('PROP-BILL-061: Cancel inflight guard', () => {
-    it('503 + existing operationId; link session consumed before PAY.JP write (§8 item 3)', async () => {
+    it('503 + existing operationId; link session remains reusable when inflight exists', async () => {
       const existingOpId = 'existing-cancel-op-456';
       const deps = makeSuccessfulDeps({
         inflight_operation_id: existingOpId,
@@ -431,8 +431,8 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
         expect(result.statusCode).toBe(503);
         expect(result.operationId).toBe(existingOpId);
       }
-      // §8 item 3: link_session consumed after lock, before PAY.JP write
-      expect(deps.db.consumeLinkSession).toHaveBeenCalled();
+      // inflight reject path keeps link_session unconsumed so the client can retry.
+      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
     });
   });
 
@@ -493,13 +493,13 @@ describe('POST /v1/subscriptions/cancel — Integration', () => {
       const idxRemoveRole = callOrder.indexOf('removeRole');
       const idxUpdateRoleState = callOrder.indexOf('updateMemberRoleState');
 
-      // §8 item 3: consumeSession before PAY.JP write, after lock
-      // findSession → findMember(initial) → Lock → findMember(locked) → consumeSession
-      //   → setInflight → cancelSubscription → updateMember → removeRole → updateRoleState
+      // Pre-PAY.JP guards (including inflight) run before session consumption.
+      // findSession → findMember(initial) → Lock → findMember(locked) → setInflight
+      //   → consumeSession → cancelSubscription → updateMember → removeRole → updateRoleState
       expect(idxFindSession).toBeLessThan(idxLock);
       expect(idxFindMember).toBeLessThan(idxLock);
-      expect(idxLock).toBeLessThan(idxConsumeSession);
-      expect(idxConsumeSession).toBeLessThan(idxInflight);
+      expect(idxLock).toBeLessThan(idxInflight);
+      expect(idxInflight).toBeLessThan(idxConsumeSession);
       expect(idxInflight).toBeLessThan(idxCancel);
       expect(idxCancel).toBeLessThan(idxUpdateMember);
       expect(idxUpdateMember).toBeLessThan(idxRemoveRole);

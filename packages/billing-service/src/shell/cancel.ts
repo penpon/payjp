@@ -592,8 +592,13 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
 
-    // §8 item 3: consume link_session before PAY.JP write, after lock acquisition
-    // V3-M3: Add try/catch for consumeLinkSession to prevent silent propagation
+    const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
+    if ('ok' in cancelState) {
+      return cancelState;
+    }
+
+    // Keep link_session reusable when we only reject by pre-PAY.JP guards
+    // (e.g. existing inflight operation). Consume it only when proceeding past guards.
     try {
       await deps.db.consumeLinkSession(tokenHash, now);
     } catch (err) {
@@ -608,11 +613,6 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
         errorCode: 'DB_UPDATE_FAILED',
         message: 'Failed to consume session',
       };
-    }
-
-    const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
-    if ('ok' in cancelState) {
-      return cancelState;
     }
 
     return await finalizeImmediateCancel(cancelState.member, deps, {
