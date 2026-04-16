@@ -34,10 +34,10 @@
     "clean": "rm -rf logs/nginx/* test-results/* playwright-report/* entities.json node_modules/.cache 2>/dev/null || true"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.11",
+    "@biomejs/biome": "^2.4.12",
     "@playwright/test": "^1.56.1",
     "@types/node": "^25",
-    "lefthook": "^2.1.5",
+    "lefthook": "^2.1.6",
     "tsx": "^4.21.0",
     "vitest": "^3.2.4"
   }
