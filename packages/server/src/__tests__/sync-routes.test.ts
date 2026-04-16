@@ -167,6 +167,41 @@ describe('POST /v1/payjp/webhook', () => {
     expect(res.json().error).toBe('Unauthorized');
   });
 
+  it('returns 401 when x-payjp-webhook-token is comma-combined (RFC 7230 duplicate fields)', async () => {
+    const app = createApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: WEBHOOK_URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-payjp-webhook-token': `${WEBHOOK_TOKEN}, ${WEBHOOK_TOKEN}`,
+      },
+      payload: makeEvent(),
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe('Unauthorized');
+  });
+
+  it('returns 401 when x-payjp-webhook-token is provided as multiple header lines (string[])', async () => {
+    const app = Fastify({ logger: false });
+    await app.register(fastifyCookie);
+    await app.register(syncRoutes, { syncDeps: makeSyncDeps() });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: WEBHOOK_URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-payjp-webhook-token': [WEBHOOK_TOKEN, WEBHOOK_TOKEN],
+      },
+      payload: makeEvent(),
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe('Unauthorized');
+  });
+
   it('token mismatch audit log uses socket IP, not X-Forwarded-For (when trustProxy is on)', async () => {
     const log = vi.fn();
     const deps = makeSyncDeps();
