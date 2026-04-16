@@ -356,6 +356,16 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         if (member.payjp_initial_charge_id) {
           try {
             const existingCharge = await payjp.fetchCharge(member.payjp_initial_charge_id);
+            if (!existingCharge.paid) {
+              await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createCharge');
+              return {
+                ok: false,
+                statusCode: 422,
+                errorCode: 'PAYJP_ERROR',
+                message: 'Stored charge was not paid',
+                operationId,
+              };
+            }
             initialChargeId = existingCharge.id;
           } catch (reconcileErr) {
             slog('error', 'Charge reconciliation failed', {

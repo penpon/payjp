@@ -518,7 +518,8 @@ describe('Failure Handling — Integration', () => {
         expect(result.operationId).toBe(OPERATION_ID);
       }
       expect(deps.db.updateMemberRoleState).toHaveBeenCalledWith(MEMBER_ID, 'unknown');
-      expect(deps.db.consumeLinkSession).not.toHaveBeenCalled();
+      // §8 item 3: link_session is consumed before PAY.JP write, regardless of outcome
+      expect(deps.db.consumeLinkSession).toHaveBeenCalled();
     });
   });
 

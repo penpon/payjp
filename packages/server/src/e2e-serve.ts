@@ -90,7 +90,7 @@ async function main(): Promise<void> {
         plan_enterprise: 70000,
       },
     },
-    syncDeps: buildSyncDepsForE2EPlain(pool),
+    syncDeps: buildSyncDepsForE2EPlain(pool, async () => {}, E2E_BROWSER_PLAN_ROLES),
   });
 
   await app.listen({ port: E2E_API_PORT, host: '0.0.0.0' });

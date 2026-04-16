@@ -194,6 +194,16 @@ async function handleOperationRecovery(
     return handleCancelRecovery(member, operationId, deps, resyncStartedAt);
   }
 
+  deps.log({
+    timestamp: formatRfc3339Utc(deps.now()),
+    service: 'sync-service',
+    endpoint: 'cli/resync',
+    result: 'error',
+    error: 'unknown_operation_type',
+    member_id: member.id as string,
+    operation_id: operationId,
+    operation_type: operationType,
+  });
   return { success: false };
 }
 
@@ -506,10 +516,23 @@ async function handleAllReconciliation(
       const result = await reconcileMember(member, deps);
       if (result.success) succeeded++;
       else failed++;
-    } catch {
+    } catch (err) {
       failed++;
-      // REQ-SYNC-030: Continue processing
-      await insertImpactLog(deps.db, member.id as string, 'resync_individual_error', undefined);
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/resync',
+        result: 'error',
+        error: 'reconcile_member_threw',
+        member_id: member.id as string,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      // REQ-SYNC-030: Continue processing — best-effort impact log
+      try {
+        await insertImpactLog(deps.db, member.id as string, 'resync_individual_error', undefined);
+      } catch {
+        /* best-effort */
+      }
     }
   }
 
@@ -622,8 +645,19 @@ async function syncRoleIds(
   for (const roleId of roleIds) {
     try {
       await deps.syncRole(discordUserId, action, roleId);
-    } catch {
+    } catch (err) {
       allOk = false;
+      deps.log({
+        timestamp: formatRfc3339Utc(deps.now()),
+        service: 'sync-service',
+        endpoint: 'cli/syncRoleIds',
+        result: 'error',
+        error: 'sync_role_failed',
+        discord_user_id: discordUserId,
+        action,
+        role_id: roleId,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
     }
   }
   return allOk;

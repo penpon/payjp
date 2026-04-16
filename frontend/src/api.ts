@@ -88,13 +88,9 @@ export class SubscriptionStatusError extends Error {
   }
 }
 
-async function readSubscriptionStatusErrorMessage(res: Response, fallbackMessage: string): Promise<string> {
-  const body: unknown = await res.json().catch((parseErr) => {
-    console.warn('[api] Failed to parse subscription status error body:', parseErr);
-    return {};
-  });
-  const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-  return typeof obj.message === 'string' ? obj.message : fallbackMessage;
+async function readSubscriptionStatusErrorMessage(_res: Response, fallbackMessage: string): Promise<string> {
+  // Use fixed fallback only — do not pass arbitrary server messages into error objects
+  return fallbackMessage;
 }
 
 export async function fetchSubscriptionStatus(): Promise<SubscriptionInfo | null> {

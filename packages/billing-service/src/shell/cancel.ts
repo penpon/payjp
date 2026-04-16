@@ -196,7 +196,7 @@ async function applyImmediateCancelState(
     canceledSubscription.current_period_end != null && canceledSubscription.current_period_end !== 0
       ? new Date(canceledSubscription.current_period_end * 1000)
       : member.next_billing_at;
-  const periodEnd = nextBillingAt ?? now;
+  const periodEnd = nextBillingAt ?? member.access_end_at ?? now;
 
   try {
     const updatedMember = await deps.db.updateMemberAfterCancel(member.id, {
@@ -232,7 +232,6 @@ async function finalizeImmediateCancel(
   ctx: {
     flow: 'browser' | 'google-submit';
     operationId?: string;
-    finalizeSuccess?: () => Promise<void>;
   },
 ): Promise<CancelResult> {
   const roleId = member.payjp_plan_id ? (deps.config.planRoleMapping[member.payjp_plan_id] ?? null) : null;
@@ -265,6 +264,15 @@ async function finalizeImmediateCancel(
       };
     }
   } else if (member.role_state !== 'revoked' && member.discord_user_id) {
+    // PAY.JP cancel succeeded but role mapping missing — partial success
+    // inflight already cleared by applyImmediateCancelState, so log and continue
+    slog('error', 'Role mapping missing for immediate revoke after cancel', {
+      memberId: member.id,
+      planId: member.payjp_plan_id,
+      flow: ctx.flow,
+      operationId: ctx.operationId,
+      issue: 'unmapped_plan_after_cancel',
+    });
     try {
       await deps.db.updateMemberRoleState(member.id, 'unknown');
     } catch (roleStateErr) {
@@ -282,26 +290,6 @@ async function finalizeImmediateCancel(
       message: 'Discord role mapping missing for immediate revoke',
       operationId: ctx.operationId,
     };
-  }
-
-  if (ctx.finalizeSuccess) {
-    try {
-      await ctx.finalizeSuccess();
-    } catch (err) {
-      slog('error', 'Finalize-after-success step failed', {
-        memberId: member.id,
-        flow: ctx.flow,
-        operationId: ctx.operationId,
-        error: String(err),
-      });
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'DB_UPDATE_FAILED',
-        message: 'Failed to finalize cancel state',
-        operationId: ctx.operationId,
-      };
-    }
   }
 
   return { ok: true, data: buildCancelResponse(member, roleRemovalAt) };
@@ -499,6 +487,9 @@ export async function handleGoogleCancelSubmit(
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No member found for token' };
     }
 
+    // §8 item 3: consume cancel form token before PAY.JP write, after lock acquisition
+    await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
+
     const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
     if ('ok' in cancelState) {
       return cancelState;
@@ -507,9 +498,6 @@ export async function handleGoogleCancelSubmit(
     return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'google-submit',
       operationId: cancelState.operationId,
-      finalizeSuccess: async () => {
-        await deps.db.consumeCancelFormToken(verifiedToken.payload.jti, now);
-      },
     });
   } finally {
     try {
@@ -556,6 +544,9 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
       return { ok: false, statusCode: 409, errorCode: 'NO_SUBSCRIPTION', message: 'No active subscription found' };
     }
 
+    // §8 item 3: consume link_session before PAY.JP write, after lock acquisition
+    await deps.db.consumeLinkSession(tokenHash, now);
+
     const cancelState = await applyImmediateCancelState(lockedMember, deps, now);
     if ('ok' in cancelState) {
       return cancelState;
@@ -564,9 +555,6 @@ export async function handleCancel(req: CancelRequest, deps: BillingDeps): Promi
     return await finalizeImmediateCancel(cancelState.member, deps, {
       flow: 'browser',
       operationId: cancelState.operationId,
-      finalizeSuccess: async () => {
-        await deps.db.consumeLinkSession(tokenHash, now);
-      },
     });
   } finally {
     try {
