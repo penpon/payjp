@@ -1,9 +1,11 @@
+import fastifyCookie from '@fastify/cookie';
 import { createInMemoryAuthDb } from '@hayane/auth-service/test-utils';
 import type { DbPool } from '@hayane/shared';
 import type { WebhookHandlerDeps } from '@hayane/sync-service';
+import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
-import type { SyncDeps } from '../routes/sync.routes.js';
+import { type SyncDeps, syncRoutes } from '../routes/sync.routes.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -163,6 +165,32 @@ describe('POST /v1/payjp/webhook', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().error).toBe('Unauthorized');
+  });
+
+  it('token mismatch audit log uses socket IP, not X-Forwarded-For (when trustProxy is on)', async () => {
+    const log = vi.fn();
+    const deps = makeSyncDeps();
+    deps.webhookDeps.log = log;
+
+    const app = Fastify({ logger: false, trustProxy: true });
+    await app.register(fastifyCookie);
+    await app.register(syncRoutes, { syncDeps: deps });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: WEBHOOK_URL,
+      headers: {
+        'content-type': 'application/json',
+        'x-payjp-webhook-token': 'wrong-token',
+        'x-forwarded-for': '203.0.113.50',
+      },
+      payload: makeEvent(),
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(log).toHaveBeenCalled();
+    const entry = log.mock.calls[0][0] as { remote_ip?: string };
+    expect(entry.remote_ip).not.toBe('203.0.113.50');
   });
 
   it('returns 200 with ok:true on valid event', async () => {
