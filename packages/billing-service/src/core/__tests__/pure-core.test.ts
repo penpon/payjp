@@ -127,15 +127,15 @@ describe('PROP-BILL-003: hasActiveSubscription', () => {
   const past = new Date('2026-03-01T00:00:00Z');
 
   it.each([
-    { status: 'active', accessEndAt: future, expected: true },
-    { status: 'trial', accessEndAt: future, expected: true },
-    { status: 'canceled', accessEndAt: future, expected: true },
-    { status: 'canceled', accessEndAt: past, expected: false },
+    { status: 'active', accessEndAt: future, expected: true, label: '' },
+    { status: 'trial', accessEndAt: future, expected: true, label: '' },
+    { status: 'canceled', accessEndAt: future, expected: true, label: '' },
+    { status: 'canceled', accessEndAt: past, expected: false, label: '' },
     { status: 'canceled', accessEndAt: now, expected: false, label: 'boundary: accessEndAt == now' },
-    { status: 'paused', accessEndAt: future, expected: false },
-    { status: 'deleted', accessEndAt: null, expected: false },
-    { status: null, accessEndAt: null, expected: false },
-  ])('status=$status, accessEndAt=$accessEndAt → $expected ($label)', ({ status, accessEndAt, expected }) => {
+    { status: 'paused', accessEndAt: future, expected: false, label: '' },
+    { status: 'deleted', accessEndAt: null, expected: false, label: '' },
+    { status: null, accessEndAt: null, expected: false, label: '' },
+  ])('status=$status, accessEndAt=$accessEndAt → $expected $label', ({ status, accessEndAt, expected }) => {
     expect(hasActiveSubscription(status, accessEndAt, now)).toBe(expected);
   });
 });
