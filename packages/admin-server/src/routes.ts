@@ -68,9 +68,7 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
       return reply.status(405).send({ error: 'read_only', message: 'Only GET is allowed' });
     }
 
-    const teamDomain = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN?.trim() ?? '';
-    const accessAudience = process.env.CLOUDFLARE_ACCESS_AUDIENCE?.trim() ?? '';
-    if (teamDomain && accessAudience) {
+    if (cfTeamDomain && cfAudience) {
       const jwtAssertion = parseHeaderValue(request.headers['cf-access-jwt-assertion']);
       if (!jwtAssertion) {
         return reply.status(401).send({
@@ -80,8 +78,8 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
       }
       const verified = await verifyCfAccessJwt({
         token: jwtAssertion,
-        teamDomain,
-        audience: accessAudience,
+        teamDomain: cfTeamDomain,
+        audience: cfAudience,
         ...(cfAccessJwks ? { jwks: cfAccessJwks } : {}),
       });
       if (verified.ok) {

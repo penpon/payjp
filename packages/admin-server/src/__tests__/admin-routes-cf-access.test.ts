@@ -78,6 +78,34 @@ describe('admin routes — Cloudflare Access JWT', () => {
     );
   });
 
+  describe('CLOUDFLARE_ACCESS_* unset at route registration', () => {
+    beforeEach(() => {
+      delete process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
+      delete process.env.CLOUDFLARE_ACCESS_AUDIENCE;
+      delete process.env.ADMIN_API_KEY;
+      vi.mocked(verifyCfAccessJwt).mockReset();
+    });
+
+    it('does not use Cloudflare Access path when CLOUDFLARE_ACCESS_* are set only after registerAdminRoutes', async () => {
+      vi.mocked(verifyCfAccessJwt).mockResolvedValue({ ok: true, email: 'late@example.com' });
+
+      const app = Fastify();
+      await registerAdminRoutes(app, { pool: { query: vi.fn() } as unknown as Pool });
+
+      process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN = 'team.cloudflareaccess.com';
+      process.env.CLOUDFLARE_ACCESS_AUDIENCE = 'audience-tag-123';
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/overview',
+        headers: { 'cf-access-jwt-assertion': 'eyJhbGciOiJSUzI1NiJ9.late' },
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(verifyCfAccessJwt).not.toHaveBeenCalled();
+    });
+  });
+
   it('401 when verifyCfAccessJwt returns failure', async () => {
     vi.mocked(verifyCfAccessJwt).mockResolvedValue({ ok: false, reason: 'expired' });
     const logLines: string[] = [];
