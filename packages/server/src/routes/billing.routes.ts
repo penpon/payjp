@@ -37,6 +37,23 @@ function extractRequestContext(request: FastifyRequest): {
   };
 }
 
+/**
+ * Browser POSTs must send `Origin` matching FRONTEND_BASE_URL. Non-browser clients omit
+ * `Sec-Fetch-Site`, so `isForbiddenCrossSiteFetch` alone does not reject missing Origin.
+ */
+function forbiddenUnlessFrontendOrigin(request: FastifyRequest, billingDeps: BillingDeps, reply: FastifyReply) {
+  const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+  if (!origin || !isSameOrigin(origin, billingDeps.config.frontendBaseUrl)) {
+    return sendBillingResponse(reply, {
+      ok: false,
+      statusCode: 403,
+      errorCode: 'FORBIDDEN_ORIGIN',
+      message: 'Origin not allowed',
+    });
+  }
+  return undefined;
+}
+
 /** Same entitlement rule as subscribe / sync: active/trial, or canceled until access_end_at. */
 function subscriptionStatusBodyForMember(
   member: Member,
@@ -89,6 +106,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           errorCode: 'FORBIDDEN_ORIGIN',
           message: 'Cross-site fetch is not allowed',
         });
+      }
+
+      const originDenied = forbiddenUnlessFrontendOrigin(request, billingDeps, reply);
+      if (originDenied !== undefined) {
+        return originDenied;
       }
 
       const { body, origin, linkSessionToken, accessGateSessionToken } = extractRequestContext(request);
@@ -226,6 +248,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         });
       }
 
+      const originDenied = forbiddenUnlessFrontendOrigin(request, billingDeps, reply);
+      if (originDenied !== undefined) {
+        return originDenied;
+      }
+
       const { origin, memberSessionToken } = extractRequestContext(request);
       // Browser POSTs from the configured frontend always send Origin; require it so
       // cookie-authenticated flows cannot be driven by non-browser clients without a forged header.
@@ -352,6 +379,11 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           errorCode: 'FORBIDDEN_ORIGIN',
           message: 'Cross-site fetch is not allowed',
         });
+      }
+
+      const originDenied = forbiddenUnlessFrontendOrigin(request, billingDeps, reply);
+      if (originDenied !== undefined) {
+        return originDenied;
       }
 
       const { origin, linkSessionToken } = extractRequestContext(request);
