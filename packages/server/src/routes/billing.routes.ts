@@ -162,9 +162,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
             const member = await billingDeps.db.findMemberById(ms.member_id);
             if (member) {
               const body = subscriptionStatusBodyForMember(member, now);
-              if (body !== null) {
-                return reply.status(200).send(body);
-              }
+              return reply.status(200).send(body ?? { subscription: null });
             }
           }
         }

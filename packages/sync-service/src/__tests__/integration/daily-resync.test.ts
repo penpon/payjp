@@ -82,7 +82,7 @@ describe('runDailyResync', () => {
     const getPayjpSubscription = vi.fn().mockRejectedValue(new Error('PAY.JP API error'));
     const { deps, log } = createDeps({ db, getPayjpSubscription });
 
-    await runDailyResync(deps);
+    await expect(runDailyResync(deps)).rejects.toThrow('daily-resync exited with code');
 
     expect(log).toHaveBeenCalledOnce();
     const entry: LogEntry = log.mock.calls[0][0];
@@ -129,7 +129,7 @@ describe('runDailyResync', () => {
     );
 
     const { deps, log } = createDeps({ db });
-    await runDailyResync(deps);
+    await expect(runDailyResync(deps)).rejects.toThrow('daily-resync exited with code');
 
     const entry: LogEntry = log.mock.calls[0][0];
     // Inflight members count as failed reconciliation (manual --operation-id required)

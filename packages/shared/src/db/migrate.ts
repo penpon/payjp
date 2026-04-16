@@ -31,8 +31,12 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
         migrationFiles = readdirSync(migrationsDir)
           .filter((f) => f.endsWith('.sql'))
           .sort();
-      } catch {
-        migrationFiles = [];
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          migrationFiles = [];
+        } else {
+          throw new Error(`Failed to read migrations dir "${migrationsDir}": ${String(err)}`);
+        }
       }
 
       // Track applied migrations

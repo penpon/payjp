@@ -15,16 +15,9 @@ export interface DailyResyncDeps {
  */
 export async function runDailyResync(deps: DailyResyncDeps): Promise<void> {
   const { cliDeps, log } = deps;
+  let output: Awaited<ReturnType<typeof runResyncCli>>;
   try {
-    const output = await runResyncCli(['--all'], cliDeps);
-
-    log({
-      timestamp: formatRfc3339Utc(cliDeps.now()),
-      service: 'sync-service',
-      endpoint: 'daily-resync',
-      result: output.exitCode === 0 ? 'success' : 'failure',
-      ...output.result,
-    });
+    output = await runResyncCli(['--all'], cliDeps);
   } catch (err) {
     log({
       timestamp: formatRfc3339Utc(cliDeps.now()),
@@ -34,5 +27,17 @@ export async function runDailyResync(deps: DailyResyncDeps): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
     });
     throw err;
+  }
+
+  log({
+    timestamp: formatRfc3339Utc(cliDeps.now()),
+    service: 'sync-service',
+    endpoint: 'daily-resync',
+    result: output.exitCode === 0 ? 'success' : 'failure',
+    ...output.result,
+  });
+
+  if (output.exitCode !== 0) {
+    throw new Error(`daily-resync exited with code ${output.exitCode}`);
   }
 }

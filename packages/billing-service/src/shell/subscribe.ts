@@ -141,7 +141,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         ok: false,
         statusCode: 503,
         errorCode: 'INFLIGHT_OPERATION',
-        message: 'Another operation is in progress',
+        message: `Your previous ${member.inflight_operation_type ?? 'unknown'} operation (${member.inflight_operation_id}) is still in progress`,
         operationId: member.inflight_operation_id,
       };
     }
@@ -185,7 +185,23 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
     // Step 6: Persist operationId BEFORE any PAY.JP write (incl. selected plan for recovery)
     const operationId = generateOperationId();
-    await db.setInflightOperation(member.id, operationId, 'subscribe', now, req.planId);
+    try {
+      await db.setInflightOperation(member.id, operationId, 'subscribe', now, req.planId);
+    } catch (err) {
+      slog('error', 'setInflightOperation failed', {
+        email: normalizedEmail,
+        memberId: member.id,
+        operationId,
+        error: String(err),
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'DB_UPDATE_FAILED',
+        message: 'Failed to set inflight operation',
+        operationId,
+      };
+    }
 
     // Step 7: PAY.JP token 3DS verification (READ-only)
     let payjpTokenData: Awaited<ReturnType<typeof payjp.fetchToken>>;
