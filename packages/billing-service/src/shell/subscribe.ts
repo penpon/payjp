@@ -206,7 +206,6 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         statusCode: 503,
         errorCode: 'DB_UPDATE_FAILED',
         message: 'Failed to set inflight operation',
-        operationId,
       };
     }
 
