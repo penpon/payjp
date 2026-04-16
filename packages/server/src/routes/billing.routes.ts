@@ -307,9 +307,6 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
     '/v1/subscriptions/cancel',
     {
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
-      schema: {
-        body: { type: 'object', additionalProperties: false },
-      },
     },
     async (request, reply) => {
       const { origin, linkSessionToken } = extractRequestContext(request);

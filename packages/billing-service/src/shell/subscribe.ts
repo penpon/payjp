@@ -175,7 +175,14 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
     // Step 6: Existing subscription short-circuit (after gate; does not leak existence pre-gate)
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
       const response = buildSubscriptionResponse(member);
+      // Non-fatal: session token issuance failure should not fail an already-active subscription response.
       const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
+      if (memberSessionToken === undefined) {
+        slog('warn', 'session_token_issuance_failed_step6', {
+          email: normalizedEmail,
+          memberId: member.id,
+        });
+      }
       return {
         ok: true,
         data: response,
@@ -209,6 +216,15 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       payjpTokenData = await payjp.fetchToken(req.payjpToken);
     } catch (err) {
       slog('error', 'PAY.JP token fetch failed', { email: normalizedEmail, operationId, error: String(err) });
+      if (isUncertainError(err)) {
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'PAYJP_UNCERTAIN',
+          message: 'Uncertain failure during token verification',
+          operationId,
+        };
+      }
       try {
         await db.clearInflightOperation(member.id);
       } catch (clearErr) {
@@ -400,6 +416,16 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
             statusCode: 503,
             errorCode: 'PAYJP_ERROR',
             message: 'No charge ID available',
+            operationId,
+          };
+        }
+        if (!charge.paid) {
+          await clearInflightOnDefinitePayjpFailure(db, member.id, normalizedEmail, operationId, 'createCharge');
+          return {
+            ok: false,
+            statusCode: 422,
+            errorCode: 'PAYJP_ERROR',
+            message: 'Charge was not paid',
             operationId,
           };
         }

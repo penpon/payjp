@@ -295,7 +295,11 @@ async function handleSubscribeRecovery(
 
   if (!chargeId && isFirstTime) {
     // Step 3: Search charges
-    const inflightStartedAt = member.inflight_operation_started_at as Date;
+    const inflightStartedAt = member.inflight_operation_started_at as Date | null;
+    if (!inflightStartedAt) {
+      await insertImpactLog(deps.db, memberId, 'subscribe_recovery_no_inflight_started_at', operationId);
+      return { success: false };
+    }
     const inflightUnix = Math.floor(inflightStartedAt.getTime() / 1000);
     const searchParams = buildChargeSearchParams(customerId, inflightUnix);
 
@@ -340,10 +344,28 @@ async function handleSubscribeRecovery(
           metadata: { ...metaBase },
         });
         chargeId = charge.id;
-        await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
-          chargeId,
-          memberId,
-        ]);
+        try {
+          await deps.db.query('UPDATE members SET payjp_initial_charge_id = $1, updated_at = now() WHERE id = $2', [
+            chargeId,
+            memberId,
+          ]);
+        } catch (dbErr) {
+          deps.log({
+            timestamp: formatRfc3339Utc(deps.now()),
+            service: 'sync-service',
+            endpoint: 'cli/subscribe-recovery',
+            result: 'error',
+            error: 'payjp_createCharge_db_update_failed',
+            member_id: memberId,
+            operation_id: operationId,
+            payjp_charge_id: chargeId,
+            errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          });
+          await insertImpactLog(deps.db, memberId, 'subscribe_recovery_payjp_charge_db_update_failed', operationId, {
+            payjp_charge_id: chargeId,
+          });
+          return { success: false };
+        }
       } catch (err) {
         deps.log({
           timestamp: formatRfc3339Utc(deps.now()),
@@ -401,10 +423,34 @@ async function handleSubscribeRecovery(
       try {
         const sub = await deps.createPayjpSubscription(subParams);
         subscriptionId = sub.id;
-        await deps.db.query(
-          'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
-          [subscriptionId, sub.status, memberId],
-        );
+        try {
+          await deps.db.query(
+            'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
+            [subscriptionId, sub.status, memberId],
+          );
+        } catch (dbErr) {
+          deps.log({
+            timestamp: formatRfc3339Utc(deps.now()),
+            service: 'sync-service',
+            endpoint: 'cli/subscribe-recovery',
+            result: 'error',
+            error: 'payjp_createSubscription_db_update_failed',
+            member_id: memberId,
+            operation_id: operationId,
+            payjp_subscription_id: subscriptionId,
+            errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          });
+          await insertImpactLog(
+            deps.db,
+            memberId,
+            'subscribe_recovery_payjp_subscription_db_update_failed',
+            operationId,
+            {
+              payjp_subscription_id: subscriptionId,
+            },
+          );
+          return { success: false };
+        }
       } catch (err) {
         deps.log({
           timestamp: formatRfc3339Utc(deps.now()),
@@ -557,7 +603,7 @@ async function handleCancelRecovery(
   }
 
   // Step 5: Clear inflight on confirmed integrity
-  if (canResolveInflightOperation('canceled', subscriptionId, subscriptionId, customerId)) {
+  if (canResolveInflightOperation('canceled', payjpSub.id as string, subscriptionId, customerId)) {
     const periodEndUnix = (payjpSub as { current_period_end?: number }).current_period_end;
     const periodEndDate = periodEndUnix != null && periodEndUnix !== 0 ? new Date(periodEndUnix * 1000) : deps.now();
     await deps.db.query(
@@ -632,8 +678,16 @@ async function handleAllReconciliation(
       // REQ-SYNC-030: Continue processing — best-effort impact log
       try {
         await insertImpactLog(deps.db, member.id as string, 'resync_individual_error', undefined);
-      } catch {
-        /* best-effort */
+      } catch (impactErr) {
+        deps.log({
+          timestamp: formatRfc3339Utc(deps.now()),
+          service: 'sync-service',
+          endpoint: 'cli/resync',
+          result: 'error',
+          error: 'impact_log_insert_failed_in_error_path',
+          member_id: member.id as string,
+          errorMessage: impactErr instanceof Error ? impactErr.message : String(impactErr),
+        });
       }
     }
   }

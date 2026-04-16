@@ -87,10 +87,18 @@ export async function accessGateRoutes(app: FastifyInstance, opts: { billingDeps
       const ttl = billingDeps.config.accessGateSessionTtlSeconds;
       const sessionExpires = new Date(now.getTime() + ttl * 1000);
 
-      await billingDeps.db.insertAccessGateSession({
-        accessGateSessionTokenHash: sessionHash,
-        expiresAt: sessionExpires,
-      });
+      try {
+        await billingDeps.db.insertAccessGateSession({
+          accessGateSessionTokenHash: sessionHash,
+          expiresAt: sessionExpires,
+        });
+      } catch {
+        return reply.status(503).send({
+          ok: false,
+          errorCode: 'DB_ERROR',
+          message: 'Failed to create access gate session',
+        });
+      }
 
       const attrs = buildCookieAttributes('__Host-access_gate', ttl);
       reply.header('Set-Cookie', serializeCookieAttributes(attrs, rawSession));
