@@ -39,6 +39,11 @@ function slog(level: 'info' | 'warn' | 'error', message: string, ctx: Record<str
 }
 
 function secureCompare(a: string, b: string): boolean {
+  // Empty vs empty would hash to identical digests; reject so a missing/empty
+  // shared secret cannot authenticate (mirrors verifySharedPasscode guard).
+  if (a.length === 0 || b.length === 0) {
+    return false;
+  }
   const left = createHash('sha256').update(a).digest();
   const right = createHash('sha256').update(b).digest();
   return timingSafeEqual(left, right);

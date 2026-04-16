@@ -229,6 +229,24 @@ function makeGoogleCancelSubmitRequest(overrides: { token?: string; email?: stri
 
 describe('POST /v1/subscriptions/cancel — Integration', () => {
   // -------------------------------------------------------------------------
+  // Google Apps Script shared secret: empty must not match empty
+  // -------------------------------------------------------------------------
+  describe('handleGoogleCancelSubmit shared secret', () => {
+    it('rejects when both submitted and configured secrets are empty', async () => {
+      const deps = makeSuccessfulDeps();
+      deps.config.googleFormCancelSecret = '';
+      const req = makeGoogleCancelSubmitRequest();
+      req.secret = '';
+      const result = await handleGoogleCancelSubmit(req, deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(401);
+        expect(result.errorCode).toBe('INVALID_GOOGLE_SECRET');
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // PROP-BILL-059: Origin validation (cancel)
   // -------------------------------------------------------------------------
   describe('PROP-BILL-059: Cancel Origin validation', () => {
