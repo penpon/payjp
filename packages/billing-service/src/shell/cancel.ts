@@ -339,7 +339,7 @@ export async function handleCreateCancelFormLink(
       ok: false,
       statusCode: 503,
       errorCode: 'INFLIGHT_OPERATION',
-      message: 'Another operation is in progress',
+      message: `Your previous ${member.inflight_operation_type ?? 'unknown'} operation (${member.inflight_operation_id}) is still in progress`,
       operationId: member.inflight_operation_id,
     };
   }
