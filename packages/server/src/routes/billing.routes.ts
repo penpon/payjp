@@ -227,6 +227,16 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       }
 
       const { origin, memberSessionToken } = extractRequestContext(request);
+      // Browser POSTs from the configured frontend always send Origin; require it so
+      // cookie-authenticated flows cannot be driven by non-browser clients without a forged header.
+      if (origin === '') {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Origin not allowed',
+        });
+      }
 
       const req: CancelFormLinkRequest = {
         origin,
@@ -336,6 +346,14 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       }
 
       const { origin, linkSessionToken } = extractRequestContext(request);
+      if (origin === '') {
+        return sendBillingResponse(reply, {
+          ok: false,
+          statusCode: 403,
+          errorCode: 'FORBIDDEN_ORIGIN',
+          message: 'Origin not allowed',
+        });
+      }
 
       const req: CancelRequest = {
         origin,
