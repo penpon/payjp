@@ -9,7 +9,6 @@ import type { SyncDeps } from '../routes/sync.routes.js';
 const NOW = new Date('2025-04-01T10:00:00Z');
 const FRONTEND_BASE_URL = 'https://example.com';
 const LINK_SESSION_TOKEN = 'link-session-token-rl';
-const _MEMBER_SESSION_TOKEN = 'member-session-token-rl';
 const PLAN_ID = 'plan-rl-001';
 
 const APP_CONFIG = {
@@ -171,7 +170,7 @@ function makeSyncDeps(): SyncDeps {
 }
 
 describe('rate limit enforcement', () => {
-  const RATE_LIMIT_CASES: { method: 'GET' | 'POST'; url: string; max: number; setup?: string }[] = [
+  const RATE_LIMIT_CASES: { method: 'GET' | 'POST'; url: string; max: number }[] = [
     { method: 'POST', url: '/v1/subscriptions', max: 5 },
     { method: 'POST', url: '/v1/subscriptions/cancel', max: 5 },
     { method: 'POST', url: '/v1/subscriptions/cancel/google-form-link', max: 5 },
