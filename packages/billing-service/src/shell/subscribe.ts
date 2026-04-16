@@ -4,7 +4,6 @@
  * 課金成功後に `__Host-member_session` を発行し、OAuth + `guilds.join` は member ルートで実施する。
  */
 import { randomBytes } from 'node:crypto';
-import type { Member } from '@hayane/shared';
 import {
   accessGateSessionTokenHash,
   buildSubscriptionMetadata,
@@ -529,7 +528,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
       }
     }
 
-    // Step 11: Member state update + clear inflight
+    // Step 11: Member state update (atomically clears inflight — see NR-C1 fix in pg-db-client.ts)
     const subscriptionStatus = determineSubscriptionStatus(isFirstTime);
     const accessEndAt = new Date(subscription.current_period_end * 1000);
     const nextBillingAt = new Date(subscription.current_period_end * 1000);
@@ -553,6 +552,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         operationId,
         error: String(err),
       });
+      // NR-C1: inflight は意図的にクリアしない。PAY.JP 書込済で CLI recovery が必要。
       return {
         ok: false,
         statusCode: 503,
@@ -561,34 +561,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
         operationId,
       };
     }
-
-    // Step 12: Clear inflight operation
-    try {
-      await db.clearInflightOperation(updatedMember.id);
-    } catch (err) {
-      slog('error', 'clearInflightOperation failed after successful subscribe', {
-        email: normalizedEmail,
-        operationId,
-        memberId: updatedMember.id,
-        error: String(err),
-      });
-      return {
-        ok: false,
-        statusCode: 503,
-        errorCode: 'DB_UPDATE_FAILED',
-        message: 'Failed to finalize subscription state',
-        operationId,
-      };
-    }
-    const memberForResponse = {
-      ...updatedMember,
-      inflight_operation_id: null,
-      inflight_operation_type: null as Member['inflight_operation_type'],
-      inflight_operation_started_at: null,
-      inflight_subscribe_plan_id: null,
-    };
-
-    // Step 13: Issue member session token for post-subscribe flows (only if DB row is persisted)
+    // Step 12: Issue member session token for post-subscribe flows (only if DB row is persisted)
     const memberSessionToken = await issueMemberSessionToken(db, updatedMember.id, now, {
       email: normalizedEmail,
       operationId,
@@ -603,7 +576,7 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
     return {
       ok: true,
-      data: buildSubscriptionResponse(memberForResponse),
+      data: buildSubscriptionResponse(updatedMember),
       ...(memberSessionToken !== undefined ? { memberSessionToken } : {}),
     };
   } finally {

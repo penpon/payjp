@@ -44,7 +44,10 @@ export interface CliDeps {
   listPayjpCharges: (
     params: { customer: string; since: number; until: number; limit: number },
     offset: number,
-  ) => Promise<{ data: Array<{ id: string; metadata?: Record<string, string> }>; has_more: boolean }>;
+  ) => Promise<{
+    data: Array<{ id: string; paid: boolean; metadata?: Record<string, string> }>;
+    has_more: boolean;
+  }>;
   listPayjpSubscriptions: (
     customerId: string,
     offset: number,
@@ -310,7 +313,8 @@ async function handleSubscribeRecovery(
     while (offset <= 900) {
       const result = await deps.listPayjpCharges(searchParams, offset);
       for (const charge of result.data) {
-        if (charge.metadata?.operation_id === operationId) {
+        // H4 fix: metadata 一致かつ paid=true のみ採用。未決済 charge を DB に書くと課金整合性崩壊。
+        if (charge.metadata?.operation_id === operationId && charge.paid === true) {
           matches.push(charge);
         }
       }

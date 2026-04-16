@@ -135,13 +135,37 @@ describe('INT-SYNC-014: CLI subscribe recovery: existing charge found', () => {
         }),
       ),
       listPayjpCharges: vi.fn(async () => ({
-        data: [{ id: 'chg_existing', metadata: { operation_id: 'op_1' } }],
+        data: [{ id: 'chg_existing', paid: true, metadata: { operation_id: 'op_1' } }],
         has_more: false,
       })),
     });
 
     const _result = await runResyncCli(['--operation-id', 'op_1'], deps);
     expect(deps.createPayjpCharge).not.toHaveBeenCalled();
+  });
+});
+
+// H4 regression: CLI subscribe recovery must skip unpaid charges
+describe('H4 regression: CLI subscribe recovery ignores paid=false charges', () => {
+  it('paid=false charge with matching operation_id is NOT adopted → createCharge called', async () => {
+    const deps = createMockDeps({
+      db: mockDbPool(
+        vi.fn(async (text: string) => {
+          if (text.includes('inflight_operation_id')) {
+            return { rows: [MEMBER_WITH_INFLIGHT_SUBSCRIBE], rowCount: 1 };
+          }
+          return { rows: [], rowCount: 0 };
+        }),
+      ),
+      listPayjpCharges: vi.fn(async () => ({
+        data: [{ id: 'chg_unpaid', paid: false, metadata: { operation_id: 'op_1' } }],
+        has_more: false,
+      })),
+    });
+
+    await runResyncCli(['--operation-id', 'op_1'], deps);
+    // 未決済 charge は採用されず、新規 createPayjpCharge が走る (or fail-close)。
+    expect(deps.createPayjpCharge).toHaveBeenCalled();
   });
 });
 
@@ -159,8 +183,8 @@ describe('INT-SYNC-015: CLI subscribe recovery: 2+ charges → fail-close', () =
       ),
       listPayjpCharges: vi.fn(async () => ({
         data: [
-          { id: 'chg_1', metadata: { operation_id: 'op_1' } },
-          { id: 'chg_2', metadata: { operation_id: 'op_1' } },
+          { id: 'chg_1', paid: true, metadata: { operation_id: 'op_1' } },
+          { id: 'chg_2', paid: true, metadata: { operation_id: 'op_1' } },
         ],
         has_more: false,
       })),

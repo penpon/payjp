@@ -149,10 +149,10 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     access_end_at: new Date(periodEndMs),
     next_billing_at: new Date(periodEndMs),
     role_state: 'unknown',
-    // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、setInflightOperation の値がそのまま残る
-    inflight_operation_id: OPERATION_ID,
-    inflight_operation_type: 'subscribe',
-    inflight_operation_started_at: NOW,
+    // NR-C1 fix: updateMemberAfterSubscribe は inflight 列を同一 UPDATE 内でアトミックに NULL 化する。
+    inflight_operation_id: null,
+    inflight_operation_type: null,
+    inflight_operation_started_at: null,
   };
 }
 

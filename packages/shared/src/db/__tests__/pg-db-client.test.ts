@@ -217,7 +217,9 @@ describe('PgDbClient - access_gate_sessions', () => {
 });
 
 describe('PgDbClient - updateMemberAfterSubscribe', () => {
-  it('updates subscribe fields and does not modify inflight columns', async () => {
+  // NR-C1 regression: inflight 列のクリアは同一 UPDATE 内でアトミックに行う。
+  // 分離すると PAY.JP 書込済 + DB 瞬断の窓で inflight 残留 → 以降 503 永続ブロック。
+  it('updates subscribe fields AND atomically clears inflight columns (NR-C1)', async () => {
     const member = await db.upsertProvisionalMember('discord-030', 'sub@example.com');
     await db.updateMemberCustomerId(member.id, 'cus_sub');
     const now = new Date();
@@ -239,9 +241,10 @@ describe('PgDbClient - updateMemberAfterSubscribe', () => {
     expect(updated.subscription_status).toBe('active');
     expect(updated.payjp_subscription_id).toBe('sub_test');
     expect(updated.role_state).toBe('granted');
-    expect(updated.inflight_operation_id).toBe('op-subscribe-ongoing');
-    expect(updated.inflight_operation_type).toBe('subscribe');
-    expect(updated.inflight_operation_started_at!.getTime()).toBe(now.getTime());
+    expect(updated.inflight_operation_id).toBeNull();
+    expect(updated.inflight_operation_type).toBeNull();
+    expect(updated.inflight_operation_started_at).toBeNull();
+    expect(updated.inflight_subscribe_plan_id).toBeNull();
   });
 });
 

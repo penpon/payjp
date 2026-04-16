@@ -25,6 +25,16 @@ function parseHeaderValue(v: unknown): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+// audit actor は構造化ログにそのまま載るため、log injection 耐性確保。
+// printable ASCII のみ許可、長さ上限 256 で DoS/ログ肥大化も防止。
+const AUDIT_ACTOR_MAX_LEN = 256;
+function sanitizeAuditActor(v: string | null): string | null {
+  if (v === null) return null;
+  if (v.length > AUDIT_ACTOR_MAX_LEN) return null;
+  if (!/^[\x20-\x7E]+$/.test(v)) return null;
+  return v;
+}
+
 function hasValidAdminApiKey(provided: string | null, expectedRaw: string | undefined): boolean {
   const expected = expectedRaw?.trim() ?? '';
   if (expected === '' || !provided) return false;
@@ -83,7 +93,8 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
         ...(cfAccessJwks ? { jwks: cfAccessJwks } : {}),
       });
       if (verified.ok) {
-        logAdminRequest(request, verified.email);
+        const sanitized = sanitizeAuditActor(verified.email);
+        logAdminRequest(request, sanitized ?? '[invalid-actor]');
         return;
       }
       logCfAccessJwtFailure(request, verified.reason);
@@ -93,7 +104,7 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
       });
     }
 
-    const localActor = parseHeaderValue(request.headers['x-admin-audit-actor']);
+    const localActor = sanitizeAuditActor(parseHeaderValue(request.headers['x-admin-audit-actor']));
     const localApiKey = parseHeaderValue(request.headers['x-admin-api-key']);
     if (localActor && hasValidAdminApiKey(localApiKey, process.env.ADMIN_API_KEY)) {
       logAdminRequest(request, localActor);

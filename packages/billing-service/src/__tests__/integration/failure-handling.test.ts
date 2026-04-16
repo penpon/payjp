@@ -478,7 +478,9 @@ describe('Failure Handling — Integration', () => {
 
       expect(result.ok).toBe(true);
       expect(deps.payjp.createSubscription).toHaveBeenCalledTimes(1);
-      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+      // NR-C1 fix: success path では inflight クリアは updateMemberAfterSubscribe 内でアトミックに行う。
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+      expect(deps.db.updateMemberAfterSubscribe).toHaveBeenCalledTimes(1);
     });
   });
 

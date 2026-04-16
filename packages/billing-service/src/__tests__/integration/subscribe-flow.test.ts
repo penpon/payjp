@@ -117,10 +117,10 @@ function makeUpdatedMemberAfterSubscribe(member: Member): Member {
     access_end_at: new Date(makePayjpSubscription().current_period_end * 1000),
     next_billing_at: new Date(makePayjpSubscription().current_period_end * 1000),
     role_state: 'unknown',
-    // updateMemberAfterSubscribe の SQL は inflight 列を触らないため、step 7 の値がそのまま残る
-    inflight_operation_id: OPERATION_ID,
-    inflight_operation_type: 'subscribe',
-    inflight_operation_started_at: NOW,
+    // NR-C1 fix: updateMemberAfterSubscribe は inflight 列を同一 UPDATE 内でアトミックに NULL 化する。
+    inflight_operation_id: null,
+    inflight_operation_type: null,
+    inflight_operation_started_at: null,
   };
 }
 
@@ -694,11 +694,28 @@ describe('POST /v1/subscriptions — Integration', () => {
       }
     });
 
-    it('clearInflightOperation called after successful subscribe', async () => {
+    it('NR-C1 regression: updateMemberAfterSubscribe atomically clears inflight (no separate clearInflightOperation call)', async () => {
       const deps = makeSuccessfulDeps();
       const result = await handleSubscribe(makeSubscribeRequest(), deps);
       expect(result.ok).toBe(true);
-      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
+      // success path では別クエリの clearInflightOperation を呼ばない。
+      // inflight クリアは updateMemberAfterSubscribe の SET 句内でアトミックに行う。
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
+      expect(deps.db.updateMemberAfterSubscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('NR-C1 regression: updateMemberAfterSubscribe DB failure leaves inflight intact for CLI recovery', async () => {
+      const deps = makeSuccessfulDeps();
+      (deps.db.updateMemberAfterSubscribe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
+      const result = await handleSubscribe(makeSubscribeRequest(), deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.statusCode).toBe(503);
+        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
+        expect(result.operationId).toBe(OPERATION_ID);
+      }
+      // PAY.JP 書込済のため inflight は意図的に保持する。CLI 側で復旧する。
+      expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
 
     it('returns memberSessionToken on success', async () => {
@@ -719,19 +736,6 @@ describe('POST /v1/subscriptions — Integration', () => {
       if (result.ok) {
         expect(result.memberSessionToken).toBeUndefined();
       }
-    });
-
-    it('returns 503 + operationId when clearInflightOperation fails after subscribe', async () => {
-      const deps = makeSuccessfulDeps();
-      (deps.db.clearInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB write timeout'));
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(503);
-        expect(result.errorCode).toBe('DB_UPDATE_FAILED');
-        expect(result.operationId).toBe(OPERATION_ID);
-      }
-      expect(deps.db.clearInflightOperation).toHaveBeenCalledTimes(1);
     });
   });
 
