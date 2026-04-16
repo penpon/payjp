@@ -1006,31 +1006,6 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns 403 when Sec-Fetch-Site is cross-site (CSRF with shared secret + signature)', async () => {
-    const deps = createGoogleSubmitDeps();
-    const app = createApp(deps);
-    const res = await app.inject({
-      method: 'POST',
-      url: URL,
-      headers: {
-        'content-type': 'application/json',
-        'sec-fetch-site': 'cross-site',
-        'x-cancel-secret': 'google-shared-secret',
-        'x-cancel-signature': '00'.repeat(32),
-      },
-      payload: {
-        email: EMAIL,
-        name: 'Test User',
-        reason: 'Need to cancel',
-        token: 'any-token',
-      },
-    });
-
-    expect(res.statusCode).toBe(403);
-    expect(res.json().errorCode).toBe('FORBIDDEN_ORIGIN');
-    expect(deps.payjp.cancelSubscription).not.toHaveBeenCalled();
-  });
-
   it('returns 200 on valid secret + signature + token', async () => {
     const deps = createGoogleSubmitDeps();
     const app = createApp(deps);

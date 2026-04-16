@@ -276,17 +276,6 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       },
     },
     async (request, reply) => {
-      // Block browser-driven CSRF: attacker page can POST with the shared secret + HMAC (not HttpOnly).
-      // Google Apps Script / server callers omit Sec-Fetch-Site or send "none", not "cross-site".
-      if (isForbiddenCrossSiteFetch(request)) {
-        return sendBillingResponse(reply, {
-          ok: false,
-          statusCode: 403,
-          errorCode: 'FORBIDDEN_ORIGIN',
-          message: 'Cross-site fetch is not allowed',
-        });
-      }
-
       const { body } = extractRequestContext(request);
 
       const h = request.headers;
