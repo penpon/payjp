@@ -53,6 +53,9 @@ export async function registerAdminRoutes(app: FastifyInstance, opts: { pool: Po
       return reply.status(405).send({ error: 'read_only', message: 'Only GET is allowed' });
     }
 
+    // CF Access email header is stripped by nginx (prevents spoofing via SSH tunnel).
+    // Re-enable this path with Cf-Access-Jwt-Assertion JWT verification once
+    // cloudflared Tunnel is deployed (docs/ops/admin-access-cloudflare.md §3.3).
     const cloudflareActor = parseHeaderValue(request.headers['cf-access-authenticated-user-email']);
     if (cloudflareActor) {
       logAdminRequest(request, cloudflareActor);
