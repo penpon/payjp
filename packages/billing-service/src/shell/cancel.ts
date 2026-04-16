@@ -167,9 +167,34 @@ async function immediateCancelPayjpWrite(
     };
   }
 
+  // `prepareImmediateCancel` guarantees this, but TS can't narrow across function boundaries.
+  const subscriptionId = member.payjp_subscription_id;
+  if (subscriptionId === null) {
+    slog('error', 'payjp_subscription_id is null after inflight set (unexpected)', {
+      memberId: member.id,
+      operationId,
+    });
+    try {
+      await deps.db.clearInflightOperation(member.id);
+    } catch (clearErr) {
+      slog('error', 'clearInflightOperation failed after unexpected null payjp_subscription_id', {
+        memberId: member.id,
+        operationId,
+        error: String(clearErr),
+      });
+    }
+    return {
+      ok: false,
+      statusCode: 409,
+      errorCode: 'NO_PAYJP_SUBSCRIPTION',
+      message: 'payjp_subscription_id is null',
+      operationId,
+    };
+  }
+
   let canceledSubscription: Awaited<ReturnType<typeof deps.payjp.cancelSubscription>>;
   try {
-    canceledSubscription = await deps.payjp.cancelSubscription(member.payjp_subscription_id);
+    canceledSubscription = await deps.payjp.cancelSubscription(subscriptionId);
   } catch (err) {
     if (isUncertainError(err)) {
       slog('error', 'PAY.JP cancelSubscription uncertain failure', {
@@ -194,7 +219,7 @@ async function immediateCancelPayjpWrite(
       error: String(err),
     });
     try {
-      const refetched = await deps.payjp.fetchSubscription(member.payjp_subscription_id);
+      const refetched = await deps.payjp.fetchSubscription(subscriptionId);
       if (refetched.status !== 'canceled') {
         try {
           await deps.db.clearInflightOperation(member.id);
