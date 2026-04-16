@@ -1,6 +1,7 @@
 import type { AuthConfig, AuthRequest } from '@hayane/auth-service';
 import { handleAuthRequest } from '@hayane/auth-service';
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { isForbiddenCrossSiteFetch } from '../cross-site-fetch.js';
 
 const MANAGED_HEADERS = new Set([
   'cache-control',
@@ -78,6 +79,11 @@ export async function authRoutes(app: FastifyInstance, opts: { config: AuthConfi
     '/v1/auth/discord/session',
     { config: { rateLimit: { max: 15, timeWindow: '1 minute' } } },
     async (request, reply) => {
+      // Block cross-site top-level navigations / no-cors loads that omit Origin (FIND-008 allows
+      // same-origin navigations without Origin; attackers otherwise obtain JSON via <a href> + Referrer).
+      if (isForbiddenCrossSiteFetch(request)) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
       try {
         const origin = request.headers.origin;
         const authReq: AuthRequest = {
