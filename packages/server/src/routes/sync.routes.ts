@@ -1,9 +1,15 @@
 import type { WebhookHandlerDeps, WebhookRequest } from '@hayane/sync-service';
 import { handleWebhook } from '@hayane/sync-service';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 export interface SyncDeps {
   webhookDeps: WebhookHandlerDeps;
+}
+
+/** Use the TCP peer address for audit logs — not `request.ip`, which follows X-Forwarded-For when trustProxy is enabled. */
+function webhookRemoteIp(request: FastifyRequest): string {
+  const addr = request.socket?.remoteAddress;
+  return typeof addr === 'string' && addr.length > 0 ? addr : '';
 }
 
 export async function syncRoutes(app: FastifyInstance, opts: { syncDeps: SyncDeps }) {
@@ -17,7 +23,7 @@ export async function syncRoutes(app: FastifyInstance, opts: { syncDeps: SyncDep
         const req: WebhookRequest = {
           headers: extractWebhookHeaders(request.headers),
           body: request.body,
-          remoteIp: request.ip,
+          remoteIp: webhookRemoteIp(request),
         };
 
         const result = await handleWebhook(req, webhookDeps);
