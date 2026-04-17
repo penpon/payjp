@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light" style=""><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>利用規約 | &amp;line | 認証企業限定 SES高効率ソーシング・プラットフォーム</title>
+    <meta name="description" content="完全審査制のSES特化型ソーシング基盤「&amp;line」の利用規約です。本サービスの利用条件および、会員間の適正な取引に関する取り決めを定めています。">
+    <style>
+      :root {
+        --primary-color: #10233d;
+        --primary-deep: #0a1729;
+        --secondary-color: #5a6b7d;
+        --gold-color: #a98a52;
+        --gold-deep: #8b6e3f;
+        --gold-light: #d8c29a;
+        --bg-light: #f6f5f2;
+        --bg-white: #ffffff;
+        --text-main: #2f3440;
+        --text-muted: #666f7a;
+        --border-color: #e4e6ea;
+        --font-serif: 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif JP', serif;
+        --font-sans: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--font-sans);
+        color: var(--text-main);
+        background: linear-gradient(180deg, #fdfcf9 0%, #ffffff 18%, #fbfaf7 100%);
+        line-height: 1.8;
+        letter-spacing: 0.03em;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        text-decoration: none;
+      }
+
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px 32px;
+        font-size: 15px;
+        font-weight: bold;
+        border-radius: 3px;
+        transition: all 0.35s ease;
+        cursor: pointer;
+        letter-spacing: 0.08em;
+        box-shadow: 0 10px 24px rgba(16, 35, 61, 0.08);
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .btn-gold {
+        background: linear-gradient(180deg, #b79a63 0%, var(--gold-color) 55%, var(--gold-deep) 100%);
+        color: #fff;
+        border: 1px solid rgba(169, 138, 82, 0.88);
+      }
+
+      .btn-gold:hover {
+        background: linear-gradient(180deg, #c3a86f 0%, #a98a52 52%, #7c6035 100%);
+        border-color: var(--gold-deep);
+      }
+
+      .btn-outline {
+        background-color: transparent;
+        color: var(--primary-color);
+        border: 1px solid rgba(16, 35, 61, 0.28);
+      }
+
+      .btn-outline:hover {
+        background-color: rgba(16, 35, 61, 0.05);
+      }
+
+      .btn-member {
+        position: relative;
+        min-width: 188px;
+        padding: 14px 22px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        box-shadow: 0 16px 34px rgba(122, 95, 47, 0.26);
+      }
+
+      .btn-member::after {
+        content: 'MEMBERS ONLY';
+        position: absolute;
+        top: -11px;
+        right: 16px;
+        padding: 2px 8px;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        color: var(--primary-color);
+        background: #f4ead7;
+        border: 1px solid rgba(169, 138, 82, 0.32);
+      }
+
+      .btn-login-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Header */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 6px 18px rgba(16, 35, 61, 0.04);
+      }
+
+      header .container {
+        max-width: 1120px;
+        padding: 0 16px;
+      }
+
+      .header-top {
+        background: rgba(250, 248, 244, 0.96);
+        border-bottom: 1px solid rgba(228, 230, 234, 0.9);
+      }
+
+      .header-top-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 50px;
+        gap: 16px;
+      }
+
+      .header-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .header-status span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 12px;
+        border: 1px solid rgba(169, 138, 82, 0.28);
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--gold-deep);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        font-weight: bold;
+        white-space: nowrap;
+      }
+
+      .header-member-area {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .header-member-area .btn-login-wrap {
+        align-items: flex-end;
+      }
+
+      .header-bottom {
+        background-color: rgba(255, 255, 255, 0.94);
+        border-bottom: 1px solid rgba(228, 230, 234, 0.9);
+      }
+
+      .header-bottom-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 72px;
+        gap: 24px;
+      }
+
+      .logo {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--primary-color);
+        font-weight: bold;
+        letter-spacing: 1.5px;
+        flex-shrink: 0;
+      }
+
+      .header-nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+
+      .header-nav a {
+        position: relative;
+        font-size: 12px;
+        color: var(--primary-color);
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+        line-height: 1.2;
+        padding: 4px 0;
+      }
+
+      .header-nav a::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: -3px;
+        width: 100%;
+        height: 1px;
+        background: rgba(169, 138, 82, 0.48);
+        transform: scaleX(0);
+        transform-origin: center;
+        transition: transform 0.25s ease;
+      }
+
+      .header-nav a:hover,
+      .header-nav a.active {
+        color: var(--gold-deep);
+      }
+
+      .header-nav a:hover::after,
+      .header-nav a.active::after {
+        transform: scaleX(1);
+      }
+
+      /* Hero */
+      .page-hero {
+        background-color: var(--primary-color);
+        color: #fff;
+        padding: 100px 0 80px;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .page-hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background:
+          radial-gradient(circle at top right, rgba(169, 138, 82, 0.12), transparent 28%),
+          linear-gradient(135deg, rgba(16, 35, 61, 0.96) 0%, rgba(16, 35, 61, 1) 100%);
+        z-index: 1;
+      }
+
+      .page-hero::after {
+        content: '';
+        position: absolute;
+        inset: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .page-hero-inner {
+        position: relative;
+        z-index: 2;
+      }
+
+      .page-hero-title {
+        font-family: var(--font-serif);
+        font-size: 36px;
+        line-height: 1.4;
+        margin-bottom: 24px;
+        font-weight: normal;
+        letter-spacing: 0.06em;
+      }
+
+      .page-hero-sub {
+        font-size: 15px;
+        color: #e7ebf0;
+        letter-spacing: 0.1em;
+        line-height: 1.8;
+      }
+
+      /* Executive Notice */
+      .executive-notice {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-top: 2px solid rgba(169, 138, 82, 0.72);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+        padding: 32px 40px;
+        max-width: 800px;
+        margin: 40px auto 0;
+      }
+
+      .executive-notice p {
+        margin: 0;
+        color: var(--gold-light);
+        font-size: 16px;
+        font-weight: bold;
+        letter-spacing: 0.1em;
+        font-family: var(--font-serif);
+      }
+
+      /* Terms Content */
+      .terms-section {
+        padding: 80px 0 100px;
+      }
+
+      .terms-card {
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid var(--border-color);
+        border-top: 3px solid var(--gold-color);
+        box-shadow: 0 16px 36px rgba(16, 35, 61, 0.05);
+        padding: 64px 80px;
+      }
+
+      .terms-intro {
+        margin-bottom: 48px;
+        font-size: 15px;
+        line-height: 1.9;
+        color: var(--text-main);
+      }
+
+      .terms-toc {
+        background: var(--bg-light);
+        padding: 32px 40px;
+        margin-bottom: 56px;
+        border-radius: 2px;
+      }
+
+      .terms-toc-title {
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 20px;
+        font-size: 15px;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid rgba(16, 35, 61, 0.1);
+        padding-bottom: 12px;
+      }
+
+      .terms-toc ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px 24px;
+      }
+
+      .terms-toc a {
+        color: var(--secondary-color);
+        font-size: 14px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+        display: inline-block;
+      }
+
+      .terms-toc a:hover {
+        color: var(--gold-deep);
+      }
+
+      .clause {
+        margin-bottom: 56px;
+      }
+
+      .clause:last-child {
+        margin-bottom: 0;
+      }
+
+      .clause-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        color: var(--primary-color);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 14px;
+        margin-top: 0;
+        margin-bottom: 24px;
+        font-weight: normal;
+        letter-spacing: 0.05em;
+      }
+
+      .clause-body {
+        font-size: 14.5px;
+        line-height: 2;
+        color: var(--text-main);
+      }
+
+      .clause-body p {
+        margin: 0 0 16px 0;
+      }
+
+      .clause-body p:last-child {
+        margin-bottom: 0;
+      }
+
+      .clause-body ul {
+        margin: 16px 0;
+        padding-left: 24px;
+        color: var(--text-muted);
+      }
+
+      .clause-body li {
+        margin-bottom: 8px;
+      }
+
+      .clause-body li:last-child {
+        margin-bottom: 0;
+      }
+
+      .emphasis-box {
+        background: rgba(169, 138, 82, 0.04);
+        border-left: 3px solid var(--gold-color);
+        padding: 16px 24px;
+        margin: 24px 0;
+      }
+
+      .emphasis-title {
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 8px;
+        display: block;
+      }
+
+      /* CTA */
+      .cta-section {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(251, 248, 242, 1) 100%);
+        padding: 80px 0;
+        text-align: center;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .cta-inner {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .cta-actions {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      /* Footer */
+      footer {
+        background-color: #fbfbfa;
+        padding: 72px 0 36px;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .footer-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 40px;
+        margin-bottom: 28px;
+      }
+
+      .footer-brand {
+        max-width: 420px;
+        text-align: left;
+      }
+
+      .footer-logo {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--primary-color);
+        margin-bottom: 14px;
+      }
+
+      .footer-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.9;
+      }
+
+      .footer-links {
+        min-width: 320px;
+        text-align: right;
+      }
+
+      .footer-links-title {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        color: var(--gold-color);
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+
+      .footer-nav {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        margin-bottom: 0;
+      }
+
+      .footer-nav a {
+        font-size: 13px;
+        color: var(--primary-color);
+        letter-spacing: 0.04em;
+      }
+
+      .footer-nav a:hover,
+      .footer-nav a.active {
+        color: var(--gold-deep);
+      }
+
+      .footer-bottom {
+        border-top: 1px solid var(--border-color);
+        padding-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .footer-note,
+      .copyright {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Responsive */
+      @media (max-width: 980px) {
+        .header-top-inner,
+        .header-bottom-inner {
+          gap: 14px;
+        }
+        .header-nav {
+          gap: 12px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .header-top-inner,
+        .header-bottom-inner {
+          padding: 14px 0;
+          flex-direction: column;
+          align-items: center;
+        }
+        .header-status,
+        .header-member-area,
+        .header-nav {
+          width: 100%;
+          justify-content: center;
+        }
+        .header-member-area .btn-login-wrap {
+          align-items: center;
+        }
+        .header-nav {
+          gap: 10px 16px;
+        }
+        .terms-card {
+          padding: 40px 24px;
+        }
+        .terms-toc ul {
+          grid-template-columns: 1fr;
+        }
+        .terms-toc {
+          padding: 24px;
+        }
+        .footer-inner,
+        .footer-bottom {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .footer-brand,
+        .footer-links {
+          max-width: none;
+          width: 100%;
+          text-align: left;
+        }
+        .footer-nav {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .cta-actions {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body style="">
+    <header>
+      <div class="header-top">
+        <div class="container header-top-inner">
+          <div class="header-status">
+            <span>完全審査制</span>
+            <span>認証企業限定プラットフォーム</span>
+            <span>ご入会前面談あり</span>
+          </div>
+          <div class="header-member-area">
+            <div class="btn-login-wrap">
+              <a href="/login" class="btn btn-gold btn-member" style="padding: 9px 16px; font-size: 11px">会員様ページはこちら</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-bottom">
+        <div class="container header-bottom-inner">
+          <a href="/" class="logo">&amp;line</a>
+          <nav class="header-nav" aria-label="グローバルナビゲーション">
+            <a href="/">ホーム</a>
+            <a href="/#services">サービス</a>
+            <a href="/terms-of-service" class="active">利用規約</a>
+            <a href="/privacy-policy">プライバシーポリシー</a>
+            <a href="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <div class="container page-hero-inner">
+          <h1 class="page-hero-title">利用規約</h1>
+          <p class="page-hero-sub">本サービスの利用条件および、会員間の適正な取引に関する取り決めを定めています。</p>
+
+          <div class="executive-notice">
+            <p>ご入会前に必ず一度、担当者との面談を実施しております。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="terms-section">
+        <div class="container">
+          <div class="terms-card">
+            <div class="terms-intro">
+              <p>
+                本利用規約（以下「本規約」といいます。）は、株式会社Animato
+                techno（以下「当社」といいます。）が提供するSESマッチングプラットフォーム「&amp;line」（以下「本サービス」といいます。）の利用条件を定めるものです。本サービスを利用する法人（以下「会員」といいます。）は、本規約に同意の上、本サービスを利用するものとします。
+              </p>
+            </div>
+
+            <nav class="terms-toc" aria-label="利用規約の目次">
+              <div class="terms-toc-title">目次</div>
+              <ul>
+                <li><a href="#clause-1">第1条（本サービスの定義と目的）</a></li>
+                <li><a href="#clause-2">第2条（会員登録と審査）</a></li>
+                <li><a href="#clause-3">第3条（利用料金および支払方法）</a></li>
+                <li><a href="#clause-4">第4条（情報の的確な表示義務）</a></li>
+                <li><a href="#clause-5">第5条（契約形態の明示と偽装請負の防止）</a></li>
+                <li><a href="#clause-6">第6条（直接契約の禁止と違約金）</a></li>
+                <li><a href="#clause-7">第7条（禁止事項）</a></li>
+                <li><a href="#clause-8">第8条（免責事項）</a></li>
+                <li><a href="#clause-9">第9条（解約と退会）</a></li>
+                <li><a href="#clause-10">第10条（規約の変更）</a></li>
+              </ul>
+            </nav>
+
+            <article id="clause-1" class="clause">
+              <h2 class="clause-title">第1条（本サービスの定義と目的）</h2>
+              <div class="clause-body">
+                <p>
+                  本サービスは、会員間におけるエンジニアの稼働情報および案件情報の共有を目的とした「特定募集情報等提供事業（職業安定法第4条第7項）」に基づくプラットフォームです。
+                </p>
+                <p>
+                  当社は、会員間の情報流通の場を提供するものであり、会員間の契約成立を媒介、代理、または斡旋する「職業紹介（同法第4条第1項）」を行うものではありません。
+                </p>
+              </div>
+            </article>
+
+            <article id="clause-2" class="clause">
+              <h2 class="clause-title">第2条（会員登録と審査）</h2>
+              <div class="clause-body">
+                <p>
+                  本サービスの利用を希望する法人（以下「登録希望者」といいます。）は、当社所定の審査（事前面談を含みます）を受け、当社の承認を得る必要があります。
+                </p>
+                <p>
+                  当社は、当社の裁量により登録の可否を判断します。審査不通過の理由については一切開示義務を負わないものとし、登録希望者はこれに異議を唱えないものとします。
+                </p>
+                <p>会員は、登録情報に変更が生じた場合、速やかに当社へ届け出るものとします。</p>
+              </div>
+            </article>
+
+            <article id="clause-3" class="clause">
+              <h2 class="clause-title">第3条（利用料金および支払方法）</h2>
+              <div class="clause-body">
+                <p>
+                  会員は、当社が別途定める料金プラン（Light, Standard,
+                  Business等）に基づき、月額利用料を支払うものとします。
+                </p>
+                <p>
+                  決済方法はクレジットカード決済（Pay.jp）または銀行振込（上位プラン等、当社が認めた場合）とします。
+                </p>
+                <div class="emphasis-box">
+                  <span class="emphasis-title">【Pay.jp審査対応：支払時期】</span>
+                  <ul style="margin-top: 8px; padding-left: 20px">
+                    <li><strong>初回決済：</strong>利用申込時。</li>
+                    <li><strong>次月以降：</strong>毎月、初回申込日と同日に自動決済。</li>
+                    <li><strong>銀行振込の場合：</strong>当社発行の請求書に記載の期日まで。</li>
+                  </ul>
+                </div>
+                <p>
+                  当社は、法令の改定や経済状況の変化等に基づき、利用料金を改定することがあります。その場合、改定日の1ヶ月前までに通知するものとします。
+                </p>
+              </div>
+            </article>
+
+            <article id="clause-4" class="clause">
+              <h2 class="clause-title">第4条（情報の的確な表示義務）</h2>
+              <div class="clause-body">
+                <p>
+                  会員は、本サービスに情報を掲載する際、職業安定法第5条の4に基づき、正確かつ最新の内容を表示しなければなりません。
+                </p>
+                <p>
+                  会員は、募集が終了した案件や稼働が決定したエンジニアの情報について、速やかに掲載を終了または更新する義務を負います。
+                </p>
+                <p>案件情報の掲載にあたっては、以下の項目を明示する必要があります。</p>
+                <ul>
+                  <li>従事すべき業務の内容および変更の範囲</li>
+                  <li>就業の場所および変更の範囲</li>
+                  <li>契約期間および更新の基準</li>
+                  <li>賃金、労働時間、その他の労働条件</li>
+                </ul>
+              </div>
+            </article>
+
+            <article id="clause-5" class="clause">
+              <h2 class="clause-title">第5条（契約形態の明示と偽装請負の防止）</h2>
+              <div class="clause-body">
+                <p>会員は、案件を投稿する際、契約形態（準委任契約、派遣契約等）を必ず選択しなければなりません。</p>
+                <p>
+                  準委任契約（請負を含む）を締結する場合、会員は「昭和61年労働省告示第37号（37号告示）」を遵守し、以下の事項を徹底するものとします。
+                </p>
+                <ul>
+                  <li>受託企業のエンジニアに対し、委託企業が直接指揮命令を行わないこと。</li>
+                  <li>労働時間の管理、服務規律の決定、技術的指導は受託企業が自ら行うこと。</li>
+                </ul>
+                <p>当社は、適正な取引を推進するため、会員に対し運用ガイドラインを提供することがあります。</p>
+              </div>
+            </article>
+
+            <article id="clause-6" class="clause">
+              <h2 class="clause-title">第6条（直接契約の禁止と違約金）</h2>
+              <div class="clause-body">
+                <p>
+                  会員は、本サービスを通じて知り得た他の会員またはエンジニアに対し、本サービスを介さずに直接、SES契約、雇用契約、その他これに類する契約を締結する行為（以下「直接契約」といいます）を行ってはなりません。
+                </p>
+                <p>前項の禁止期間は、本サービスを通じて接触した日から、退会後1年間とします。</p>
+                <p>
+                  会員が本条に違反した場合、当社に対し、違約金として「当該直接契約に基づき発生すべき利用料相当額」または「金100万円」のいずれか高い額を支払うものとします。
+                </p>
+              </div>
+            </article>
+
+            <article id="clause-7" class="clause">
+              <h2 class="clause-title">第7条（禁止事項）</h2>
+              <div class="clause-body">
+                <p>会員は、以下の行為を行ってはなりません。</p>
+                <ul>
+                  <li>虚偽の情報を登録または掲載する行為。</li>
+                  <li>他の会員、当社または第三者の知的財産権やプライバシーを侵害する行為。</li>
+                  <li>本サービスを通じて取得したエンジニア情報を、本目的以外（他社への転売等）に利用する行為。</li>
+                  <li>
+                    職業安定法において禁止される「就職お祝い金」等の金銭またはギフト券を提供し、求職者を誘引する行為（2025年4月施行分含む）。
+                  </li>
+                  <li>反社会的勢力への利益供与。</li>
+                </ul>
+              </div>
+            </article>
+
+            <article id="clause-8" class="clause">
+              <h2 class="clause-title">第8条（免責事項）</h2>
+              <div class="clause-body">
+                <p>
+                  当社は、会員間のマッチングの成否、および会員間での契約履行、トラブルについて一切の責任を負いません。紛争が生じた場合は当事者間で解決するものとします。
+                </p>
+                <p>
+                  システムメンテナンスや通信障害等によるサービスの中断について、当社は故意または重過失がない限り責任を負いません。
+                </p>
+              </div>
+            </article>
+
+            <article id="clause-9" class="clause">
+              <h2 class="clause-title">第9条（解約と退会）</h2>
+              <div class="clause-body">
+                <p>会員は、当社所定のマイページより解約手続きを行うことで、いつでも本サービスを解約できます。</p>
+                <p>
+                  解約手続きが完了した日の属する利用期間の終了をもって退会となり、日割り計算による返金は行いません。
+                </p>
+                <p>次回決済日の前日までに解約手続きを完了させた場合、次回以降の請求は発生しません。</p>
+              </div>
+            </article>
+
+            <article id="clause-10" class="clause">
+              <h2 class="clause-title">第10条（規約の変更）</h2>
+              <div class="clause-body">
+                <p>
+                  当社は、相当の事由がある場合、本規約を変更できるものとします。変更後の規約は、サイト上への掲載またはメールでの通知をもって効力を生じるものとします。
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-section">
+        <div class="container">
+          <div class="cta-inner">
+            <p style="color: var(--text-muted); margin-bottom: 32px; font-size: 15px">
+              ご不明点がある場合は、事前面談またはお問い合わせ時にご案内いたします。
+            </p>
+            <div class="cta-actions">
+              <a href="/" class="btn btn-outline" style="padding: 16px 40px">ホームへ戻る</a>
+              <div class="btn-login-wrap">
+                <a href="/login" class="btn btn-gold btn-member" style="padding: 16px 40px">会員様ページはこちら</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <div class="footer-logo">株式会社Animato techno</div>
+            <div class="footer-desc">
+              &amp;lineは、認証済み企業同士のみがアクセスできる、完全審査制のSES高効率ソーシング・プラットフォームです。<br>
+              品位ある情報流通と、実務に耐えるスピード感の両立を志向しています。
+            </div>
+          </div>
+          <div class="footer-links">
+            <div class="footer-links-title">SITE INFORMATION</div>
+            <nav class="footer-nav" aria-label="フッターナビゲーション">
+              <a href="/">ホーム</a>
+              <a href="/#services">サービス</a>
+              <a href="/terms-of-service" class="active">利用規約</a>
+              <a href="/privacy-policy">プライバシーポリシー</a>
+              <a href="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+            </nav>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <div class="footer-note">認証企業限定 / 完全審査制 / ご入会前面談あり</div>
+          <div class="copyright">© 2026 Animato techno Co.,Ltd. All Rights Reserved.</div>
+        </div>
+      </div>
+    </footer>
+  
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body></html>

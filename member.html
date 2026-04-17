@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light" style=""><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会員様ページ | &amp;line | 認証企業限定 SES高効率ソーシング・プラットフォーム</title>
+    <meta name="description" content="完全審査制のSES特化型ソーシング基盤「&amp;line」の認証済み企業様向け会員ページ・料金プランのご案内です。">
+    <style>
+      :root {
+        --primary-color: #10233d;
+        --primary-deep: #0a1729;
+        --secondary-color: #5a6b7d;
+        --gold-color: #a98a52;
+        --gold-deep: #8b6e3f;
+        --gold-light: #d8c29a;
+        --bg-light: #f6f5f2;
+        --bg-white: #ffffff;
+        --text-main: #2f3440;
+        --text-muted: #666f7a;
+        --border-color: #e4e6ea;
+        --font-serif: 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif JP', serif;
+        --font-sans: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--font-sans);
+        color: var(--text-main);
+        background: linear-gradient(180deg, #fdfcf9 0%, #ffffff 18%, #fbfaf7 100%);
+        line-height: 1.8;
+        letter-spacing: 0.03em;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        text-decoration: none;
+      }
+
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px 32px;
+        font-size: 15px;
+        font-weight: bold;
+        border-radius: 3px;
+        transition: all 0.35s ease;
+        cursor: pointer;
+        letter-spacing: 0.08em;
+        box-shadow: 0 10px 24px rgba(16, 35, 61, 0.08);
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .btn-gold {
+        background: linear-gradient(180deg, #b79a63 0%, var(--gold-color) 55%, var(--gold-deep) 100%);
+        color: #fff;
+        border: 1px solid rgba(169, 138, 82, 0.88);
+      }
+
+      .btn-gold:hover {
+        background: linear-gradient(180deg, #c3a86f 0%, #a98a52 52%, #7c6035 100%);
+        border-color: var(--gold-deep);
+      }
+
+      .btn-outline {
+        background-color: transparent;
+        color: var(--primary-color);
+        border: 1px solid rgba(16, 35, 61, 0.28);
+      }
+
+      .btn-outline:hover {
+        background-color: rgba(16, 35, 61, 0.05);
+      }
+
+      .btn-member {
+        position: relative;
+        min-width: 188px;
+        padding: 14px 22px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        box-shadow: 0 16px 34px rgba(122, 95, 47, 0.26);
+      }
+
+      .btn-member::after {
+        content: 'MEMBERS ONLY';
+        position: absolute;
+        top: -11px;
+        right: 16px;
+        padding: 2px 8px;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        color: var(--primary-color);
+        background: #f4ead7;
+        border: 1px solid rgba(169, 138, 82, 0.32);
+      }
+
+      .btn-login-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Header */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 6px 18px rgba(16, 35, 61, 0.04);
+      }
+
+      header .container {
+        max-width: 1120px;
+        padding: 0 16px;
+      }
+
+      .header-top {
+        background: rgba(250, 248, 244, 0.96);
+        border-bottom: 1px solid rgba(228, 230, 234, 0.9);
+      }
+
+      .header-top-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 50px;
+        gap: 16px;
+      }
+
+      .header-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .header-status span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 12px;
+        border: 1px solid rgba(169, 138, 82, 0.28);
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--gold-deep);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        font-weight: bold;
+        white-space: nowrap;
+      }
+
+      .header-member-area {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .header-member-area .btn-login-wrap {
+        align-items: flex-end;
+      }
+
+      .header-bottom {
+        background-color: rgba(255, 255, 255, 0.94);
+        border-bottom: 1px solid rgba(228, 230, 234, 0.9);
+      }
+
+      .header-bottom-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 72px;
+        gap: 24px;
+      }
+
+      .logo {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--primary-color);
+        font-weight: bold;
+        letter-spacing: 1.5px;
+        flex-shrink: 0;
+      }
+
+      .header-nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+
+      .header-nav a {
+        position: relative;
+        font-size: 12px;
+        color: var(--primary-color);
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+        line-height: 1.2;
+        padding: 4px 0;
+      }
+
+      .header-nav a::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: -3px;
+        width: 100%;
+        height: 1px;
+        background: rgba(169, 138, 82, 0.48);
+        transform: scaleX(0);
+        transform-origin: center;
+        transition: transform 0.25s ease;
+      }
+
+      .header-nav a:hover,
+      .header-nav a.active {
+        color: var(--gold-deep);
+      }
+
+      .header-nav a:hover::after,
+      .header-nav a.active::after {
+        transform: scaleX(1);
+      }
+
+      /* Hero */
+      .page-hero {
+        background-color: var(--primary-color);
+        color: #fff;
+        padding: 100px 0 80px;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .page-hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background:
+          radial-gradient(circle at top right, rgba(169, 138, 82, 0.12), transparent 28%),
+          linear-gradient(135deg, rgba(16, 35, 61, 0.96) 0%, rgba(16, 35, 61, 1) 100%);
+        z-index: 1;
+      }
+
+      .page-hero::after {
+        content: '';
+        position: absolute;
+        inset: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .page-hero-inner {
+        position: relative;
+        z-index: 2;
+      }
+
+      .page-hero-title {
+        font-family: var(--font-serif);
+        font-size: 32px;
+        line-height: 1.5;
+        margin-bottom: 24px;
+        font-weight: normal;
+        letter-spacing: 0.06em;
+      }
+
+      .page-hero-sub {
+        font-size: 15px;
+        color: #e7ebf0;
+        letter-spacing: 0.1em;
+        line-height: 1.8;
+        max-width: 720px;
+        margin: 0 auto;
+      }
+
+      /* Executive Notice */
+      .executive-notice {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-top: 2px solid rgba(169, 138, 82, 0.72);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+        padding: 32px 40px;
+        max-width: 800px;
+        margin: 40px auto 0;
+      }
+
+      .executive-notice p {
+        margin: 0;
+        color: var(--gold-light);
+        font-size: 16px;
+        font-weight: bold;
+        letter-spacing: 0.1em;
+        font-family: var(--font-serif);
+      }
+
+      /* Main Content */
+      .main-section {
+        padding: 80px 0 100px;
+      }
+
+      .section-header {
+        text-align: center;
+        margin-bottom: 64px;
+      }
+
+      .section-title {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        color: var(--primary-color);
+        margin-bottom: 16px;
+        font-weight: normal;
+        letter-spacing: 0.05em;
+      }
+
+      .section-desc {
+        color: var(--text-muted);
+        font-size: 15px;
+      }
+
+      /* Pricing Plans */
+      .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        max-width: 1080px;
+        margin: 0 auto 40px;
+        align-items: flex-start;
+      }
+
+      .pricing-card {
+        background: #fff;
+        border: 1px solid var(--border-color);
+        padding: 48px 32px;
+        text-align: center;
+        position: relative;
+        transition: transform 0.3s ease;
+        box-shadow: 0 12px 24px rgba(16, 35, 61, 0.04);
+      }
+
+      .pricing-card.standard {
+        border: 2px solid var(--gold-color);
+        box-shadow: 0 24px 48px rgba(169, 138, 82, 0.12);
+        transform: translateY(-8px);
+        z-index: 2;
+      }
+
+      .pricing-badge {
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(180deg, #b79a63 0%, var(--gold-color) 55%, var(--gold-deep) 100%);
+        color: #fff;
+        padding: 4px 24px;
+        font-size: 11px;
+        font-weight: bold;
+        letter-spacing: 0.1em;
+        white-space: nowrap;
+        box-shadow: 0 4px 12px rgba(169, 138, 82, 0.3);
+      }
+
+      .plan-name {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--primary-color);
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+      }
+
+      .plan-target {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 24px;
+        min-height: 40px;
+      }
+
+      .plan-price {
+        font-size: 32px;
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 8px;
+        font-family: var(--font-serif);
+      }
+
+      .plan-price span {
+        font-size: 14px;
+        font-weight: normal;
+        font-family: var(--font-sans);
+      }
+
+      .plan-fee {
+        font-size: 13px;
+        color: var(--gold-deep);
+        font-weight: bold;
+        margin-bottom: 32px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        text-align: left;
+      }
+
+      .plan-features li {
+        font-size: 14px;
+        color: var(--text-main);
+        margin-bottom: 16px;
+        padding-left: 24px;
+        position: relative;
+        line-height: 1.6;
+      }
+
+      .plan-features li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 6px;
+        width: 6px;
+        height: 6px;
+        background-color: var(--gold-color);
+        border-radius: 50%;
+      }
+
+      .plan-features .includes {
+        color: var(--text-muted);
+        font-size: 13px;
+        border-bottom: 1px dashed var(--border-color);
+        padding-bottom: 8px;
+        margin-bottom: 16px;
+      }
+
+      .pricing-note {
+        text-align: center;
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.8;
+        max-width: 700px;
+        margin: 0 auto 80px;
+      }
+
+      /* Steps */
+      .steps-section {
+        background: var(--bg-light);
+        padding: 64px 40px;
+        max-width: 900px;
+        margin: 0 auto;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .steps-title {
+        text-align: center;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--primary-color);
+        margin-bottom: 40px;
+      }
+
+      .steps-container {
+        display: flex;
+        justify-content: space-between;
+        position: relative;
+      }
+
+      .steps-container::before {
+        content: '';
+        position: absolute;
+        top: 24px;
+        left: 10%;
+        right: 10%;
+        height: 1px;
+        background: rgba(169, 138, 82, 0.3);
+        z-index: 1;
+      }
+
+      .step-item {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        flex: 1;
+        padding: 0 16px;
+      }
+
+      .step-number {
+        width: 48px;
+        height: 48px;
+        background: #fff;
+        border: 2px solid var(--gold-color);
+        color: var(--gold-deep);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: bold;
+        margin: 0 auto 16px;
+        box-shadow: 0 4px 12px rgba(169, 138, 82, 0.15);
+      }
+
+      .step-text {
+        font-size: 15px;
+        font-weight: bold;
+        color: var(--primary-color);
+      }
+
+      /* CTA */
+      .cta-section {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(251, 248, 242, 1) 100%);
+        padding: 80px 0;
+        text-align: center;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .cta-inner {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .cta-actions {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      /* Footer */
+      footer {
+        background-color: #fbfbfa;
+        padding: 72px 0 36px;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .footer-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 40px;
+        margin-bottom: 28px;
+      }
+
+      .footer-brand {
+        max-width: 420px;
+        text-align: left;
+      }
+
+      .footer-logo {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--primary-color);
+        margin-bottom: 14px;
+      }
+
+      .footer-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.9;
+      }
+
+      .footer-links {
+        min-width: 320px;
+        text-align: right;
+      }
+
+      .footer-links-title {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        color: var(--gold-color);
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+
+      .footer-nav {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        margin-bottom: 0;
+      }
+
+      .footer-nav a {
+        font-size: 13px;
+        color: var(--primary-color);
+        letter-spacing: 0.04em;
+      }
+
+      .footer-nav a:hover,
+      .footer-nav a.active {
+        color: var(--gold-deep);
+      }
+
+      .footer-bottom {
+        border-top: 1px solid var(--border-color);
+        padding-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .footer-note,
+      .copyright {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Responsive */
+      @media (max-width: 980px) {
+        .pricing-grid {
+          grid-template-columns: 1fr;
+          gap: 32px;
+          max-width: 500px;
+        }
+        .pricing-card.standard {
+          transform: none;
+        }
+        .header-top-inner,
+        .header-bottom-inner {
+          gap: 14px;
+        }
+        .header-nav {
+          gap: 12px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .header-top-inner,
+        .header-bottom-inner {
+          padding: 14px 0;
+          flex-direction: column;
+          align-items: center;
+        }
+        .header-status,
+        .header-member-area,
+        .header-nav {
+          width: 100%;
+          justify-content: center;
+        }
+        .header-member-area .btn-login-wrap {
+          align-items: center;
+        }
+        .header-nav {
+          gap: 10px 16px;
+        }
+        .steps-container {
+          flex-direction: column;
+          gap: 32px;
+        }
+        .steps-container::before {
+          display: none;
+        }
+        .footer-inner,
+        .footer-bottom {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .footer-brand,
+        .footer-links {
+          max-width: none;
+          width: 100%;
+          text-align: left;
+        }
+        .footer-nav {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .cta-actions {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body style="">
+    <header>
+      <div class="header-top">
+        <div class="container header-top-inner">
+          <div class="header-status">
+            <span>完全審査制</span>
+            <span>認証企業限定プラットフォーム</span>
+            <span>ご入会前面談あり</span>
+          </div>
+          <div class="header-member-area">
+            <div class="btn-login-wrap">
+              <a href="/login" class="btn btn-gold btn-member" style="padding: 9px 16px; font-size: 11px">会員様ページはこちら</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-bottom">
+        <div class="container header-bottom-inner">
+          <a href="/" class="logo">&amp;line</a>
+          <nav class="header-nav" aria-label="グローバルナビゲーション">
+            <a href="/">ホーム</a>
+            <a href="/#services">サービス</a>
+            <a href="/terms-of-service">利用規約</a>
+            <a href="/privacy-policy">プライバシーポリシー</a>
+            <a href="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <div class="container page-hero-inner">
+          <h1 class="page-hero-title">認証済み企業様 会員ページ</h1>
+          <p class="page-hero-sub">
+            審査を通過された企業様のみがご利用いただける、上質な会員導線と料金プランのご案内です。
+          </p>
+
+          <div class="executive-notice">
+            <p>ご入会前に必ず一度、担当者との面談を実施しております。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="main-section">
+        <div class="container">
+          <div class="section-header">
+            <h2 class="section-title">ご利用プラン</h2>
+            <p class="section-desc">企業規模や運用体制に応じた3つのプランをご用意しております。</p>
+          </div>
+
+          <div class="pricing-grid">
+            <!-- LIGHT Plan -->
+            <div class="pricing-card">
+              <div class="plan-name">LIGHT</div>
+              <div class="plan-target">個人事業主・マイクロSES向け</div>
+              <div class="plan-price">20,000<span>円/月</span></div>
+              <div class="plan-fee">初期費用 0円</div>
+              <ul class="plan-features">
+                <li>DM送信無制限</li>
+                <li>基本検索機能</li>
+                <li>プロフィール公開</li>
+              </ul>
+            </div>
+
+            <!-- STANDARD Plan -->
+            <div class="pricing-card standard">
+              <div class="pricing-badge">RECOMMENDED</div>
+              <div class="plan-name">STANDARD</div>
+              <div class="plan-target">中小規模SES企業向け</div>
+              <div class="plan-price">50,000<span>円/月</span></div>
+              <div class="plan-fee">初期費用 0円</div>
+              <ul class="plan-features">
+                <li class="includes">LIGHTプランの全機能</li>
+                <li>企業認証バッジ付与</li>
+                <li>月1回の全体サポート</li>
+              </ul>
+            </div>
+
+            <!-- BUSINESS Plan -->
+            <div class="pricing-card">
+              <div class="plan-name">BUSINESS</div>
+              <div class="plan-target">大規模SES・組織運用向け</div>
+              <div class="plan-price">100,000<span>円/月</span></div>
+              <div class="plan-fee">初期費用 0円</div>
+              <ul class="plan-features">
+                <li class="includes">STANDARDの内容をすべて含む</li>
+                <li>大手SES・元請け企業向け</li>
+                <li>API連携・外部統合</li>
+                <li>無制限サポート付き</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="pricing-note">
+            <p>
+              ※当プラットフォームは認証企業様限定の完全審査制です。<br>
+              ※担当者との事前面談および審査完了後に、正式な利用開始（アカウント発行）となります。<br>
+              ※料金は税表記なしの基本価格となっております。詳細はお問い合わせ時にご案内いたします。
+            </p>
+          </div>
+
+          <div class="steps-section">
+            <h3 class="steps-title">ご利用開始までの流れ</h3>
+            <div class="steps-container">
+              <div class="step-item">
+                <div class="step-number">1</div>
+                <div class="step-text">事前面談</div>
+              </div>
+              <div class="step-item">
+                <div class="step-number">2</div>
+                <div class="step-text">審査・ご案内</div>
+              </div>
+              <div class="step-item">
+                <div class="step-number">3</div>
+                <div class="step-text">会員利用開始</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-section">
+        <div class="container">
+          <div class="cta-inner">
+            <p style="color: var(--text-muted); margin-bottom: 32px; font-size: 15px">
+              すでに認証済みの企業様は、下記より会員ページへお進みください。
+            </p>
+            <div class="cta-actions">
+              <a href="/" class="btn btn-outline" style="padding: 16px 40px">ホームへ戻る</a>
+              <div class="btn-login-wrap">
+                <a href="/login" class="btn btn-gold btn-member" style="padding: 16px 40px">会員様ページはこちら</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <div class="footer-logo">株式会社Animato techno</div>
+            <div class="footer-desc">
+              &amp;lineは、認証済み企業同士のみがアクセスできる、完全審査制のSES高効率ソーシング・プラットフォームです。<br>
+              品位ある情報流通と、実務に耐えるスピード感の両立を志向しています。
+            </div>
+          </div>
+          <div class="footer-links">
+            <div class="footer-links-title">SITE INFORMATION</div>
+            <nav class="footer-nav" aria-label="フッターナビゲーション">
+              <a href="/">ホーム</a>
+              <a href="/#services">サービス</a>
+              <a href="/terms-of-service">利用規約</a>
+              <a href="/privacy-policy">プライバシーポリシー</a>
+              <a href="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+            </nav>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <div class="footer-note">認証企業限定 / 完全審査制 / ご入会前面談あり</div>
+          <div class="copyright">© 2026 Animato techno Co.,Ltd. All Rights Reserved.</div>
+        </div>
+      </div>
+    </footer>
+  
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body></html>

@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light" style=""><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サービス | &amp;line | 認証企業限定 SES高効率ソーシング・プラットフォーム</title>
+    <meta name="description" content="完全審査制のSES特化型ソーシング基盤「&amp;line」のサービス紹介ページ。認証済み企業限定のクローズド環境で、案件・要員の商談機会を高速かつ安全につなぎます。">
+    <style>
+      :root {
+        --primary-color: #10233d;
+        --primary-deep: #0a1729;
+        --secondary-color: #5a6b7d;
+        --gold-color: #a98a52;
+        --gold-deep: #8b6e3f;
+        --gold-light: #d8c29a;
+        --bg-light: #f6f5f2;
+        --bg-white: #ffffff;
+        --text-main: #2f3440;
+        --text-muted: #666f7a;
+        --border-color: #e4e6ea;
+        --font-serif: 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif JP', serif;
+        --font-sans: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--font-sans);
+        color: var(--text-main);
+        background: linear-gradient(180deg, #fdfcf9 0%, #ffffff 18%, #fbfaf7 100%);
+        line-height: 1.8;
+        letter-spacing: 0.03em;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        text-decoration: none;
+      }
+
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      section {
+        padding: 100px 0;
+      }
+
+      section:nth-child(even) {
+        background-color: var(--bg-light);
+      }
+
+      .section-title {
+        text-align: center;
+        font-size: 34px;
+        color: var(--primary-color);
+        margin-bottom: 18px;
+        font-family: var(--font-serif);
+        font-weight: normal;
+        letter-spacing: 0.06em;
+      }
+
+      .section-subtitle {
+        text-align: center;
+        font-size: 12px;
+        color: var(--gold-color);
+        margin-bottom: 64px;
+        letter-spacing: 0.22em;
+        font-weight: bold;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px 32px;
+        font-size: 15px;
+        font-weight: bold;
+        border-radius: 3px;
+        transition: all 0.35s ease;
+        cursor: pointer;
+        letter-spacing: 0.08em;
+        box-shadow: 0 10px 24px rgba(16, 35, 61, 0.08);
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .btn-gold {
+        background: linear-gradient(180deg, #b79a63 0%, var(--gold-color) 55%, var(--gold-deep) 100%);
+        color: #fff;
+        border: 1px solid rgba(169, 138, 82, 0.88);
+      }
+
+      .btn-gold:hover {
+        background: linear-gradient(180deg, #c3a86f 0%, #a98a52 52%, #7c6035 100%);
+        border-color: var(--gold-deep);
+      }
+
+      .btn-primary {
+        background-color: var(--primary-color);
+        color: #fff;
+        border: 1px solid var(--primary-color);
+      }
+
+      .btn-primary:hover {
+        background-color: #0b1b30;
+      }
+
+      .btn-outline-white {
+        background-color: transparent;
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+      }
+
+      .btn-outline-white:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .btn-member {
+        position: relative;
+        min-width: 188px;
+        padding: 14px 22px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        box-shadow: 0 16px 34px rgba(122, 95, 47, 0.26);
+      }
+
+      .btn-member::after {
+        content: 'MEMBERS ONLY';
+        position: absolute;
+        top: -11px;
+        right: 16px;
+        padding: 2px 8px;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        color: var(--primary-color);
+        background: #f4ead7;
+        border: 1px solid rgba(169, 138, 82, 0.32);
+      }
+
+      .btn-login-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-login-note {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Header */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 6px 18px rgba(16, 35, 61, 0.04);
+      }
+
+      header .container {
+        max-width: 1120px;
+        padding: 0 16px;
+      }
+
+      .header-top {
+        background: rgba(250, 248, 244, 0.96);
+        border-bottom: 1px solid rgba(228, 230, 234, 0.9);
+      }
+
+      .header-top-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 50px;
+        gap: 16px;
+      }
+
+      .header-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .header-status span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 12px;
+        border: 1px solid rgba(169, 138, 82, 0.28);
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--gold-deep);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        font-weight: bold;
+        white-space: nowrap;
+      }
+
+      .header-member-area {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .header-member-area .btn-login-wrap {
+        align-items: flex-end;
+      }
+
+      .header-bottom {
+        background-color: rgba(255, 255, 255, 0.94);
+        border-bottom: 1px solid rgba(228, 230, 234, 0.9);
+      }
+
+      .header-bottom-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 72px;
+        gap: 24px;
+      }
+
+      .logo {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--primary-color);
+        font-weight: bold;
+        letter-spacing: 1.5px;
+        flex-shrink: 0;
+      }
+
+      .header-nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+
+      .header-nav a {
+        position: relative;
+        font-size: 12px;
+        color: var(--primary-color);
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+        line-height: 1.2;
+        padding: 4px 0;
+      }
+
+      .header-nav a::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: -3px;
+        width: 100%;
+        height: 1px;
+        background: rgba(169, 138, 82, 0.48);
+        transform: scaleX(0);
+        transform-origin: center;
+        transition: transform 0.25s ease;
+      }
+
+      .header-nav a:hover,
+      .header-nav a.active {
+        color: var(--gold-deep);
+      }
+
+      .header-nav a:hover::after,
+      .header-nav a.active::after {
+        transform: scaleX(1);
+      }
+
+      /* Hero */
+      .hero {
+        background-color: var(--primary-color);
+        color: #fff;
+        padding: 132px 0 124px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background:
+          radial-gradient(circle at top right, rgba(169, 138, 82, 0.12), transparent 28%),
+          linear-gradient(135deg, rgba(16, 35, 61, 0.96) 0%, rgba(16, 35, 61, 1) 100%);
+        z-index: 1;
+      }
+
+      .hero::after {
+        content: '';
+        position: absolute;
+        inset: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .hero-inner {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .hero-lead {
+        display: inline-block;
+        margin-bottom: 22px;
+        padding: 8px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: rgba(255, 255, 255, 0.84);
+        font-size: 12px;
+        letter-spacing: 0.16em;
+      }
+
+      .hero-title {
+        font-family: var(--font-serif);
+        font-size: 44px;
+        line-height: 1.45;
+        margin-bottom: 24px;
+        font-weight: normal;
+      }
+
+      .hero-desc {
+        font-size: 16px;
+        color: #e7ebf0;
+        margin-bottom: 48px;
+        max-width: 760px;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+      }
+
+      .hero-note {
+        margin-top: 24px;
+        font-size: 13px;
+        color: #a0aec0;
+        letter-spacing: 0.05em;
+      }
+
+      /* Service Overview */
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+        margin-top: 48px;
+      }
+
+      .overview-card {
+        background: #fff;
+        padding: 40px 32px;
+        border-top: 3px solid var(--gold-color);
+        box-shadow: 0 12px 30px rgba(16, 35, 61, 0.05);
+        text-align: center;
+      }
+
+      .overview-card h3 {
+        font-size: 18px;
+        color: var(--primary-color);
+        margin-top: 0;
+        margin-bottom: 16px;
+        font-family: var(--font-serif);
+      }
+
+      .overview-card p {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin: 0;
+        text-align: left;
+      }
+
+      /* Issues */
+      .issues-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 32px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .issue-card {
+        background: #fff;
+        padding: 32px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        gap: 20px;
+      }
+
+      .issue-card h3 {
+        font-size: 18px;
+        color: var(--primary-color);
+        margin-top: 0;
+        margin-bottom: 12px;
+      }
+
+      .issue-card p {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin: 0;
+      }
+
+      /* Features */
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+      }
+
+      .feature-card {
+        background: #fff;
+        padding: 32px 24px;
+        border: 1px solid var(--border-color);
+        text-align: center;
+      }
+
+      .feature-card h3 {
+        font-size: 16px;
+        color: var(--primary-color);
+        margin-bottom: 12px;
+      }
+
+      .feature-card p {
+        font-size: 13px;
+        color: var(--text-main);
+        text-align: left;
+        margin: 0;
+      }
+
+      /* Steps */
+      .steps-wrap {
+        display: flex;
+        justify-content: space-between;
+        max-width: 900px;
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .steps-wrap::before {
+        content: '';
+        position: absolute;
+        top: 24px;
+        left: 10%;
+        right: 10%;
+        height: 1px;
+        background: rgba(169, 138, 82, 0.3);
+        z-index: 1;
+      }
+
+      .step-item {
+        flex: 1;
+        text-align: center;
+        padding: 0 16px;
+        position: relative;
+        z-index: 2;
+      }
+
+      .step-number {
+        width: 48px;
+        height: 48px;
+        background: #fff;
+        border: 2px solid var(--gold-color);
+        color: var(--gold-deep);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: bold;
+        margin: 0 auto 16px;
+        box-shadow: 0 4px 12px rgba(169, 138, 82, 0.15);
+      }
+
+      .step-title {
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      .step-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      /* Benefits */
+      .benefits-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .benefit-row {
+        display: flex;
+        background: #fff;
+        border: 1px solid var(--border-color);
+        padding: 40px;
+        align-items: center;
+      }
+
+      .benefit-title {
+        flex: 0 0 300px;
+        font-size: 18px;
+        font-weight: bold;
+        color: var(--primary-color);
+        font-family: var(--font-serif);
+      }
+
+      .benefit-desc {
+        flex: 1;
+        font-size: 14px;
+      }
+
+      /* Pricing */
+      .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+      }
+
+      .price-card {
+        background: #fff;
+        border: 1px solid var(--border-color);
+        padding: 48px 32px;
+        position: relative;
+        box-shadow: 0 12px 30px rgba(16, 35, 61, 0.04);
+        text-align: center;
+      }
+
+      .price-card.recommended {
+        border-color: var(--gold-color);
+        box-shadow: 0 18px 40px rgba(16, 35, 61, 0.08);
+      }
+
+      .plan-name {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--primary-color);
+        margin-bottom: 16px;
+      }
+
+      .plan-price {
+        font-size: 32px;
+        font-weight: bold;
+        margin-bottom: 32px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--primary-color);
+      }
+
+      .plan-price span {
+        font-size: 16px;
+        font-weight: normal;
+      }
+
+      .plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        text-align: left;
+      }
+
+      .plan-features li {
+        font-size: 14px;
+        margin-bottom: 16px;
+        padding-left: 24px;
+        position: relative;
+        color: var(--text-main);
+      }
+
+      .plan-features li::before {
+        content: '■';
+        color: var(--gold-color);
+        position: absolute;
+        left: 0;
+        font-size: 10px;
+        top: 4px;
+      }
+
+      /* Compliance */
+      .compliance-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .compliance-card {
+        background: #fff;
+        padding: 32px;
+        border: 1px solid var(--border-color);
+      }
+
+      .compliance-card h3 {
+        color: var(--primary-color);
+        margin-top: 0;
+        font-size: 16px;
+        font-family: var(--font-serif);
+      }
+
+      .compliance-card p {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin: 0;
+      }
+
+      /* FAQ */
+      .faq-item {
+        border-bottom: 1px solid var(--border-color);
+        padding: 24px 0;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .faq-q {
+        font-weight: bold;
+        color: var(--primary-color);
+        font-size: 16px;
+        margin-bottom: 12px;
+      }
+
+      .faq-q::before {
+        content: 'Q.';
+        color: var(--gold-color);
+        margin-right: 12px;
+        font-family: var(--font-serif);
+      }
+
+      .faq-a {
+        font-size: 14px;
+        color: var(--text-muted);
+        padding-left: 28px;
+      }
+
+      /* Contact */
+      .contact-section {
+        background-color: var(--bg-light);
+        border-top: 1px solid var(--border-color);
+        padding: 100px 0;
+      }
+
+      .contact-inner {
+        max-width: 800px;
+        margin: 0 auto;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(251, 248, 242, 1) 100%);
+        padding: 72px 44px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+        border-top: 3px solid var(--gold-color);
+        box-shadow: 0 20px 48px rgba(16, 35, 61, 0.08);
+      }
+
+      /* Login */
+      .login-section {
+        background: linear-gradient(180deg, rgba(10, 23, 41, 1) 0%, rgba(16, 35, 61, 1) 100%);
+        color: #fff;
+        padding: 72px 0;
+        text-align: center;
+        border-top: 1px solid rgba(216, 194, 154, 0.18);
+      }
+
+      /* Footer */
+      footer {
+        background-color: #fbfbfa;
+        padding: 72px 0 36px;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .footer-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 40px;
+        margin-bottom: 28px;
+      }
+
+      .footer-brand {
+        max-width: 420px;
+        text-align: left;
+      }
+
+      .footer-logo {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        color: var(--primary-color);
+        margin-bottom: 14px;
+      }
+
+      .footer-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.9;
+      }
+
+      .footer-links {
+        min-width: 320px;
+        text-align: right;
+      }
+
+      .footer-links-title {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        color: var(--gold-color);
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+
+      .footer-nav {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        margin-bottom: 0;
+      }
+
+      .footer-nav a {
+        font-size: 13px;
+        color: var(--primary-color);
+        letter-spacing: 0.04em;
+      }
+
+      .footer-nav a:hover {
+        color: var(--gold-deep);
+      }
+
+      .footer-bottom {
+        border-top: 1px solid var(--border-color);
+        padding-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .footer-note,
+      .copyright {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      @media (max-width: 980px) {
+        .pricing-grid,
+        .features-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .hero-actions {
+          flex-direction: column;
+        }
+        .overview-grid,
+        .issues-grid,
+        .pricing-grid,
+        .compliance-grid,
+        .features-grid {
+          grid-template-columns: 1fr;
+        }
+        .benefit-row {
+          flex-direction: column;
+          gap: 16px;
+          align-items: flex-start;
+        }
+        .benefit-title {
+          flex: auto;
+        }
+        .steps-wrap {
+          flex-direction: column;
+          gap: 32px;
+        }
+        .steps-wrap::before {
+          display: none;
+        }
+        .header-top-inner,
+        .header-bottom-inner {
+          padding: 14px 0;
+          flex-direction: column;
+          align-items: center;
+        }
+        .header-status,
+        .header-member-area,
+        .header-nav {
+          width: 100%;
+          justify-content: center;
+        }
+        .header-nav {
+          gap: 10px 16px;
+        }
+        .footer-inner,
+        .footer-bottom {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .footer-brand,
+        .footer-links {
+          width: 100%;
+          text-align: left;
+        }
+        .footer-nav {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body id="top" style="">
+    <!-- Header -->
+    <header>
+      <div class="header-top">
+        <div class="container header-top-inner">
+          <div class="header-status">
+            <span>認証企業限定</span>
+            <span>完全審査制</span>
+            <span>職安法・派遣法対応済</span>
+          </div>
+          <div class="header-member-area">
+            <div class="btn-login-wrap">
+              <a href="/login" class="btn btn-gold btn-member" style="padding: 9px 16px; font-size: 11px">会員様ページはこちら</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-bottom">
+        <div class="container header-bottom-inner">
+          <a href="/" class="logo" data-route="/">&amp;line</a>
+          <nav class="header-nav" aria-label="グローバルナビゲーション">
+            <a href="/" data-route="/">ホーム</a>
+            <a href="#service-overview" data-scroll-target="service-overview" class="active">サービス</a>
+            <a href="/terms-of-service" data-route="/terms-of-service">利用規約</a>
+            <a href="/privacy-policy" data-route="/privacy-policy">プライバシーポリシー</a>
+            <a href="/specified-commercial-transactions" data-route="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <!-- 1. Hero -->
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-lead">PRIVATE MEMBERSHIP PLATFORM FOR CERTIFIED SES COMPANIES</div>
+        <h1 class="hero-title">認証済み企業だけが出会える、<br>SES商談のための上質な導線。</h1>
+        <p class="hero-desc">
+          完全審査制のクローズドな環境が、メール中心の非効率な業務や鮮度低下を防ぎます。<br>
+          情報品質と取引相手の信頼性を担保し、案件・要員の商談機会を圧倒的なスピード感でつなぎます。
+        </p>
+        <div class="hero-actions">
+          <a href="#contact" class="btn btn-outline-white" data-scroll-target="contact">審査面談・資料請求はこちら</a>
+          <div class="btn-login-wrap">
+            <a href="/login" class="btn btn-gold btn-member">会員様ページはこちら</a>
+            <span class="btn-login-note" style="color: rgba(255, 255, 255, 0.7)">※認証後ログイン画面へ遷移します</span>
+          </div>
+        </div>
+        <div class="hero-note">初期費用0円 / 最短1週間で導入 / 認証企業限定</div>
+      </div>
+    </section>
+
+    <!-- 2. Service Overview -->
+    <section id="service-overview">
+      <div class="container">
+        <h2 class="section-title">&amp;lineが提供するもの</h2>
+        <div class="section-subtitle">SERVICE OVERVIEW</div>
+        <p style="
+            text-align: center;
+            margin-bottom: 48px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 2;
+          ">
+          &amp;line（アンドライン）は、認証済み企業同士のみがつながるSES高効率ソーシング基盤です。<br>
+          不要なノイズを削ぎ落とし、案件・要員情報を「速く・正確に・安全に」流通させることで、<br>
+          機会損失をなくしビジネスを加速させます。
+        </p>
+
+        <div class="overview-grid">
+          <div class="overview-card">
+            <h3>信頼性 (Trust)</h3>
+            <p>
+              事前面談を通過した企業のみが参加できるクローズド環境。取引相手を見極める負荷を軽減し、質の高い商談に専念できます。
+            </p>
+          </div>
+          <div class="overview-card">
+            <h3>速度 (Speed)</h3>
+            <p>
+              1対1の即時チャット機能により、従来のメール業務で生じていたタイムラグを解消。先行者利益を確実なものにします。
+            </p>
+          </div>
+          <div class="overview-card">
+            <h3>情報品質 (Quality)</h3>
+            <p>
+              AIやカテゴリ最適化による鮮度の高い情報管理。募集終了案件への無駄なアプローチを防ぎ、常にクリーンな状態を保ちます。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Issues -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">解決する課題</h2>
+        <div class="section-subtitle">SOLVING INDUSTRY ISSUES</div>
+        <div class="issues-grid">
+          <div class="issue-card">
+            <div>
+              <h3>膨大なメール対応工数</h3>
+              <p>
+                日々送られてくる大量のメール確認・整理に追われ、本来注力すべき提案活動や関係構築の時間が奪われています。
+              </p>
+            </div>
+          </div>
+          <div class="issue-card">
+            <div>
+              <h3>タイムラグによる失注</h3>
+              <p>
+                メールの往復で発生する待機時間により、優秀な人材や優良案件を他社に奪われる機会損失が常態化しています。
+              </p>
+            </div>
+          </div>
+          <div class="issue-card">
+            <div>
+              <h3>情報の陳腐化</h3>
+              <p>手動管理によるステータス更新の遅れから、募集が終了した案件への無駄な問い合わせが発生しています。</p>
+            </div>
+          </div>
+          <div class="issue-card">
+            <div>
+              <h3>取引相手の見極め負荷</h3>
+              <p>
+                新規取引先の信頼性や実績の確認にリソースが割かれ、安全な商談にたどり着くまでのハードルが高くなっています。
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Features -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">主要機能</h2>
+        <div class="section-subtitle">FEATURES</div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <h3>厳密な企業審査と権限管理</h3>
+            <p>面談を通過した認証済み企業のみがアクセス可能。なりすましを排除し、安全な商圏を維持します。</p>
+          </div>
+          <div class="feature-card">
+            <h3>即時の1対1チャット</h3>
+            <p>メールの10倍以上のスピード感で直接コミュニケーション。素早いアプローチで商談を有利に進めます。</p>
+          </div>
+          <div class="feature-card">
+            <h3>AIによる情報鮮度維持</h3>
+            <p>ステータス更新のリマインドをAIが代行。更新漏れを防ぎ、常にノイズのない情報基盤を提供します。</p>
+          </div>
+          <div class="feature-card">
+            <h3>技術スタック別カテゴリ最適化</h3>
+            <p>スキルや役割ごとに情報を整理。求める人材・案件へ最短距離で直感的にアクセスできます。</p>
+          </div>
+          <div class="feature-card">
+            <h3>ステータス可視化</h3>
+            <p>「募集中」「提案中」「終了」などの状況が一目でわかり、無駄な連絡を削減します。</p>
+          </div>
+          <div class="feature-card">
+            <h3>API連携（上位プラン）</h3>
+            <p>貴社の既存社内システムとのシームレスなデータ連携が可能。業務フローを分断させません。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Steps -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">導入イメージ</h2>
+        <div class="section-subtitle">HOW IT WORKS</div>
+        <div class="steps-wrap">
+          <div class="step-item">
+            <div class="step-number">1</div>
+            <div class="step-title">審査面談</div>
+            <div class="step-desc">担当者よりサービス説明と簡単な企業審査を実施します。</div>
+          </div>
+          <div class="step-item">
+            <div class="step-number">2</div>
+            <div class="step-title">認証・初期設定</div>
+            <div class="step-desc">審査通過後、アカウントを発行。プロフィール等を設定します。</div>
+          </div>
+          <div class="step-item">
+            <div class="step-number">3</div>
+            <div class="step-title">掲載・検索</div>
+            <div class="step-desc">案件・要員情報を投稿、または条件に合う情報を検索します。</div>
+          </div>
+          <div class="step-item">
+            <div class="step-number">4</div>
+            <div class="step-title">直接商談</div>
+            <div class="step-desc">チャット機能で即座にコンタクトを取り、商談へ進みます。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Benefits -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">導入メリット</h2>
+        <div class="section-subtitle">BENEFITS</div>
+        <div class="benefits-wrap">
+          <div class="benefit-row">
+            <div class="benefit-title">営業リソースの劇的な創出</div>
+            <div class="benefit-desc">
+              月間数十時間に及ぶメール処理や監視業務をシステムが代替。空いた時間を新規開拓や深耕営業など、より本質的な業務に充てることができます。
+            </div>
+          </div>
+          <div class="benefit-row">
+            <div class="benefit-title">機会損失の最小化</div>
+            <div class="benefit-desc">
+              即時チャット機能とリアルタイム通知により、スピード勝負のSES業界において他社の一歩先を行くアプローチが可能になります。
+            </div>
+          </div>
+          <div class="benefit-row">
+            <div class="benefit-title">社内共有の標準化</div>
+            <div class="benefit-desc">
+              属人化しがちな案件・人材情報をプラットフォーム上で一元管理。社内での情報共有がスムーズになり、チーム全体の営業力が底上げされます。
+            </div>
+          </div>
+          <div class="benefit-row">
+            <div class="benefit-title">稟議に載せやすいコスト構造</div>
+            <div class="benefit-desc">
+              初期費用0円、月額低価格からのモデルを採用。既存の高額なSaaSと比べ、圧倒的に導入のハードルが低くスモールスタートが可能です。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Pricing -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">ご利用プラン</h2>
+        <div class="section-subtitle">PRICING</div>
+        <div class="pricing-grid">
+          <div class="price-card">
+            <div class="plan-name">LIGHT</div>
+            <div class="plan-price">20,000<span>円/月</span></div>
+            <ul class="plan-features">
+              <li>個人事業主・マイクロSES向け</li>
+              <li>DM送信無制限</li>
+              <li>基本検索機能</li>
+              <li>プロフィール公開</li>
+            </ul>
+          </div>
+          <div class="price-card recommended">
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: var(--gold-color);
+                color: #fff;
+                text-align: center;
+                font-size: 12px;
+                padding: 4px 0;
+                font-weight: bold;
+              ">
+              推奨プラン
+            </div>
+            <div class="plan-name" style="margin-top: 16px">STANDARD</div>
+            <div class="plan-price">50,000<span>円/月</span></div>
+            <ul class="plan-features">
+              <li>中小SES企業（10〜100名）向け</li>
+              <li>LIGHTプランの全機能</li>
+              <li>企業認証バッジ付与</li>
+              <li>月1回の全体サポート</li>
+            </ul>
+          </div>
+          <div class="price-card">
+            <div class="plan-name">BUSINESS</div>
+            <div class="plan-price">100,000<span>円/月</span></div>
+            <ul class="plan-features">
+              <li>大手SES・元請け企業向け</li>
+              <li>STANDARDプランの全機能</li>
+              <li>API連携・外部統合</li>
+              <li>無制限サポート付き</li>
+            </ul>
+          </div>
+        </div>
+        <p style="text-align: center; margin-top: 40px; font-weight: bold; color: var(--primary-color)">
+          全プラン 初期費用 0円
+        </p>
+      </div>
+    </section>
+
+    <!-- 8. Compliance -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">安心してご利用いただくために</h2>
+        <div class="section-subtitle">COMPLIANCE &amp; POLICY</div>
+        <div class="compliance-grid">
+          <div class="compliance-card">
+            <h3>完全審査制・認証済み企業限定</h3>
+            <p>
+              事前面談を通過した企業のみにアカウントを発行。身元が確かな相手とだけ商談できるクローズドな環境を維持しています。
+            </p>
+          </div>
+          <div class="compliance-card">
+            <h3>特定募集情報等提供事業の届出済み</h3>
+            <p>厚生労働省に対する届出を完了し、適法な情報の場としてのプラットフォームを提供しています。</p>
+          </div>
+          <div class="compliance-card">
+            <h3>厳格な個人情報保護</h3>
+            <p>
+              プライバシーポリシーに基づき、プラットフォーム上の個人情報および機密情報を適切かつ慎重に管理しています。
+            </p>
+          </div>
+          <div class="compliance-card">
+            <h3>適切な権限管理とルール設計</h3>
+            <p>
+              利用規約にて直接契約の禁止や適正な取引ルールを明文化し、会員企業様が安心して利用できる健全な場を構築しています。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. FAQ -->
+    <section>
+      <div class="container">
+        <h2 class="section-title">よくあるご質問</h2>
+        <div class="section-subtitle">FAQ</div>
+        <div>
+          <div class="faq-item">
+            <div class="faq-q">審査面談ではどのようなことを確認されますか？</div>
+            <div class="faq-a">
+              事業内容、取引実績、コンプライアンス体制などを確認させていただきます。優良なプラットフォーム環境を維持し、会員企業様に安心してご利用いただくための審査となります。
+            </div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q">現在利用している他社SaaSとの違いは何ですか？</div>
+            <div class="faq-a">
+              最大の違いは「参加企業の質」と「情報の鮮度・スピード」です。厳格な審査制を敷きつつ、洗練されたUIとチャット機能により、タイムラグを劇的に削減します。
+            </div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q">導入までにどのくらい日数がかかりますか？</div>
+            <div class="faq-a">審査面談後、最短で1日～2日<span style="letter-spacing: 0.03em;">でアカウントを発行、すぐにご利用を開始していただけます。</span></div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q">プランの変更は途中で可能ですか？</div>
+            <div class="faq-a">
+              はい、可能です。最初はLIGHTプランやSTANDARDプランからスモールスタートし、利用規模やAPI連携が必要になったタイミングでアップグレードしていただけます。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. Contact -->
+    <section class="contact-section" id="contact">
+      <div class="container">
+        <div class="contact-inner">
+          <h2 class="section-title" style="margin-bottom: 16px">まずは審査面談にお申し込みください</h2>
+          <p style="
+              margin-top: 0;
+              margin-bottom: 14px;
+              color: var(--gold-color);
+              font-size: 12px;
+              letter-spacing: 0.18em;
+              font-weight: bold;
+            ">
+            ENTRY FOR SELECTED COMPANIES
+          </p>
+          <p style="color: var(--text-muted); margin-bottom: 40px; font-size: 15px">
+            初回面談では、貴社の営業体制・案件特性・運用イメージを丁寧にうかがいながら、最適なご利用条件をご案内いたします。<br>
+            ご入会前に必ず一度、担当者との面談を実施しております。
+          </p>
+          <div style="display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; align-items: center">
+            <a href="#contact" class="btn btn-primary" style="padding: 16px 48px">審査面談・資料請求はこちら</a>
+            <div class="btn-login-wrap">
+              <a href="/login" class="btn btn-gold btn-member" style="padding: 16px 40px">会員様ページはこちら</a>
+              <span class="btn-login-note">※認証済み企業様はログインへお進みください</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. Login -->
+    <section class="login-section" id="login">
+      <div class="container">
+        <h2 style="
+            font-family: var(--font-serif);
+            font-weight: normal;
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 24px;
+          ">
+          認証済み企業様ログイン
+        </h2>
+        <p style="margin-bottom: 32px; font-size: 14px; opacity: 0.8">
+          ※事前面談を通過し、アカウントを発行された企業様専用の入り口です。
+        </p>
+        <div class="btn-login-wrap">
+          <a href="/login" class="btn btn-gold btn-member" style="padding: 16px 48px">会員様ページはこちら</a>
+          <span class="btn-login-note" style="color: rgba(255, 255, 255, 0.7); margin-top: 8px">認証後ログイン画面へ遷移します</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12. Footer -->
+    <footer>
+      <div class="container">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <div class="footer-logo">株式会社Animato techno</div>
+            <div class="footer-desc">
+              &amp;lineは、認証済み企業同士のみがアクセスできる、完全審査制のSES高効率ソーシング・プラットフォームです。<br>
+              品位ある情報流通と、実務に耐えるスピード感の両立を志向しています。
+            </div>
+          </div>
+          <div class="footer-links">
+            <div class="footer-links-title">SITE INFORMATION</div>
+            <nav class="footer-nav" aria-label="フッターナビゲーション">
+              <a href="/" data-route="/">ホーム</a>
+              <a href="#service-overview" data-scroll-target="service-overview">サービス</a>
+              <a href="/terms-of-service" data-route="/terms-of-service">利用規約</a>
+              <a href="/privacy-policy" data-route="/privacy-policy">プライバシーポリシー</a>
+              <a href="/specified-commercial-transactions" data-route="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+            </nav>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <div class="footer-note">認証企業限定 / 完全審査制 / ご入会前面談あり</div>
+          <div class="copyright">© 2026 Animato techno Co.,Ltd. All Rights Reserved.</div>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        const routeElements = document.querySelectorAll('[data-route]');
+        const scrollElements = document.querySelectorAll('[data-scroll-target]');
+
+        routeElements.forEach(function (element) {
+          element.addEventListener('click', function (event) {
+            const route = element.getAttribute('data-route');
+            if (route && route !== window.location.pathname) {
+              window.location.href = route;
+            }
+          });
+        });
+
+        scrollElements.forEach(function (element) {
+          element.addEventListener('click', function (event) {
+            const targetId = element.getAttribute('data-scroll-target');
+            const target = document.getElementById(targetId);
+            if (target) {
+              event.preventDefault();
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+        });
+      });
+    </script>
+  
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body></html>
