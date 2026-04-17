@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ページが見つかりません | &amp;line</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#10233d">
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+    <link rel="stylesheet" href="/src/common.css">
+    <style>
+      .notfound-wrap {
+        min-height: calc(100vh - 200px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 24px;
+        text-align: center;
+      }
+      .notfound-code {
+        font-family: var(--font-serif);
+        font-size: 96px;
+        color: var(--gold-color);
+        letter-spacing: 0.08em;
+        margin: 0 0 12px;
+        line-height: 1;
+      }
+      .notfound-title {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--primary-color);
+        margin: 0 0 16px;
+        font-weight: normal;
+        letter-spacing: 0.06em;
+      }
+      .notfound-desc {
+        font-size: 15px;
+        color: var(--text-muted);
+        max-width: 520px;
+        margin: 0 auto 40px;
+      }
+      .notfound-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="sr-only-focusable" href="#main">本文へスキップ</a>
+
+    <header>
+      <div class="header-top">
+        <div class="container header-top-inner">
+          <div class="header-status">
+            <span>完全審査制</span>
+            <span>認証企業限定プラットフォーム</span>
+            <span>ご入会前面談あり</span>
+          </div>
+          <div class="header-member-area">
+            <div class="btn-login-wrap">
+              <a href="/v1/auth/discord/start" class="btn btn-gold btn-member" style="padding: 9px 16px; font-size: 11px" aria-label="会員様専用ページへログイン">会員様ページはこちら</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-bottom">
+        <div class="container header-bottom-inner">
+          <a href="/" class="logo">&amp;line</a>
+          <nav class="header-nav" aria-label="グローバルナビゲーション">
+            <a href="/">ホーム</a>
+            <a href="/service">サービス</a>
+            <a href="/terms-of-service">利用規約</a>
+            <a href="/privacy-policy">プライバシーポリシー</a>
+            <a href="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="container notfound-wrap">
+        <p class="notfound-code">404</p>
+        <h1 class="notfound-title">ページが見つかりません</h1>
+        <p class="notfound-desc">
+          お探しのページは移動または削除された可能性があります。<br>
+          URLをご確認いただくか、下記よりトップページへお戻りください。
+        </p>
+        <div class="notfound-actions">
+          <a href="/" class="btn btn-primary">ホームへ戻る</a>
+          <a href="/service" class="btn btn-outline">サービス案内を見る</a>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <div class="footer-logo">株式会社Animato techno</div>
+            <div class="footer-desc">
+              &amp;lineは、認証済み企業同士のみがアクセスできる、完全審査制のSES高効率ソーシング・プラットフォームです。<br>
+              品位ある情報流通と、実務に耐えるスピード感の両立を志向しています。
+            </div>
+          </div>
+          <div class="footer-links">
+            <div class="footer-links-title">SITE INFORMATION</div>
+            <nav class="footer-nav" aria-label="フッターナビゲーション">
+              <a href="/">ホーム</a>
+              <a href="/service">サービス</a>
+              <a href="/terms-of-service">利用規約</a>
+              <a href="/privacy-policy">プライバシーポリシー</a>
+              <a href="/specified-commercial-transactions">特定商取引法に基づく表記</a>
+            </nav>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <div class="footer-note">認証企業限定 / 完全審査制 / ご入会前面談あり</div>
+          <div class="copyright">© 2026 Animato techno Co.,Ltd. All Rights Reserved.</div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

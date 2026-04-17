@@ -12,6 +12,20 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        // Marketing + legal static pages
+        home: path.resolve(__dirname, 'index.html'),
+        service: path.resolve(__dirname, 'service.html'),
+        terms: path.resolve(__dirname, 'terms-of-service.html'),
+        privacy: path.resolve(__dirname, 'privacy-policy.html'),
+        legal: path.resolve(__dirname, 'specified-commercial-transactions.html'),
+        notfound: path.resolve(__dirname, '404.html'),
+        // Member page hosts the PAY.JP subscription SPA
+        // (access gate → Discord OAuth → plan → PAY.JP card → 3DS)
+        member: path.resolve(__dirname, 'member.html'),
+      },
+    },
   },
   server: {
     host: '0.0.0.0',
