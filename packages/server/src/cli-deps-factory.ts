@@ -142,17 +142,28 @@ export function buildCliDepsFromPayjpApi(params: {
     try {
       return (await payjpApi.subscriptions.retrieve(subscriptionId)) as Record<string, unknown>;
     } catch (err) {
-      // H3 fix: transient PAY.JP エラーを silent null 化せず log 出力。
-      // CLI recovery の fail-close 判定で `null` を「未存在」と誤解する経路を防ぐ。
+      // PAY.JP SDK throws Error with `.status = HTTP status` (see payjp/built/resource.js).
+      // 404 = subscription deleted on PAY.JP → return null so reconcileMember can mark
+      // the local row as 'deleted' and revoke roles (matches REQ-SYNC behaviour).
+      // ANY other error (5xx, timeout, DNS, network) is transient/uncertain. Returning
+      // null here would let `reconcileMember` UPDATE subscription_status='deleted' and
+      // revoke Discord roles for *every active member* during a single PAY.JP outage,
+      // because daily resync iterates all members on the same broken connection.
+      // Re-throw transient errors so handleAllReconciliation's catch counts the member
+      // as failed and leaves DB state untouched.
+      const status = (err as { status?: unknown }).status;
+      const isNotFound = typeof status === 'number' && status === 404;
       log({
         timestamp: now().toISOString(),
         service: 'cli-deps-factory',
         endpoint: 'payjp/subscriptions.retrieve',
-        result: 'error',
+        result: isNotFound ? 'success' : 'error',
         subscription_id: subscriptionId,
         error: String(err),
+        ...(typeof status === 'number' ? { http_status: status } : {}),
       });
-      return null;
+      if (isNotFound) return null;
+      throw err;
     }
   };
 
