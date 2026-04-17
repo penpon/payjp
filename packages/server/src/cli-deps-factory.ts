@@ -96,11 +96,23 @@ export function buildCliDepsFromPayjpApi(params: {
 
   async function syncRole(userId: string, action: 'grant' | 'revoke', roleId: string): Promise<void> {
     const endpoint = `/guilds/${discordGuildId}/members/${userId}/roles/${roleId}` as const;
-    if (action === 'grant') {
-      await discordRest.put(endpoint);
-    } else {
-      await discordRest.delete(endpoint);
+    let lastError: unknown;
+    for (const delayMs of [0, 1000, 2000]) {
+      if (delayMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      }
+      try {
+        if (action === 'grant') {
+          await discordRest.put(endpoint, { signal: AbortSignal.timeout(1000) });
+        } else {
+          await discordRest.delete(endpoint, { signal: AbortSignal.timeout(1000) });
+        }
+        return;
+      } catch (err) {
+        lastError = err;
+      }
     }
+    throw lastError;
   }
 
   const listPayjpCharges: CliDeps['listPayjpCharges'] = async (chargeParams, offset) => {

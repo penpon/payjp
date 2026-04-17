@@ -546,7 +546,7 @@ describe('INT-SYNC-025: Discord role retry', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect(syncRole).toHaveBeenCalled();
+    expect(syncRole).toHaveBeenCalledWith('user_1', 'grant', 'role_1');
   });
 });
 
@@ -652,7 +652,7 @@ describe('Webhook malformed payload edge cases', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect(deps.syncRole).toHaveBeenCalled();
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant', 'role_1');
   });
 
   it('event with data.metadata absent entirely → member resolution by subscription_id', async () => {
@@ -669,7 +669,7 @@ describe('Webhook malformed payload edge cases', () => {
 
     const res = await handleWebhook(req, deps);
     expect(res.status).toBe(200);
-    expect(deps.syncRole).toHaveBeenCalled();
+    expect(deps.syncRole).toHaveBeenCalledWith('user_1', 'grant', 'role_1');
   });
 
   it('event with data.object !== "subscription" → ignored', async () => {

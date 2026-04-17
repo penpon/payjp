@@ -743,7 +743,7 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-062: Subscribe orchestration ordering
   // -------------------------------------------------------------------------
   describe('PROP-BILL-062: Subscribe orchestration ordering', () => {
-    it('returns 503 without operationId when setInflightOperation fails (no persisted inflight row)', async () => {
+    it('returns 503 with operationId when setInflightOperation fails (operationId generated but not persisted)', async () => {
       const deps = makeSuccessfulDeps();
       (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db write failed'));
 
@@ -753,7 +753,7 @@ describe('POST /v1/subscriptions — Integration', () => {
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
         expect(result.errorCode).toBe('DB_UPDATE_FAILED');
-        expect(result.operationId).toBeUndefined();
+        expect(result.operationId).toBeDefined();
       }
     });
 
