@@ -488,6 +488,19 @@ describe('POST /v1/subscriptions', () => {
     expect(body.operationId).toBe(OPERATION_ID);
   });
 
+  it('returns 503 with operationId when subscribe hits an unexpected post-persistence failure', async () => {
+    const deps = makeMockDeps();
+    (deps.payjp.createSubscription as ReturnType<typeof vi.fn>).mockResolvedValue(undefined as never);
+    const app = createApp(deps);
+
+    const res = await app.inject(subscribeInjectOpts(SUBSCRIBE_URL, subscribePayload()));
+
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.errorCode).toBe('INTERNAL_ERROR');
+    expect(body.operationId).toBe(OPERATION_ID);
+  });
+
   it('returns 200 with existing subscription when already active', async () => {
     const deps = makeMockDeps({
       subscription_status: 'active',
@@ -878,6 +891,43 @@ describe('POST /v1/subscriptions/cancel', () => {
 
     expect(res.statusCode).toBe(503);
     expect(res.json().operationId).toBe(OPERATION_ID);
+  });
+
+  it('returns 503 with operationId when cancel hits an unexpected post-persistence failure', async () => {
+    const deps = makeCancelDeps();
+    (deps.payjp.cancelSubscription as ReturnType<typeof vi.fn>).mockResolvedValue(undefined as never);
+    const app = createApp(deps);
+
+    const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload()));
+
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.errorCode).toBe('INTERNAL_ERROR');
+    expect(body.operationId).toBe(OPERATION_ID);
+  });
+
+  it('returns 503 with operationId when cancel response construction throws after persistence', async () => {
+    const deps = makeCancelDeps();
+    (deps.db.updateMemberAfterCancel as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeMember({
+        subscription_status: 'canceled',
+        access_end_at: null,
+        next_billing_at: null,
+        payjp_subscription_id: PAYJP_SUBSCRIPTION_ID,
+        payjp_customer_id: PAYJP_CUSTOMER_ID,
+        payjp_plan_id: PLAN_ID,
+        cancel_requested_at: NOW,
+        role_state: 'granted',
+      }),
+    );
+    const app = createApp(deps);
+
+    const res = await app.inject(injectOpts(CANCEL_URL, cancelPayload()));
+
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.errorCode).toBe('INTERNAL_ERROR');
+    expect(body.operationId).toBe(OPERATION_ID);
   });
 
   it('returns 401 when link session is expired', async () => {

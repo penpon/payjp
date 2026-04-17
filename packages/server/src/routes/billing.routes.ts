@@ -77,6 +77,24 @@ function subscriptionStatusBodyForMember(
   };
 }
 
+function createRequestScopedBillingDeps(billingDeps: BillingDeps): {
+  billingDeps: BillingDeps;
+  getOperationId: () => string | undefined;
+} {
+  let operationId: string | undefined;
+  return {
+    billingDeps: {
+      ...billingDeps,
+      generateOperationId: () => {
+        const generated = billingDeps.generateOperationId();
+        operationId = generated;
+        return generated;
+      },
+    },
+    getOperationId: () => operationId,
+  };
+}
+
 export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: BillingDeps }) {
   const { billingDeps } = opts;
 
@@ -124,9 +142,10 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         linkSessionToken,
         accessGateSessionToken,
       };
+      const requestScoped = createRequestScopedBillingDeps(billingDeps);
 
       try {
-        const result = await handleSubscribe(req, billingDeps);
+        const result = await handleSubscribe(req, requestScoped.billingDeps);
         // Issue __Host-member_session cookie on successful subscribe
         if (result.ok && result.memberSessionToken) {
           const attrs = buildCookieAttributes('__Host-member_session', 86400);
@@ -134,6 +153,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         }
         return sendBillingResponse(reply, result);
       } catch (err) {
+        const operationId = requestScoped.getOperationId();
         console.error(
           JSON.stringify({
             level: 'error',
@@ -141,6 +161,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
             message: 'subscribe handler threw unexpectedly',
             error: err instanceof Error ? err.message : String(err),
             stack: err instanceof Error ? err.stack : undefined,
+            ...(operationId !== undefined ? { operationId } : {}),
             timestamp: new Date().toISOString(),
           }),
         );
@@ -149,6 +170,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           statusCode: 503,
           errorCode: 'INTERNAL_ERROR',
           message: 'An unexpected error occurred',
+          ...(operationId !== undefined ? { operationId } : {}),
         });
       }
     },
@@ -341,11 +363,13 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         secret: sharedSecret,
         signature,
       };
+      const requestScoped = createRequestScopedBillingDeps(billingDeps);
 
       try {
-        const result = await handleGoogleCancelSubmit(req, billingDeps);
+        const result = await handleGoogleCancelSubmit(req, requestScoped.billingDeps);
         return sendBillingResponse(reply, result);
       } catch (err) {
+        const operationId = requestScoped.getOperationId();
         console.error(
           JSON.stringify({
             level: 'error',
@@ -353,6 +377,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
             message: 'cancel google-submit handler threw unexpectedly',
             error: err instanceof Error ? err.message : String(err),
             stack: err instanceof Error ? err.stack : undefined,
+            ...(operationId !== undefined ? { operationId } : {}),
             timestamp: new Date().toISOString(),
           }),
         );
@@ -361,6 +386,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           statusCode: 503,
           errorCode: 'INTERNAL_ERROR',
           message: 'An unexpected error occurred',
+          ...(operationId !== undefined ? { operationId } : {}),
         });
       }
     },
@@ -400,11 +426,13 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
         origin,
         linkSessionToken,
       };
+      const requestScoped = createRequestScopedBillingDeps(billingDeps);
 
       try {
-        const result = await handleCancel(req, billingDeps);
+        const result = await handleCancel(req, requestScoped.billingDeps);
         return sendBillingResponse(reply, result);
       } catch (err) {
+        const operationId = requestScoped.getOperationId();
         console.error(
           JSON.stringify({
             level: 'error',
@@ -412,6 +440,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
             message: 'cancel handler threw unexpectedly',
             error: err instanceof Error ? err.message : String(err),
             stack: err instanceof Error ? err.stack : undefined,
+            ...(operationId !== undefined ? { operationId } : {}),
             timestamp: new Date().toISOString(),
           }),
         );
@@ -420,6 +449,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
           statusCode: 503,
           errorCode: 'INTERNAL_ERROR',
           message: 'An unexpected error occurred',
+          ...(operationId !== undefined ? { operationId } : {}),
         });
       }
     },
