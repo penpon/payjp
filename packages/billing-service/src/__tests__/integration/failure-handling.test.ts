@@ -327,7 +327,7 @@ describe('Failure Handling — Integration', () => {
       expect(deps.db.clearInflightOperation).not.toHaveBeenCalled();
     });
 
-    it('returns 503 without operationId when setInflightOperation fails (no persisted inflight row)', async () => {
+    it('returns 503 with operationId when setInflightOperation fails (operationId generated but not persisted)', async () => {
       const deps = makeSubscribeDeps();
       (deps.db.setInflightOperation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db write timeout'));
 
@@ -337,7 +337,7 @@ describe('Failure Handling — Integration', () => {
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
         expect(result.errorCode).toBe('DB_UPDATE_FAILED');
-        expect(result.operationId).toBeUndefined();
+        expect(result.operationId).toBe(OPERATION_ID);
       }
     });
   });
@@ -601,7 +601,7 @@ describe('Failure Handling — Integration', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.statusCode).toBe(503);
-        expect(result.errorCode).toBe('DISCORD_ROLE_REVOKE_FAILED');
+        expect(result.errorCode).toBe('ROLE_REVOKE_FAILED');
         // PAY.JP cancel + DB update succeeded (inflight cleared); include operationId for recovery correlation.
         expect(result.operationId).toBe(OPERATION_ID);
       }

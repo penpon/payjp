@@ -135,7 +135,7 @@ async function immediateCancelPrecheck(
     return {
       ok: false,
       statusCode: 409,
-      errorCode: 'NO_ACCESS_END',
+      errorCode: 'ACCESS_END_AT_NULL',
       message: 'access_end_at is not set',
     };
   }
@@ -323,7 +323,7 @@ async function finalizeImmediateCancel(
       return {
         ok: false,
         statusCode: 503,
-        errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
+        errorCode: 'ROLE_REVOKE_FAILED',
         message: 'Discord role revoke failed after cancel',
         ...(ctx.operationId !== undefined ? { operationId: ctx.operationId } : {}),
       };
@@ -351,7 +351,7 @@ async function finalizeImmediateCancel(
     return {
       ok: false,
       statusCode: 503,
-      errorCode: 'DISCORD_ROLE_REVOKE_FAILED',
+      errorCode: 'ROLE_REVOKE_FAILED',
       message: 'Discord role mapping missing for immediate revoke',
       ...(ctx.operationId !== undefined ? { operationId: ctx.operationId } : {}),
     };
