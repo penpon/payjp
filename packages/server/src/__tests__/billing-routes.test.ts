@@ -1173,7 +1173,7 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
     expect(callOrder.indexOf('setInflightOperation')).toBeLessThan(callOrder.indexOf('cancelSubscription'));
   });
 
-  it('accepts legacy X-Google-Cancel-Secret when X-Cancel-Secret is absent (signature still required)', async () => {
+  it('accepts X-Cancel-Secret with valid signature', async () => {
     const deps = createGoogleSubmitDeps();
     const app = createApp(deps);
     const linkRes = await app.inject(
@@ -1189,7 +1189,7 @@ describe('POST /v1/subscriptions/cancel/google-submit', () => {
       url: URL,
       headers: {
         'content-type': 'application/json',
-        'x-google-cancel-secret': 'google-shared-secret',
+        'x-cancel-secret': 'google-shared-secret',
         'x-cancel-signature': signature,
       },
       payload: {

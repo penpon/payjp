@@ -325,12 +325,7 @@ export async function billingRoutes(app: FastifyInstance, opts: { billingDeps: B
       const { body } = extractRequestContext(request);
 
       const h = request.headers;
-      const sharedSecret =
-        typeof h['x-cancel-secret'] === 'string'
-          ? h['x-cancel-secret']
-          : typeof h['x-google-cancel-secret'] === 'string'
-            ? h['x-google-cancel-secret']
-            : '';
+      const sharedSecret = typeof h['x-cancel-secret'] === 'string' ? h['x-cancel-secret'] : '';
       const signature = typeof h['x-cancel-signature'] === 'string' ? h['x-cancel-signature'] : '';
 
       const req: GoogleCancelSubmitRequest = {

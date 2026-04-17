@@ -34,6 +34,8 @@ function submitCancelToServer(email, name, reason, token) {
     .map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); })
     .join('');
 
+  // ⚠️ セキュリティ警告: X-Cancel-Secret の値を Logger.log() や console.log() で
+  // 出力しないこと。GAS の実行ログ（Apps Script ダッシュボード）に平文記録される。
   const response = UrlFetchApp.fetch('https://api.and--line.com/v1/subscriptions/cancel/google-submit', {
     method: 'post',
     contentType: 'application/json',
@@ -52,6 +54,11 @@ function submitCancelToServer(email, name, reason, token) {
   return JSON.parse(response.getContentText());
 }
 ```
+
+## セキュリティ注意事項
+
+- `X-Cancel-Secret` の値を `Logger.log()` や `console.log()` で出力しないこと。Apps Script ダッシュボードの実行ログに平文記録され、ダッシュボードにアクセスできる全員が閲覧できる。
+- すでにログ出力した場合は、直ちに `GOOGLE_FORM_CANCEL_SECRET` をローテートし、サーバー側 `.env` と Script Properties を同時に更新すること。
 
 ## デプロイ手順
 

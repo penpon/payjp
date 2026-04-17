@@ -364,18 +364,19 @@ main() {
 	trap 'on_signal INT' INT
 	trap 'on_signal TERM' TERM
 
+	# op signin BEFORE tee — prevents session token from appearing in deploy log
+	CURRENT_STEP="op signin"
+	if ! eval "$(op signin)"; then
+		echo "Error: op signin failed or was cancelled." >&2
+		exit 1
+	fi
+	AFTER_OP=1
+
 	rotate_deploy_log_if_needed
 	exec > >(tee -a "$DEPLOY_LOG") 2>&1
 
 	log "Deploy start sha=${SHA} host=${HOST_SHORT}"
 	START_TS=$(date +%s)
-
-	CURRENT_STEP="op signin"
-	if ! eval "$(op signin)"; then
-		log "Error: op signin failed or was cancelled."
-		exit 1
-	fi
-	AFTER_OP=1
 
 	ensure_notify_state_dir
 
