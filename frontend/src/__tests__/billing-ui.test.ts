@@ -97,8 +97,8 @@ describe('billing-ui', () => {
       expect(container.querySelector('#billing-consent')).not.toBeNull();
       const links = container.querySelectorAll('.consent-link');
       expect(links.length).toBe(2);
-      expect(links[0]?.getAttribute('href')).toBe('/terms.html');
-      expect(links[1]?.getAttribute('href')).toBe('/privacy.html');
+      expect(links[0]?.getAttribute('href')).toBe('/terms-of-service');
+      expect(links[1]?.getAttribute('href')).toBe('/privacy-policy');
       expect(links[0]?.getAttribute('rel')).toBe('noopener noreferrer');
       expect(links[1]?.getAttribute('rel')).toBe('noopener noreferrer');
     });

@@ -361,11 +361,11 @@ function renderBillingForm(
     el('div', { class: 'consent-row' }, [
       checkbox,
       el('label', { class: 'consent-label', for: 'billing-consent' }, [
-        el('a', { href: '/terms.html', target: '_blank', rel: 'noopener noreferrer', class: 'consent-link' }, [
+        el('a', { href: '/terms-of-service', target: '_blank', rel: 'noopener noreferrer', class: 'consent-link' }, [
           '利用規約',
         ]),
         ' および ',
-        el('a', { href: '/privacy.html', target: '_blank', rel: 'noopener noreferrer', class: 'consent-link' }, [
+        el('a', { href: '/privacy-policy', target: '_blank', rel: 'noopener noreferrer', class: 'consent-link' }, [
           '個人情報の取り扱い',
         ]),
         ' に同意する',

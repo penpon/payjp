@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { installPayjpMockRoute } from '../fixtures/payjp-mock.js';
 
 async function fillBillingFormReadyToSubmit(page: import('@playwright/test').Page, email: string): Promise<void> {
-  await page.goto('/');
+  await page.goto('/member');
   await expect(page.getByRole('heading', { name: 'プランを選択' })).toBeVisible();
   await page.fill('#billing-email', email);
   await page.fill('#billing-name', 'TARO E2E');

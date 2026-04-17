@@ -12,7 +12,7 @@ test.describe('subscribe → Discord OAuth → subscribed → cancel modal', () 
   test('full path to Google Form handoff', async ({ page }) => {
     const email = `e2e-journey-${Date.now()}@example.com`;
 
-    await page.goto('/');
+    await page.goto('/member');
     await expect(page.getByRole('heading', { name: 'プランを選択' })).toBeVisible();
     await page.fill('#billing-email', email);
     await page.fill('#billing-name', 'JOURNEY E2E');

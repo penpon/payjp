@@ -4,7 +4,7 @@ import { installPayjpMockRoute } from '../fixtures/payjp-mock.js';
 test('subscribe flow shows completion after Discord and billing', async ({ page }) => {
   await installPayjpMockRoute(page);
   const email = `e2e-subscribe-${Date.now()}@example.com`;
-  await page.goto('/');
+  await page.goto('/member');
 
   await expect(page.getByRole('heading', { name: 'プランを選択' })).toBeVisible();
   await page.fill('#billing-email', email);
