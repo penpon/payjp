@@ -31,8 +31,6 @@ export function isForbiddenCrossSiteFetch(request: FastifyRequest): boolean {
   if (site === 'absent') {
     return false;
   }
-  if (site === 'blank') {
-    return true;
-  }
-  return site === 'cross-site';
+  const ALLOWED = new Set(['same-origin', 'same-site']);
+  return !ALLOWED.has(site);
 }

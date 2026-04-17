@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS members (
 
 CREATE INDEX IF NOT EXISTS members_payjp_subscription_id_idx ON members (payjp_subscription_id) WHERE payjp_subscription_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS members_subscription_status_idx ON members (subscription_status);
+-- Prevent double trial: each email may receive trial benefits only once
+CREATE UNIQUE INDEX IF NOT EXISTS members_email_trial_once
+  ON members (lower(email)) WHERE first_trial_granted_at IS NOT NULL;
 
 -- Table 2: payjp_events — Webhook受信履歴と処理結果 (sync-service 管理)
 CREATE TABLE IF NOT EXISTS payjp_events (

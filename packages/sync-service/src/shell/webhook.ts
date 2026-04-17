@@ -336,6 +336,15 @@ export async function handleWebhook(req: WebhookRequest, deps: WebhookHandlerDep
 
   // --- Post-transaction: role sync (best-effort, outside transaction) ---
   if (txResult.type === 'unknown_status') {
+    try {
+      await insertImpactLog(deps.db, txResult.lockedMember.id as string, ROLE_SYNC_FAILED_WEBHOOK, undefined, {
+        errorLabel: 'webhook_unknown_status',
+        action: 'revoke',
+        message: 'unknown PAY.JP subscription status',
+      });
+    } catch {
+      // best-effort; continue with role revoke
+    }
     await attemptRoleSyncAllRoles(deps, txResult.lockedMember, 'revoke', 'role_sync_failed_unknown_status');
   }
 

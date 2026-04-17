@@ -184,7 +184,7 @@ export function isSubscriptionCreatedEvent(eventType: string): boolean {
 
 // REQ-SYNC-002/003/004: PROP-SYNC-015
 export function determineIgnoreReason(event: WebhookEvent, expectedLivemode: boolean): string | null {
-  if (event.livemode !== undefined && isLivemodeMismatch(event.livemode, expectedLivemode)) {
+  if (event.livemode === undefined || isLivemodeMismatch(event.livemode, expectedLivemode)) {
     return 'livemode_mismatch';
   }
   if (event.type && !isAllowedEventType(event.type)) {

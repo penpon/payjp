@@ -19,6 +19,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const cfTeamDomain = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN?.trim() ?? '';
+  const cfAudience = process.env.CLOUDFLARE_ACCESS_AUDIENCE?.trim() ?? '';
+  const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? '';
+  if (!cfTeamDomain || !cfAudience) {
+    if (!adminApiKey) {
+      process.stderr.write(
+        '[admin-server] When CLOUDFLARE_ACCESS_TEAM_DOMAIN/AUDIENCE are unset, ADMIN_API_KEY is required\n',
+      );
+      process.exit(1);
+    }
+  }
+
   const sslDisabled = databaseUrl.includes('sslmode=disable');
   const pool = createPool(databaseUrl, sslDisabled ? { ssl: false } : undefined);
   await runMigrations(pool);

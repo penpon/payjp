@@ -38,4 +38,12 @@ describe('isForbiddenCrossSiteFetch', () => {
   it('allows same-origin', () => {
     expect(isForbiddenCrossSiteFetch(req({ 'sec-fetch-site': 'same-origin' }))).toBe(false);
   });
+
+  it('allows same-site', () => {
+    expect(isForbiddenCrossSiteFetch(req({ 'sec-fetch-site': 'same-site' }))).toBe(false);
+  });
+
+  it('rejects Sec-Fetch-Site: none (top-level navigation, not same-origin)', () => {
+    expect(isForbiddenCrossSiteFetch(req({ 'sec-fetch-site': 'none' }))).toBe(true);
+  });
 });

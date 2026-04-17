@@ -16,6 +16,7 @@ import {
   formatRfc3339Utc,
   isAccessEndExpired,
   isInflightOperationStale,
+  mapSubscriptionStatus,
   type PlanRoleMapping,
   resolveRoleIdForPlan,
   type SubscriptionCandidate,
@@ -392,6 +393,7 @@ async function handleSubscribeRecovery(
   if (!subscriptionId) {
     let found: SubscriptionCandidate | undefined;
     let subOffset = 0;
+    let subHasMoreAtLimit = false;
     while (subOffset <= 900) {
       const result = await deps.listPayjpSubscriptions(customerId, subOffset);
       for (const sub of result.data) {
@@ -405,14 +407,27 @@ async function handleSubscribeRecovery(
       if (found) break;
       if (!result.has_more) break;
       subOffset += 100;
-      if (subOffset > 900 && result.has_more) break;
+      if (subOffset > 900 && result.has_more) {
+        subHasMoreAtLimit = true;
+        break;
+      }
+    }
+
+    if (subHasMoreAtLimit) {
+      await insertImpactLog(deps.db, memberId, 'subscribe_recovery_subscription_ambiguous', operationId);
+      return { success: false };
     }
 
     if (found) {
       subscriptionId = found.id;
+      const mappedStatus = mapSubscriptionStatus(found.status as string);
+      if (!mappedStatus) {
+        await insertImpactLog(deps.db, memberId, 'subscribe_recovery_subscription_ambiguous', operationId);
+        return { success: false };
+      }
       await deps.db.query(
         'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
-        [subscriptionId, found.status, memberId],
+        [subscriptionId, mappedStatus, memberId],
       );
     } else {
       const subParams: Record<string, unknown> = {
@@ -427,10 +442,15 @@ async function handleSubscribeRecovery(
       try {
         const sub = await deps.createPayjpSubscription(subParams);
         subscriptionId = sub.id;
+        const mappedSubStatus = mapSubscriptionStatus(sub.status as string);
+        if (!mappedSubStatus) {
+          await insertImpactLog(deps.db, memberId, 'subscribe_recovery_subscription_ambiguous', operationId);
+          return { success: false };
+        }
         try {
           await deps.db.query(
             'UPDATE members SET payjp_subscription_id = $1, subscription_status = $2, updated_at = now() WHERE id = $3',
-            [subscriptionId, sub.status, memberId],
+            [subscriptionId, mappedSubStatus, memberId],
           );
         } catch (dbErr) {
           deps.log({

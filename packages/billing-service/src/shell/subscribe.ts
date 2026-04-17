@@ -173,7 +173,17 @@ export async function handleSubscribe(req: SubscribeRequest, deps: BillingDeps):
 
     // Step 6: Existing subscription short-circuit (after gate; does not leak existence pre-gate)
     if (hasActiveSubscription(member.subscription_status, member.access_end_at, now)) {
-      const response = buildSubscriptionResponse(member);
+      let response: ReturnType<typeof buildSubscriptionResponse>;
+      try {
+        response = buildSubscriptionResponse(member);
+      } catch {
+        return {
+          ok: false,
+          statusCode: 503,
+          errorCode: 'MEMBER_DATA_INCOMPLETE',
+          message: 'Member data is incomplete for active subscription',
+        };
+      }
       // Non-fatal: session token issuance failure should not fail an already-active subscription response.
       const memberSessionToken = await issueMemberSessionToken(db, member.id, now, { email: normalizedEmail });
       if (memberSessionToken === undefined) {
