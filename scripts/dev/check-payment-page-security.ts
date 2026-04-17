@@ -1,14 +1,17 @@
 /**
  * Payment page security checks (static + optional live).
  *
- * Static (default): CSP parity `_headers` vs nginx, source/dist index.html allowlists,
+ * Static (default): nginx CSP matches EXPECTED, source/dist member.html allowlists,
  * no Google Fonts in `frontend/public/*.html`.
  *
  * Live (`--live` or `PAYMENT_PAGE_URL`): HTTPS GET and verify headers + HTML allowlist.
  *
+ * Payment page lives at /member (source: frontend/member.html, dist: frontend/dist/member.html).
+ * nginx is the sole source of truth for CSP; there is no _headers file (not CF Pages).
+ *
  * @example
  * npm run check:payment-security
- * PAYMENT_PAGE_URL=https://example.com/ npm run check:payment-security:live
+ * PAYMENT_PAGE_URL=https://example.com/member npm run check:payment-security:live
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-/** Must match [frontend/public/_headers](frontend/public/_headers) and [nginx/security-headers.conf](nginx/security-headers.conf). */
+/** Must match [nginx/security-headers.conf](nginx/security-headers.conf). */
 export const EXPECTED_CSP =
   "default-src 'self'; script-src 'self' https://js.pay.jp; style-src 'self'; font-src 'self'; connect-src 'self' https://api.pay.jp; frame-src https://js.pay.jp; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; img-src 'self' data:";
 
@@ -26,11 +29,6 @@ const SOURCE_MAIN = '/src/main.ts';
 
 function normalizeCsp(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
-}
-
-function extractCspFromHeadersFile(content: string): string | null {
-  const m = content.match(/Content-Security-Policy:\s*([^\n\r]+)/);
-  return m?.[1]?.trim() ?? null;
 }
 
 function extractCspFromNginx(content: string): string | null {
@@ -44,32 +42,32 @@ function assertNoInlineStyle(html: string, label: string): void {
   }
 }
 
-function checkSourceIndexHtml(html: string): void {
-  assertNoInlineStyle(html, 'frontend/index.html');
+function checkSourceMemberHtml(html: string): void {
+  assertNoInlineStyle(html, 'frontend/member.html');
   if (/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(html)) {
-    throw new Error('frontend/index.html: unexpected Google Fonts reference');
+    throw new Error('frontend/member.html: unexpected Google Fonts reference');
   }
   const scripts = [...html.matchAll(/<script[^>]+src\s*=\s*["']([^"']+)["']/gi)].map((m) => m[1]);
   if (scripts.length !== 2) {
     throw new Error(
-      `frontend/index.html: expected exactly 2 external script tags, got ${scripts.length}: ${scripts.join(', ')}`,
+      `frontend/member.html: expected exactly 2 external script tags, got ${scripts.length}: ${scripts.join(', ')}`,
     );
   }
   if (!scripts.includes(PAYJP_PAY_SCRIPT)) {
-    throw new Error(`frontend/index.html: missing ${PAYJP_PAY_SCRIPT}`);
+    throw new Error(`frontend/member.html: missing ${PAYJP_PAY_SCRIPT}`);
   }
   if (!scripts.includes(SOURCE_MAIN)) {
-    throw new Error(`frontend/index.html: missing ${SOURCE_MAIN}`);
+    throw new Error(`frontend/member.html: missing ${SOURCE_MAIN}`);
   }
 }
 
 function isAllowedDistScriptSrc(src: string): boolean {
   if (src === PAYJP_PAY_SCRIPT) return true;
-  if (/^\/assets\/index-[A-Za-z0-9_-]+\.js$/.test(src)) return true;
+  if (/^\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]+\.js$/.test(src)) return true;
   return false;
 }
 
-function checkBuiltIndexHtml(html: string, label: string): void {
+function checkBuiltMemberHtml(html: string, label: string): void {
   assertNoInlineStyle(html, label);
   if (/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(html)) {
     throw new Error(`${label}: unexpected Google Fonts reference`);
@@ -84,14 +82,17 @@ function checkBuiltIndexHtml(html: string, label: string): void {
     }
   }
   if (
-    !/<link[^>]+rel\s*=\s*["']stylesheet["'][^>]+href\s*=\s*["']\/assets\/index-[A-Za-z0-9_-]+\.css["']/i.test(html)
+    !/<link[^>]+rel\s*=\s*["']stylesheet["'][^>]+href\s*=\s*["']\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]+\.css["']/i.test(
+      html,
+    )
   ) {
-    throw new Error(`${label}: expected <link rel="stylesheet" href="/assets/index-*.css">`);
+    throw new Error(`${label}: expected <link rel="stylesheet" href="/assets/*.css">`);
   }
 }
 
 function checkPublicHtmlFiles(): void {
   const dir = path.join(REPO_ROOT, 'frontend/public');
+  if (!existsSync(dir)) return;
   for (const name of readdirSync(dir)) {
     if (!name.endsWith('.html')) continue;
     const p = path.join(dir, name);
@@ -110,33 +111,26 @@ function readUtf8(filePath: string): string {
 }
 
 function runStaticChecks(): void {
-  const headersPath = path.join(REPO_ROOT, 'frontend/public/_headers');
   const nginxPath = path.join(REPO_ROOT, 'nginx/security-headers.conf');
-  const headersContent = readUtf8(headersPath);
   const nginxContent = readUtf8(nginxPath);
 
-  const cspHeaders = extractCspFromHeadersFile(headersContent);
   const cspNginx = extractCspFromNginx(nginxContent);
-  if (!cspHeaders) throw new Error('Could not parse Content-Security-Policy from frontend/public/_headers');
   if (!cspNginx) throw new Error('Could not parse Content-Security-Policy from nginx/security-headers.conf');
 
-  if (normalizeCsp(cspHeaders) !== normalizeCsp(cspNginx)) {
-    throw new Error(`CSP mismatch between _headers and nginx.\n_headers:\n${cspHeaders}\n\nnginx:\n${cspNginx}`);
-  }
-  if (normalizeCsp(cspHeaders) !== normalizeCsp(EXPECTED_CSP)) {
+  if (normalizeCsp(cspNginx) !== normalizeCsp(EXPECTED_CSP)) {
     throw new Error(
-      `CSP differs from EXPECTED_CSP in scripts/dev/check-payment-page-security.ts.\nExpected:\n${EXPECTED_CSP}\n\nActual:\n${cspHeaders}`,
+      `nginx CSP differs from EXPECTED_CSP in scripts/dev/check-payment-page-security.ts.\nExpected:\n${EXPECTED_CSP}\n\nActual:\n${cspNginx}`,
     );
   }
 
-  const indexPath = path.join(REPO_ROOT, 'frontend/index.html');
-  checkSourceIndexHtml(readUtf8(indexPath));
+  const memberPath = path.join(REPO_ROOT, 'frontend/member.html');
+  checkSourceMemberHtml(readUtf8(memberPath));
 
-  const distIndexPath = path.join(REPO_ROOT, 'frontend/dist/index.html');
-  if (!existsSync(distIndexPath)) {
-    throw new Error('frontend/dist/index.html not found — run npm run build:frontend before check:payment-security');
+  const distMemberPath = path.join(REPO_ROOT, 'frontend/dist/member.html');
+  if (!existsSync(distMemberPath)) {
+    throw new Error('frontend/dist/member.html not found — run npm run build:frontend before check:payment-security');
   }
-  checkBuiltIndexHtml(readUtf8(distIndexPath), 'frontend/dist/index.html');
+  checkBuiltMemberHtml(readUtf8(distMemberPath), 'frontend/dist/member.html');
 
   checkPublicHtmlFiles();
 }
@@ -173,7 +167,7 @@ async function runLiveCheck(urlStr: string): Promise<void> {
   }
 
   const html = await res.text();
-  checkBuiltIndexHtml(html, `live response (${res.url})`);
+  checkBuiltMemberHtml(html, `live response (${res.url})`);
 }
 
 async function main(): Promise<void> {
@@ -186,7 +180,7 @@ async function main(): Promise<void> {
   if (liveFlag) {
     const paymentUrl = process.env.PAYMENT_PAGE_URL?.trim();
     if (!paymentUrl) {
-      throw new Error('Live check: set PAYMENT_PAGE_URL=https://.../ (production HTTPS URL)');
+      throw new Error('Live check: set PAYMENT_PAGE_URL=https://.../member (production HTTPS URL)');
     }
     await runLiveCheck(paymentUrl);
     console.log(`check-payment-page-security: live check OK (${paymentUrl}).`);
