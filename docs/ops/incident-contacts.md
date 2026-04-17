@@ -10,4 +10,4 @@
 | Discord（Bot / OAuth） | [Discord Developer Portal](https://discord.com/developers/applications) のサポート導線 |
 | インシデント責任者（社内） | 1Password Vault に `Incident` 等の名前で連絡先を保管（電話・メール）。 |
 
-**ユーザー向けの公開問い合わせ先**は [frontend/public/contact.html](../../frontend/public/contact.html)（本番でメールを設定）と整合させる。
+**ユーザー向けの公開問い合わせ先**は `/` および `/service` 上の TimeRex 予約 CTA（[frontend/index.html](../../frontend/index.html) / [frontend/service.html](../../frontend/service.html) の `data-todo="timerex-url"`）と整合させる。旧 `/contact.html` 単独ページは廃止済（nginx 301 で `/member` へ転送）。

@@ -23,7 +23,7 @@ The current system assumes:
 
 Key repo evidence:
 
-- [frontend/index.html](frontend/index.html)
+- [frontend/member.html](frontend/member.html) (payment SPA host at `/member`)
 - [frontend/src/main.ts](frontend/src/main.ts)
 - [packages/billing-service/src/shell/subscribe.ts](packages/billing-service/src/shell/subscribe.ts)
 - [packages/server/src/main.ts](packages/server/src/main.ts)

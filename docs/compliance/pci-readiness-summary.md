@@ -21,7 +21,7 @@
 |------|--------|------|
 | PAN 非送信・トークンのみ | fixed_in_repo | [frontend/src/billing-ui.ts](../../frontend/src/billing-ui.ts)、[packages/server/src/routes/billing.routes.ts](../../packages/server/src/routes/billing.routes.ts) |
 | 3DS verified・503 + operationId | fixed_in_repo | [packages/billing-service](../../packages/billing-service) |
-| 静的 CSP・決済ページ表面 | fixed_in_repo | [frontend/public/_headers](../../frontend/public/_headers)、[nginx/security-headers.conf](../../nginx/security-headers.conf)、[frontend/index.html](../../frontend/index.html) |
+| 静的 CSP・決済ページ表面 | fixed_in_repo | [nginx/security-headers.conf](../../nginx/security-headers.conf)（単一真実源）、[frontend/member.html](../../frontend/member.html)（`/member`、PAY.JP SPA マウント） |
 | pay.js SRI なし | compensating_control（制限の明示） | [pci-script-security-confirmation.md](pci-script-security-confirmation.md) |
 | 11.6.1 改ざん検知 | compensating_control + CI 静的ガード | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)、[pci-incident-response-plan.md](pci-incident-response-plan.md)、[`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts) |
 | Go-Live 証跡の実填 | requires_external_evidence | [docs/evidence/README.md](../evidence/README.md) |

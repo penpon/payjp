@@ -1,6 +1,6 @@
 # Stripe Design System -- Implementation Instructions for PAY.JP x Discord Frontend
 
-Target: `frontend/index.html` (inline `<style>`) + vanilla TypeScript SPA (Vite)
+Target: `frontend/member.html` (external CSS via `/src/member-page.css`) + vanilla TypeScript SPA (Vite) mounted at `/member`
 Language: Japanese UI (lang="ja")
 
 ---

@@ -11,7 +11,7 @@ SAQ A v4.0.1 r1（2025年1月）の適格基準:
 
 ## 1. 決済ページの構成
 
-- 決済フォームURL: `https://www.and--line.com/`（SPA、購読フロー内）
+- 決済フォームURL: `https://www.and--line.com/member`（SPA、購読フロー内。`/` はマーケティングホーム、SPA は `/member` にマウント）
 - カード入力: PAY.JP.js v2（`https://js.pay.jp/v2/pay.js`）による**iframe**
 - カード入力フィールドはPAY.JPドメインのiframe内で描画され、本サービスのJavaScriptからアクセス不可
 
@@ -19,7 +19,7 @@ SAQ A v4.0.1 r1（2025年1月）の適格基準:
 
 ### 2.1 Content Security Policy（CSP）
 
-nginx (`security-headers.conf`) および Cloudflare Pages (`_headers`) で適用:
+nginx (`security-headers.conf`) で適用（単一真実源。Cloudflare Pages 型 `_headers` ファイルは廃止）:
 
 ```
 Content-Security-Policy:
@@ -36,7 +36,7 @@ Content-Security-Policy:
   img-src 'self' data:
 ```
 
-スタイルは Vite ビルドで出力される **外部 CSS**（`frontend/dist/assets/index-*.css`）のみを読み込み、`index.html` および法務系静的ページに **インライン `<style>` は置かない**。実体は [frontend/public/_headers](../../frontend/public/_headers) および [nginx/security-headers.conf](../../nginx/security-headers.conf) と一致させる。整合は CI で [`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts) が検証する。
+決済ページ (`frontend/member.html` / `/member`) ではスタイルは Vite ビルド出力の **外部 CSS**（`frontend/dist/assets/member-*.css`）のみを読み込み、**インライン `<style>` は置かない**。実体は [nginx/security-headers.conf](../../nginx/security-headers.conf) を単一真実源とする。整合は CI で [`scripts/dev/check-payment-page-security.ts`](../../scripts/dev/check-payment-page-security.ts) が検証する。
 
 **効果:**
 - `script-src 'self' https://js.pay.jp` — 許可されたドメイン以外のスクリプト実行をブロック

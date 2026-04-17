@@ -16,20 +16,20 @@
 
 - [ ] 申請する **本番 URL** が確定している（ダミー・ローカル専用 URL ではない）
 - [ ] 審査員が **ログインなしで** 以下を閲覧できる
-  - [ ] トップ（購読 UI）および [サービス案内（料金・流れ）](../../frontend/public/service.html)
-  - [ ] [特定商取引法に基づく表記](../../frontend/public/tokushou.html)（**運営者名・住所・問い合わせ先を本番値に更新済み**）
-  - [ ] [プライバシーポリシー](../../frontend/public/privacy.html)
-  - [ ] [利用規約](../../frontend/public/terms.html)
-  - [ ] [返金・キャンセル](../../frontend/public/refund.html)
-  - [ ] [お問い合わせ](../../frontend/public/contact.html)
-- [ ] フッターから各法的ページへ到達できる（`frontend/index.html` の `site-footer`）
+  - [ ] トップ（`/` マーケティング）および [サービス案内（料金・流れ）](../../frontend/service.html)（`/service`）
+  - [ ] [特定商取引法に基づく表記](../../frontend/specified-commercial-transactions.html)（`/specified-commercial-transactions`。**運営者名・住所・問い合わせ先を本番値に更新済み**）
+  - [ ] [プライバシーポリシー](../../frontend/privacy-policy.html)（`/privacy-policy`）
+  - [ ] [利用規約](../../frontend/terms-of-service.html)（`/terms-of-service`。返金・キャンセル条項を統合）
+  - [ ] 購読ページ [会員ページ / 購読 UI](../../frontend/member.html)（`/member`。PAY.JP SPA マウント）
+  - [ ] 問い合わせ導線: `/` および `/service` 上の TimeRex 予約 CTA（旧 `/contact.html` は nginx 301 で `/member` に転送）
+- [ ] フッターから各法的ページへ到達できる（`frontend/index.html` および `frontend/member.html` の `site-footer`）
 - [ ] 法務ページの本番値一致を記録した（[TEMPLATE-legal-page-verification.md](../evidence/TEMPLATE-legal-page-verification.md)）
 
 ## 2. HTTPS / TLS
 
 - [ ] 本番サイトが **HTTPS** で提供されている
 - [ ] リバースプロキシ / CDN で **TLS 1.2 以上**（古いプロトコル無効化）
-- [ ] `Strict-Transport-Security` 等のヘッダが意図どおり（API: [packages/server/src/app.ts](../../packages/server/src/app.ts)、静的: [frontend/public/_headers](../../frontend/public/_headers)）
+- [ ] `Strict-Transport-Security` 等のヘッダが意図どおり（API: [packages/server/src/app.ts](../../packages/server/src/app.ts)、静的: [nginx/security-headers.conf](../../nginx/security-headers.conf) — CF Pages 型 `_headers` ファイルは廃止、nginx が単一真実源）
 
 ## 3. 同一サイト（Cookie）
 
@@ -70,7 +70,7 @@
 - [ ] 特商法の **所在地・事業者名** が、登記・開業届・PAY.JP 登録と一致
 - [ ] **お支払い方法** に、実際に提供する手段を列挙（本サービスはクレジットカード中心）
 
-**現状**: 本番値への差し替えは `frontend/public/tokushou.html` で実施。`docs/evidence/2026-04-12-legal-page-verification.md` の更新版を Go-Live 前に発行予定。
+**現状**: 本番値への差し替えは `frontend/specified-commercial-transactions.html` で実施。`docs/evidence/2026-04-12-legal-page-verification.md` の更新版を Go-Live 前に発行予定。
 
 ## 8. PCI 補助（決済ページ・ASV・TPSP）
 

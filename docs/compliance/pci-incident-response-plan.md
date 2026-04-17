@@ -37,7 +37,7 @@
 | nginx アクセスログ | 異常な4xx/5xxスパイク | 通常の10倍以上 |
 | アプリケーションログ | `payjp_events.process_status = 'failed'` | 連続3件以上 |
 | `member_impact_logs` | `resolved_at IS NULL` の件数 | 5件以上 |
-| 決済ページ整合性（補償的統制） | `frontend/index.html` のスクリプトタグ、CSP 定義、本番ヘッダ | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) の頻度・手順に従う |
+| 決済ページ整合性（補償的統制） | `frontend/member.html`（`/member`）のスクリプトタグ、nginx CSP 定義、本番ヘッダ | [pci-payment-page-monitoring.md](pci-payment-page-monitoring.md) の頻度・手順に従う |
 | 手動確認 | PAY.JP ダッシュボード、Discordサーバー | 日次確認 |
 | 外部通知 | ユーザーからの報告 | 随時 |
 

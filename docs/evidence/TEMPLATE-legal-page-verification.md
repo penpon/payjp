@@ -10,11 +10,10 @@
 
 | ページ | パス | 確認した項目（事業者名・住所・連絡先等） | 一致 |
 |--------|------|------------------------------------------|------|
-| 特定商取引法に基づく表記 | /tokushou.html | | [ ] |
-| 利用規約 | /terms.html | | [ ] |
-| プライバシー | /privacy.html | | [ ] |
-| 返金・キャンセル | /refund.html | | [ ] |
-| お問い合わせ | /contact.html | | [ ] |
+| 特定商取引法に基づく表記 | /specified-commercial-transactions | | [ ] |
+| 利用規約（返金・キャンセル条項統合済） | /terms-of-service | | [ ] |
+| プライバシーポリシー | /privacy-policy | | [ ] |
+| 問い合わせ導線（TimeRex 予約 CTA） | / または /service 上の CTA（旧 /contact.html は nginx 301 で /member へ） | | [ ] |
 
 ## 結果
 

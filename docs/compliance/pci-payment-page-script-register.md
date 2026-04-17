@@ -4,7 +4,7 @@
 **関連**: [pci-script-security-confirmation.md](pci-script-security-confirmation.md)、[pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)
 
 最終更新: 2026-04-12  
-次回レビュー: フロントエンドの `index.html` / バンドル読込に変更が入ったとき、または年次。
+次回レビュー: 決済ページ `frontend/member.html` / バンドル読込に変更が入ったとき、または年次。
 
 ## スクリプト一覧
 
@@ -16,8 +16,8 @@
 ## 明示的に許可しないもの
 
 - 広告・行動解析・タグマネージャ等の第三者スクリプト: **導入しない**
-- 決済ページでの **Google Fonts 等の追加 CDN 読込**: **行わない**（[frontend/index.html](../../frontend/index.html)）
+- 決済ページでの **Google Fonts 等の追加 CDN 読込**: **行わない**（[frontend/member.html](../../frontend/member.html)）
 
 ## CSP との対応
 
-[frontend/public/_headers](../../frontend/public/_headers) / [nginx/security-headers.conf](../../nginx/security-headers.conf) の `script-src 'self' https://js.pay.jp` が、上記 1・2 のみを実行可能とする前提である。
+[nginx/security-headers.conf](../../nginx/security-headers.conf) の `script-src 'self' https://js.pay.jp` が、上記 1・2 のみを実行可能とする前提である（nginx 単一真実源。`_headers` ファイル方式は廃止）。

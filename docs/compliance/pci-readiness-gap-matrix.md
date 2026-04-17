@@ -19,11 +19,11 @@
 | # | 論点 | 分類 | 根拠（リポジトリ） | 補足 |
 |---|------|------|-------------------|------|
 | 1 | カード非保持（PAN 非送信） | implemented | [frontend/src/billing-ui.ts](../../frontend/src/billing-ui.ts)、[packages/server/src/routes/billing.routes.ts](../../packages/server/src/routes/billing.routes.ts) | トークンのみ送信 |
-| 2 | PAY.JP.js iframe / `pay.js` | implemented | [frontend/index.html](../../frontend/index.html) | 外部スクリプトは `js.pay.jp` のみ（[pci-payment-page-script-register.md](pci-payment-page-script-register.md)） |
+| 2 | PAY.JP.js iframe / `pay.js` | implemented | [frontend/member.html](../../frontend/member.html)（`/member`） | 外部スクリプトは `js.pay.jp` のみ（[pci-payment-page-script-register.md](pci-payment-page-script-register.md)） |
 | 3 | 3DS `verified` 強制 | implemented | [packages/billing-service/src/core/index.ts](../../packages/billing-service/src/core/index.ts) | |
 | 4 | `operationId` 保存・曖昧失敗 503 | implemented | [packages/billing-service/src/shell/subscribe.ts](../../packages/billing-service/src/shell/subscribe.ts) | |
 | 5 | API のセキュリティヘッダ（JSON API） | implemented | [packages/server/src/app.ts](../../packages/server/src/app.ts) | `default-src 'none'` 等（購読 UI とは別オリジン想定） |
-| 6 | 静的フロントの CSP / ヘッダ | implemented | [frontend/public/_headers](../../frontend/public/_headers)、[nginx/security-headers.conf](../../nginx/security-headers.conf) | [pci-script-security-confirmation.md](pci-script-security-confirmation.md) と整合 |
+| 6 | 静的フロントの CSP / ヘッダ | implemented | [nginx/security-headers.conf](../../nginx/security-headers.conf)（単一真実源。`_headers` ファイルは廃止） | [pci-script-security-confirmation.md](pci-script-security-confirmation.md) と整合 |
 | 7 | `pay.js` の SRI | documented_only | [docs/compliance/pci-script-security-confirmation.md](pci-script-security-confirmation.md) | PAY.JP がハッシュ非公開のため未付与を明示 |
 | 8 | Req 11.6.1 相当（改ざん検知） | documented_only | [docs/compliance/pci-payment-page-monitoring.md](pci-payment-page-monitoring.md)、[docs/compliance/pci-incident-response-plan.md](pci-incident-response-plan.md) | 自動 CSP レポート受信は MVP では未実装。補償的統制として手順・レビューを文書化 |
 | 9 | Go-Live 証跡パッケージ | external_evidence_needed | [docs/evidence/README.md](../evidence/README.md) | テンプレートはリポジトリ。実施記録は日付入りファイルで追記 |

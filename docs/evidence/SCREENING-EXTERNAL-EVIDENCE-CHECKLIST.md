@@ -7,9 +7,9 @@
 
 | 確認 | テンプレート / 参照 | 記録の付け方 |
 |------|---------------------|--------------|
-| 特商法・規約・PP・返金・問い合わせが本番 URL で開ける | [TEMPLATE-legal-page-verification.md](./TEMPLATE-legal-page-verification.md) | `YYYYMMDD-legal-page-verification.md` を作成 |
+| 特商法・規約・PP が本番 URL で開ける（返金・キャンセルは /terms-of-service 内に統合、問い合わせは TimeRex CTA） | [TEMPLATE-legal-page-verification.md](./TEMPLATE-legal-page-verification.md) | `YYYYMMDD-legal-page-verification.md` を作成 |
 | 事業者名・住所・連絡先が PAY.JP 登録と一致 | 同上、§7 [production-readiness-checklist.md](../ops/production-readiness-checklist.md) | 差分は Issue / チケット番号のみ |
-| 商材・料金・流れがログインなしで説明できる | 静的 [frontend/public/service.html](../../frontend/public/service.html)、トップ [frontend/index.html](../../frontend/index.html) | 本番 URL をテンプレートに記載 |
+| 商材・料金・流れがログインなしで説明できる | [frontend/service.html](../../frontend/service.html)（`/service`）、マーケティングトップ [frontend/index.html](../../frontend/index.html)（`/`） | 本番 URL をテンプレートに記載 |
 
 ## 2. PAY.JP ダッシュボード（MFA 等）
 
