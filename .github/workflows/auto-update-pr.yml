@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
       - name: Update open PR branches
-        uses: adRise/update-pr-branch@a51c014567e5be98445551cce9b8f5ad42dd8acf  # v0.10.2
+        uses: adRise/update-pr-branch@fe3b7082713cc6b51fab6cc16765fa6cbcae8ba4  # v0.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: main
