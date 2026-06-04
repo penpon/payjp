@@ -12,7 +12,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
       - name: Update open PR branches
         uses: adRise/update-pr-branch@a51c014567e5be98445551cce9b8f5ad42dd8acf  # v0.10.2
         with:
