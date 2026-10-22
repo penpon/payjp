@@ -24,7 +24,7 @@
     "@hayane/sync-service": "*",
     "cron": "^4.4.0",
     "dotenv": "^17.4.2",
-    "fastify": "^5.8.4",
+    "fastify": "^5.12.7",
     "payjp": "^3.1.1",
     "tsx": "^4.19.4"
   },
