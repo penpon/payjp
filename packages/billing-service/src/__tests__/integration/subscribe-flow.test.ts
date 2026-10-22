@@ -440,24 +440,21 @@ describe('POST /v1/subscriptions — Integration', () => {
   // PROP-BILL-029: 3DS status validation + token used check
   // -------------------------------------------------------------------------
   describe('PROP-BILL-029: 3DS status validation', () => {
-    it.each([
-      'attempted',
-      'failed',
-      'error',
-      'unverified',
-      null,
-    ])('rejects with 422 for three_d_secure_status=%s', async (status) => {
-      const deps = makeSuccessfulDeps();
-      (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue(
-        makePayjpToken({ three_d_secure_status: status }),
-      );
-      const result = await handleSubscribe(makeSubscribeRequest(), deps);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.statusCode).toBe(422);
-        expect(result.errorCode).toBe('THREE_D_SECURE_REQUIRED');
-      }
-    });
+    it.each(['attempted', 'failed', 'error', 'unverified', null])(
+      'rejects with 422 for three_d_secure_status=%s',
+      async (status) => {
+        const deps = makeSuccessfulDeps();
+        (deps.payjp.fetchToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+          makePayjpToken({ three_d_secure_status: status }),
+        );
+        const result = await handleSubscribe(makeSubscribeRequest(), deps);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.statusCode).toBe(422);
+          expect(result.errorCode).toBe('THREE_D_SECURE_REQUIRED');
+        }
+      },
+    );
 
     it('rejects with 422 when token used=true (CRIT-003)', async () => {
       const deps = makeSuccessfulDeps();
