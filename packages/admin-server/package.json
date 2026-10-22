@@ -10,7 +10,7 @@
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@hayane/shared": "*",
-    "fastify": "^5.8.4",
+    "fastify": "^5.12.7",
     "jose": "^6.2.2",
     "pg": "^8.13.3",
     "tsx": "^4.19.4"
