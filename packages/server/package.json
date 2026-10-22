@@ -17,7 +17,7 @@
     "@discordjs/rest": "^2.4.3",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
-    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/rate-limit": "^11.2.1",
     "@hayane/auth-service": "*",
     "@hayane/billing-service": "*",
     "@hayane/shared": "*",
